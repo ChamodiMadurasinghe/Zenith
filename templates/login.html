@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ t('sign_in') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<div class="login-card">
+  <h1>{{ t('app_name') }}</h1>
+  <p class="subtitle">{{ t('app_subtitle') }}</p>
+  <form method="post" action="{{ url_for('auth.login') }}">
+    <label for="password">{{ t('password') }}</label>
+    <input type="password" id="password" name="password" required autofocus placeholder="{{ t('password_placeholder') }}">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('sign_in') }}</button>
+  </form>
+</div>
+{% endblock %}

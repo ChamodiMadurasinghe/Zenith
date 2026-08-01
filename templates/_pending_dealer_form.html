@@ -1,0 +1,36 @@
+<div class="card alert">
+  <h3>{{ t('new_dealer') }}: {{ dealer_setup.dealer_name or extracted.supplier_name }}</h3>
+  <p>{{ dealer_setup.welcome_message or t('dealer_not_registered') }}</p>
+  <form method="post">
+    <input type="hidden" name="action" value="create_dealer">
+    <div class="grid-2">
+      <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_setup.dealer_name or extracted.supplier_name }}" required></label>
+      <label>{{ t('email') }} <input name="dealer_email" value="{{ dealer_setup.dealer_email or '' }}"></label>
+      <label>{{ t('phone') }} <input name="dealer_telno" value="{{ dealer_setup.dealer_telno or '' }}"></label>
+      <label>{{ t('address') }} <input name="dealer_address" value="{{ dealer_setup.dealer_address or '' }}"></label>
+      <label>{{ t('strictness') }}
+        <select name="dealer_strictness">
+          {% for s in ['High','Medium','Low'] %}
+          <option {{ 'selected' if (dealer_setup.dealer_strictness or 'Medium') == s }}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_setup.casual_days or 3 }}"></label>
+      <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_setup.impossible_days or 'Sunday' }}"></label>
+    </div>
+    {% set dealer_data = {
+      'account_name': dealer_setup.get('account_name') or dealer_setup.get('dealer_name') or extracted.get('supplier_name'),
+      'bank_name': dealer_setup.get('bank_name') or '',
+      'branch_name': dealer_setup.get('branch_name') or '',
+      'default_user_bank_acc_id': dealer_bank_data.get('default_user_bank_acc_id') if dealer_bank_data else none
+    } %}
+    {% include '_dealer_bank_fields.html' %}
+    <div class="confirm-box">
+      <label class="confirm-label">
+        <input type="checkbox" name="confirm_dealer" required>
+        {{ t('confirm_dealer') }}
+      </label>
+    </div>
+    <button type="submit" class="btn btn-secondary btn-lg">{{ t('verify_dealer_add') }}</button>
+  </form>
+</div>

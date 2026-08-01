@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ t('page_cheque_preview') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1>{{ t('page_cheque_preview') }}</h1>
+<p>{{ t('dealer_label') }}: <strong>{{ dealer.dealer_name }}</strong></p>
+
+{% if validation_issues %}
+{% from '_bundle_warnings.html' import bundle_warnings_panel with context %}
+<p class="preview-warning-banner">{{ t('preview_warning_banner') }}</p>
+{{ bundle_warnings_panel(validation_issues) }}
+{% endif %}
+
+<form method="post" action="{{ url_for('bundling.commit') }}">
+  <label>{{ t('bank_account') }}
+    <select name="user_bank_acc_id">
+      {% for acc in accounts %}
+      <option value="{{ acc.user_bank_acc_id }}" {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>{{ acc.nickname }} ({{ acc.bank_name }})</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  {% for b in bundles %}
+  <div class="cheque-print card">
+    <div class="cheque-header">{{ t('cheque_header') }}</div>
+    <div class="cheque-row"><span>{{ t('cheque_date') }}:</span> {{ b.cheque_date }}</div>
+    <div class="cheque-row"><span>{{ t('cheque_pay') }}:</span> {{ dealer.dealer_name }}</div>
+    <div class="cheque-row"><span>{{ t('cheque_amount') }}:</span> Rs. {{ "{:,.2f}".format(b.total_lkr) }}</div>
+    <div class="cheque-row"><span>{{ t('cheque_words') }}:</span> {{ b.amount_in_words }}</div>
+    <div class="cheque-row"><span>{{ t('cheque_clearance') }}:</span> {{ b.predicted_clearance_date }}</div>
+    <label>{{ t('cheque_number') }} <input name="cheque_no_{{ loop.index0 }}" placeholder="{{ t('cheque_number_ph') }}" required></label>
+    <div class="cheque-invoices">{{ t('invoices') }}: {% for inv in b.invoices %}{{ inv.invoice_no }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+  </div>
+  {% endfor %}
+
+  <div class="actions no-print">
+    <button type="button" onclick="window.print()" class="btn btn-secondary btn-lg">{{ t('print') }}</button>
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('commit_db') }}</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ dealer.dealer_name }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<p class="text-muted"><a href="{{ url_for('bundling.bundling_home') }}">&larr; {{ t('back_to_cheques') }}</a></p>
+<h1>{{ dealer.dealer_name }}</h1>
+
+<div class="tab-bar">
+  <a href="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
+     class="tab {{ 'active' if active_tab == 'details' }}">{{ t('tab_dealer_details') }}</a>
+  <a href="{{ url_for('dealers.cheques', dealer_id=dealer.dealer_id) }}"
+     class="tab {{ 'active' if active_tab == 'cheques' }}">{{ t('tab_dealer_cheques') }}</a>
+</div>
+
+{% if active_tab == 'details' %}
+<form class="card" method="post" action="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}">
+  <div class="grid-2">
+    <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_data.dealer_name }}" required></label>
+    <label>{{ t('email') }} <input name="dealer_email" value="{{ dealer_data.dealer_email or '' }}"></label>
+    <label>{{ t('phone') }} <input name="dealer_telno" value="{{ dealer_data.dealer_telno or '' }}"></label>
+    <label>{{ t('address') }} <input name="dealer_address" value="{{ dealer_data.dealer_address or '' }}"></label>
+    <label>{{ t('strictness') }}
+      <select name="dealer_strictness">
+        {% for s in ['High','Medium','Low'] %}
+        <option {{ 'selected' if (dealer_data.dealer_strictness or 'Medium') == s }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_data.casual_days or 3 }}"></label>
+    <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_data.impossible_days or 'Sunday' }}"></label>
+  </div>
+  {% include '_dealer_bank_fields.html' %}
+  <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
+</form>
+{% else %}
+{% include 'dealer_cheques.html' %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if active_tab == 'cheques' %}
+<script>
+  window.__dealerId = {{ dealer.dealer_id }};
+  {% if bundles %}window.__currentBundles = {{ bundles | tojson }};{% endif %}
+  {% if validation_issues %}window.__bundleIssues = {{ validation_issues | tojson }};{% endif %}
+  {% if pending_review %}window.__pendingReview = {{ pending_review | tojson }};{% endif %}
+  {% if chat_history %}window.__chatHistory = {{ chat_history | tojson }};{% endif %}
+</script>
+<script src="{{ url_for('static', filename='js/bundling.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=16"></script>
+{% endif %}
+{% endblock %}

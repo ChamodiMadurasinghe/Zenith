@@ -1,0 +1,125 @@
+<p class="help-tip">{{ t('help_tip_cheques') }}</p>
+
+<div class="layout-split" id="cheques-layout">
+  <div class="card" id="bundle-workspace" data-dealer="{{ dealer.dealer_id }}">
+    <button type="button" id="chat-expand-btn" class="btn btn-secondary btn-sm chat-expand-fab" hidden>
+      {{ t('chat_show') }}
+    </button>
+
+    {% if committed_cheques %}
+    <h3>{{ t('committed_cheques') }}</h3>
+    <table class="data-table">
+      <thead>
+        <tr><th>{{ t('col_cheque_no') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_clearance') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_invoices') }}</th></tr>
+      </thead>
+      <tbody>
+        {% for ch in committed_cheques %}
+        <tr>
+          <td>{{ ch.cheque_no }}</td>
+          <td>{{ ch.cheque_date }}</td>
+          <td>{{ ch.predicted_clearance_date or '—' }}</td>
+          <td>{{ "{:,.2f}".format(ch.amount_in_numerals) }}</td>
+          <td>{% for inv in ch.invoices %}{{ inv.invoice_no }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if pending_invoices %}
+    <h3>{{ t('pending_verification') }}</h3>
+    <table class="data-table">
+      <thead><tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th></th></tr></thead>
+      <tbody>
+        {% for inv in pending_invoices %}
+        <tr>
+          <td>{{ inv.invoice_no }}</td>
+          <td>{{ inv.invoiced_date }}</td>
+          <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
+          <td><a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-secondary btn-sm">{{ t('verify') }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('bundling.compute', dealer_id=dealer.dealer_id) }}">
+      <label>{{ t('lkr_ceiling') }} <input type="number" name="ceiling_lkr" value="{{ ceiling_lkr }}" step="1000" required></label>
+      <h3>{{ t('ready_to_bundle') }}</h3>
+      {% if invoices %}
+      <div class="select-all-row">
+        <label class="confirm-label">
+          <input type="checkbox" id="select-all-invoices">
+          <strong>{{ t('select_all_invoices') }}</strong>
+        </label>
+      </div>
+      <ul class="check-list" id="invoice-check-list">
+        {% for inv in invoices %}
+        <li>
+          <label>
+            <input type="checkbox" name="invoice_ids" value="{{ inv.invoices_id }}">
+            {{ inv.invoice_no }} — Rs. {{ "{:,.2f}".format(inv.total_amount) }}
+            ({{ inv.invoiced_date }}, {{ inv.credit_period_days }}d)
+          </label>
+        </li>
+        {% endfor %}
+      </ul>
+      <button type="submit" class="btn btn-primary btn-lg">{{ t('compute_bundles') }}</button>
+      <button type="button" id="one-per-invoice-btn" class="btn btn-secondary btn-lg">{{ t('one_per_invoice') }}</button>
+      {% else %}
+      <p>{{ t('no_verified_invoices') }}</p>
+      {% endif %}
+    </form>
+
+    <div id="bundle-proposals"></div>
+  </div>
+
+  <div class="card chat-panel">
+    <div class="chat-header">
+      <h3>{{ t('assistant') }}
+        {% if use_fake_ai %}
+        <span class="badge badge-demo">{{ t('badge_demo_mode') }}</span>
+        {% else %}
+        <span class="badge badge-live">{{ t('badge_live_ai') }}</span>
+        {% endif %}
+      </h3>
+      <div class="chat-header-actions">
+        <button type="button" id="chat-reset" class="btn btn-secondary btn-sm">{{ t('reset_chat') }}</button>
+        <button type="button" id="chat-collapse-btn" class="btn btn-secondary btn-sm">{{ t('chat_hide') }}</button>
+      </div>
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      {% if not chat_history %}
+      <p class="chat-welcome">{{ t('chat_welcome') }}</p>
+      {% endif %}
+      {% for m in chat_history %}
+      <div class="chat-msg chat-{{ m.role }}">
+        {% if m.role == 'reviewer' %}
+        <div class="chat-reviewer-label">{{ t('reviewer_label') }}</div>
+        <div class="chat-reviewer-body">{{ m.content }}</div>
+        {% if m.verdict == 'suggest_changes' and not m.applied %}
+        <div class="chat-reviewer-actions">
+          <button type="button" class="btn btn-secondary btn-sm apply-reviewer-btn" data-review-index="{{ loop.index0 }}">{{ t('apply_reviewer_suggestions') }}</button>
+        </div>
+        {% elif m.applied %}
+        <div class="chat-reviewer-applied">{{ t('reviewer_applied') }}</div>
+        {% endif %}
+        {% else %}
+        {{ m.content }}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="chat-controls">
+      <label class="chat-speak-toggle">
+        <input type="checkbox" id="chat-speak-toggle">
+        {{ t('ai_speak') }}
+      </label>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="chat-input" placeholder="{{ t('chat_placeholder') }}">
+      <button type="button" id="chat-mic" class="btn btn-secondary" title="{{ t('voice_input') }}">🎤</button>
+      <button type="button" id="chat-send" class="btn btn-secondary btn-lg" data-dealer="{{ dealer.dealer_id }}">{{ t('send') }}</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ t('page_add_dealer') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1>{{ t('page_add_dealer') }}</h1>
+<p class="lead">{{ t('lead_add_dealer') }}</p>
+
+<form class="card" method="post" action="{{ url_for('dealers.new_dealer') }}">
+  <div class="grid-2">
+    <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_data.get('dealer_name', '') }}" required></label>
+    <label>{{ t('email') }} <input name="dealer_email" value="{{ dealer_data.get('dealer_email', '') or '' }}"></label>
+    <label>{{ t('phone') }} <input name="dealer_telno" value="{{ dealer_data.get('dealer_telno', '') or '' }}"></label>
+    <label>{{ t('address') }} <input name="dealer_address" value="{{ dealer_data.get('dealer_address', '') or '' }}"></label>
+    <label>{{ t('strictness') }}
+      <select name="dealer_strictness">
+        {% for s in ['High','Medium','Low'] %}
+        <option {{ 'selected' if (dealer_data.get('dealer_strictness') or 'Medium') == s }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_data.get('casual_days', 3) }}"></label>
+    <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_data.get('impossible_days', 'Sunday') }}"></label>
+  </div>
+
+  {% include '_dealer_bank_fields.html' %}
+
+  <div class="confirm-box">
+    <label class="confirm-label">
+      <input type="checkbox" name="confirm_dealer" required>
+      {{ t('confirm_dealer') }}
+    </label>
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
+    <a href="{{ url_for('bundling.bundling_home') }}" class="btn btn-secondary">{{ t('cancel') }}</a>
+  </div>
+</form>
+{% endblock %}

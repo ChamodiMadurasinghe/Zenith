@@ -1,0 +1,16 @@
+{% macro bundle_warnings_panel(issues) %}
+{% if issues %}
+<div class="bundle-warnings" role="alert">
+  <div class="bundle-warnings-header">
+    <span class="bundle-warnings-icon" aria-hidden="true">⚠</span>
+    <strong>{{ t('bundle_warnings_title') }}</strong>
+  </div>
+  <p>{{ t('bundle_warnings_intro') }}</p>
+  <ul class="bundle-warnings-list">
+    {% for issue in issues %}
+    <li>{{ issue }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endmacro %}
