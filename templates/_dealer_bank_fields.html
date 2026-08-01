@@ -1,0 +1,21 @@
+<h3>{{ t('dealer_bank_section') }}</h3>
+<div class="grid-2">
+  <label>{{ t('dealer_account_name') }}
+    <input name="account_name" value="{{ dealer_data.get('account_name', '') or '' }}" required placeholder="{{ t('dealer_account_name_ph') }}">
+  </label>
+  <label>{{ t('dealer_bank_name') }}
+    <input name="bank_name" value="{{ dealer_data.get('bank_name', '') or '' }}" required placeholder="e.g. Commercial Bank">
+  </label>
+  <label>{{ t('dealer_branch_name') }}
+    <input name="branch_name" value="{{ dealer_data.get('branch_name', '') or '' }}">
+  </label>
+  <label>{{ t('pay_from_account') }}
+    <select name="default_user_bank_acc_id" required>
+      <option value="">{{ t('select_paying_account') }}</option>
+      {% for acc in user_bank_accounts %}
+      <option value="{{ acc.user_bank_acc_id }}"
+        {{ 'selected' if dealer_data.get('default_user_bank_acc_id') == acc.user_bank_acc_id }}>{{ acc.nickname }} ({{ acc.bank_name }})</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>

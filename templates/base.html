@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ t('app_name') }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="lang-{{ current_lang }}">
+  <div class="lang-bar">
+    <span class="lang-label">{{ t('language') }}:</span>
+    {% for code, label in supported_langs.items() %}
+    <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
+       class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if session.get('user_id') %}
+  <nav class="nav">
+    <a href="{{ url_for('ingestion.dashboard') }}" class="brand">{{ t('app_name') }}</a>
+    <div class="nav-links">
+      <a href="{{ url_for('ingestion.dashboard') }}">{{ t('nav_upload') }}</a>
+      <a href="{{ url_for('bundling.bundling_home') }}">{{ t('nav_cheques') }}</a>
+      <a href="{{ url_for('cash_flow.cash_flow') }}">{{ t('nav_cash_flow') }}</a>
+      <a href="{{ url_for('analytics.analytics') }}">{{ t('nav_analytics') }}</a>
+      <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="inline">
+        <button type="submit" class="link-btn">{{ t('nav_logout') }}</button>
+      </form>
+    </div>
+  </nav>
+  {% endif %}
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    window.__i18n = {{ js_i18n | tojson }};
+    window.__lang = {{ current_lang | tojson }};
+    window.__speechLang = {{ speech_lang | tojson }};
+    window.__ = function (key, vars) {
+      var text = window.__i18n[key] || key;
+      if (vars) {
+        Object.keys(vars).forEach(function (k) {
+          text = text.replace("{" + k + "}", vars[k]);
+        });
+      }
+      return text;
+    };
+  </script>
+
+  {% if session.get('user_id') %}
+  <div id="zenith-guide" class="guide-widget guide-collapsed" aria-label="{{ t('guide_title') }}">
+    <button type="button" class="guide-fab" id="guide-fab" aria-expanded="false" title="{{ t('guide_expand') }}">
+      <span class="guide-fab-icon">?</span>
+      <span class="guide-fab-label">{{ t('guide_expand') }}</span>
+    </button>
+    <div class="guide-panel" role="dialog" aria-labelledby="guide-title-text">
+      <header class="guide-header" id="guide-drag-handle">
+        <div class="guide-header-text">
+          <strong id="guide-title-text">{{ t('guide_title') }}</strong>
+          <span class="guide-subtitle">{{ t('guide_subtitle') }}</span>
+        </div>
+        <div class="guide-header-actions">
+          <button type="button" class="guide-icon-btn" id="guide-reset" title="{{ t('guide_reset') }}">&#8635;</button>
+          <button type="button" class="guide-icon-btn" id="guide-minimize" title="{{ t('guide_minimize') }}">&minus;</button>
+        </div>
+      </header>
+      <div class="guide-messages" id="guide-messages">
+        <div class="guide-welcome chat-welcome">{{ guide_welcome_tip(request.path) }}</div>
+      </div>
+      <div class="guide-input-row">
+        <input type="text" id="guide-input" placeholder="{{ t('guide_placeholder') }}" autocomplete="off">
+        <button type="button" id="guide-mic" class="btn btn-secondary" title="{{ t('voice_input') }}">&#127908;</button>
+        <button type="button" id="guide-send" class="btn btn-primary">{{ t('send') }}</button>
+      </div>
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='js/guide_widget.js') }}"></script>
+  {% endif %}
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

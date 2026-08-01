@@ -4,7 +4,7 @@ CREATE TABLE user (
     user_id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_name       TEXT    NOT NULL UNIQUE,
     email           TEXT    NOT NULL UNIQUE,
-    password        TEXT    NOT NULL
+    password_hash   TEXT    NOT NULL
 );
 
 CREATE TABLE user_bank_account (
@@ -19,14 +19,16 @@ CREATE TABLE user_bank_account (
 );
 
 CREATE TABLE dealers (
-    dealer_id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    dealer_name         TEXT    NOT NULL,
-    dealer_email        TEXT,
-    dealer_telno        TEXT,
-    dealer_address      TEXT,
-    dealer_strictness   TEXT,
-    casual_days         INTEGER DEFAULT 0,
-    impossible_days     TEXT
+    dealer_id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    dealer_name                     TEXT    NOT NULL,
+    dealer_email                    TEXT,
+    dealer_telno                    TEXT,
+    dealer_address                  TEXT,
+    dealer_strictness               TEXT,
+    casual_days                     INTEGER DEFAULT 0,
+    impossible_days                 TEXT,
+    preferred_dealer_bank_acc_id    INTEGER,
+    default_user_bank_acc_id        INTEGER REFERENCES user_bank_account(user_bank_acc_id)
 );
 
 CREATE TABLE dealers_bank_account (
@@ -61,6 +63,7 @@ CREATE TABLE invoices (
     credit_period_days      INTEGER NOT NULL,
     total_amount            REAL    NOT NULL,
     location_path           TEXT,
+    pending_dealer_json     TEXT,
     is_invoice_verified     INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (user_id)   REFERENCES user(user_id),
     FOREIGN KEY (dealer_id) REFERENCES dealers(dealer_id),
@@ -83,8 +86,81 @@ CREATE TABLE cbsl_bank_holidays (
     description     TEXT
 );
 
+CREATE TABLE bank_deposits (
+    deposit_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id    INTEGER NOT NULL,
+    deposit_date        TEXT    NOT NULL,
+    amount              REAL    NOT NULL,
+    reference           TEXT,
+    FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+);
+
+CREATE TABLE planned_deposits (
+    planned_deposit_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id    INTEGER NOT NULL,
+    planned_date        TEXT    NOT NULL,
+    amount              REAL    NOT NULL,
+    notes               TEXT,
+    status              TEXT    NOT NULL DEFAULT 'planned',
+    FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+);
+
+CREATE TABLE app_settings (
+    setting_key         TEXT PRIMARY KEY,
+    setting_value       TEXT NOT NULL
+);
+
+CREATE TABLE analyst_reports (
+    report_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    generated_at    TEXT    DEFAULT (datetime('now')),
+    report_markdown TEXT    NOT NULL
+);
+
+CREATE TABLE bundle_drafts (
+    dealer_id               INTEGER PRIMARY KEY,
+    ceiling_lkr             REAL NOT NULL,
+    bundles_json            TEXT NOT NULL,
+    validation_issues_json  TEXT,
+    allow_exceed_ceiling    INTEGER NOT NULL DEFAULT 0,
+    chat_history_json       TEXT,
+    updated_at              TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (dealer_id) REFERENCES dealers(dealer_id)
+);
+
+CREATE TABLE deposit_timetable (
+    timetable_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id        INTEGER NOT NULL,
+    cheque_id               INTEGER,
+    dealer_id               INTEGER,
+    stated_date             TEXT NOT NULL,
+    true_settlement_date    TEXT,
+    target_funding_date     TEXT,
+    total_amount            REAL NOT NULL,
+    days_gained             INTEGER DEFAULT 0,
+    status                  TEXT NOT NULL DEFAULT 'pending',
+    FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id),
+    FOREIGN KEY (cheque_id) REFERENCES cheque(cheque_id),
+    FOREIGN KEY (dealer_id) REFERENCES dealers(dealer_id)
+);
+
+CREATE TABLE whatsapp_sessions (
+    phone           TEXT PRIMARY KEY,
+    state           TEXT NOT NULL,
+    context_json    TEXT,
+    updated_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE alert_log (
+    alert_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel         TEXT NOT NULL,
+    recipient       TEXT NOT NULL,
+    message         TEXT NOT NULL,
+    sent_at         TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX idx_user_bank_account_user_id ON user_bank_account(user_id);
 CREATE INDEX idx_cheque_user_bank_acc_id ON cheque(user_bank_acc_id);
+CREATE INDEX idx_cheque_predicted_clearance ON cheque(predicted_clearance_date);
 CREATE INDEX idx_invoices_user_id ON invoices(user_id);
 CREATE INDEX idx_invoices_dealer_id ON invoices(dealer_id);
 CREATE INDEX idx_invoices_cheque_id ON invoices(cheque_id);
@@ -94,3 +170,10 @@ CREATE INDEX idx_item_item_code ON item(item_code);
 CREATE INDEX idx_dealers_bank_account_dealer_id ON dealers_bank_account(dealer_id);
 CREATE INDEX idx_cheque_cheque_no ON cheque(cheque_no);
 CREATE INDEX idx_dealers_dealer_name ON dealers(dealer_name);
+CREATE INDEX idx_bank_deposits_date ON bank_deposits(deposit_date);
+CREATE INDEX idx_planned_deposits_date ON planned_deposits(planned_date);
+CREATE INDEX idx_deposit_timetable_account ON deposit_timetable(user_bank_acc_id);
+CREATE INDEX idx_deposit_timetable_status ON deposit_timetable(status);
+CREATE INDEX idx_deposit_timetable_stated ON deposit_timetable(stated_date);
+CREATE INDEX idx_whatsapp_sessions_updated ON whatsapp_sessions(updated_at);
+CREATE INDEX idx_alert_log_sent_at ON alert_log(sent_at);

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t('page_cheques') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1>{{ t('page_cheques') }}</h1>
+<p class="help-tip">{{ t('help_tip_cheques') }}</p>
+
+<p class="actions-top">
+  <a href="{{ url_for('dealers.new_dealer') }}" class="btn btn-primary btn-lg">{{ t('add_dealer_manual') }}</a>
+</p>
+
+<div class="dealer-grid">
+  {% for d in dealers %}
+  {% set s = dealer_summaries.get(d.dealer_id, {}) %}
+  <a href="{{ url_for('dealers.cheques', dealer_id=d.dealer_id) }}" class="dealer-card">
+    <span class="dealer-icon">{{ d.dealer_name[0] }}</span>
+    <span>{{ d.dealer_name }}</span>
+    <span class="dealer-badges">
+      {% if s.get('ready') %}<span class="badge badge-ready">{{ t('badge_ready', n=s.ready) }}</span>{% endif %}
+      {% if s.get('pending_verification') %}<span class="badge badge-pending">{{ t('badge_pending', n=s.pending_verification) }}</span>{% endif %}
+      {% if s.get('on_cheque') %}<span class="badge badge-committed">{{ t('badge_bundled', n=s.on_cheque) }}</span>{% endif %}
+    </span>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

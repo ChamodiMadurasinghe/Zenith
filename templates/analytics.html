@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ t('page_analytics') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<h1>{{ t('page_analytics') }}</h1>
+
+<div class="summary-grid">
+  <div class="stat-card">
+    <span class="stat-label">{{ t('outstanding_liabilities') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(metrics.outstanding_liabilities_lkr) }}</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">{{ t('committed_cheques') }}</span>
+    <span class="stat-value">{{ metrics.committed_cheques_count }} (Rs. {{ "{:,.2f}".format(metrics.committed_cheques_total_lkr) }})</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">{{ t('unverified_invoices') }}</span>
+    <span class="stat-value">{{ metrics.unverified_invoices }}</span>
+  </div>
+</div>
+
+{% if report_html %}
+<div class="card report-content">
+  {{ report_html | safe }}
+</div>
+<p class="meta">{{ t('report_generated') }}: {{ report.generated_at }}</p>
+{% else %}
+<div class="card">
+  <p>{{ t('no_report') }}</p>
+</div>
+{% endif %}
+{% endblock %}
