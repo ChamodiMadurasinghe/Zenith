@@ -40,6 +40,10 @@ class InMemoryRepository:
         self._holidays: list[str] = list(DEFAULT_HOLIDAYS)
 
     def create_session(self, session_id: str, invoice_id: str | None = None) -> None:
+        if session_id in self._sessions:
+            if invoice_id is not None:
+                self._sessions[session_id]["invoice_id"] = invoice_id
+            return
         self._sessions[session_id] = {
             "invoice_id": invoice_id,
             "memory": {},

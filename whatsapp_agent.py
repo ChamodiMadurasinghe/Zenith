@@ -252,8 +252,21 @@ def whatsapp_webhook():
         return "", 403
     media_url = request.form.get("MediaUrl0")
     body = (request.form.get("Body") or "").strip()
+    use_agentic = Config.use_agentic_orchestrator()
     try:
-        if media_url:
+        if use_agentic:
+            from agentic.adapters.whatsapp_bridge import (
+                process_whatsapp_text_via_agentic,
+                process_whatsapp_via_agentic,
+            )
+
+            if media_url:
+                reply_text = process_whatsapp_via_agentic(
+                    media_url, sender, resolve_image_path=resolve_image_path
+                )
+            else:
+                reply_text = process_whatsapp_text_via_agentic(sender, body)
+        elif media_url:
             reply_text = process_whatsapp_document(media_url, sender)
         else:
             reply_text = handle_text_reply(sender, body) or "Please send a photo of an invoice or cheque."
@@ -269,18 +282,35 @@ def run_mock():
         media_url = None
     sender = MOCK_PAYLOAD["From"]
     print(f"USE_TWILIO_MOCK={USE_TWILIO_MOCK}")
+    print(f"USE_AGENTIC_ORCHESTRATOR={Config.use_agentic_orchestrator()}")
     print(f"Sender: {sender}")
     if mock_path:
         print(f"Using MOCK_IMAGE_PATH: {mock_path}")
     else:
         print(f"MediaUrl0: {MOCK_PAYLOAD['MediaUrl0']}")
     try:
-        reply_text = process_whatsapp_document(media_url, sender)
+        if Config.use_agentic_orchestrator():
+            from agentic.adapters.whatsapp_bridge import (
+                process_whatsapp_text_via_agentic,
+                process_whatsapp_via_agentic,
+            )
+
+            reply_text = process_whatsapp_via_agentic(
+                media_url, sender, resolve_image_path=resolve_image_path
+            )
+        else:
+            reply_text = process_whatsapp_document(media_url, sender)
     except Exception as exc:
         reply_text = f"Processing failed: {exc}"
     xml, status, headers = twiml_reply(reply_text)
     print(f"\nHTTP {status} {headers['Content-Type']}\n")
     print(xml)
+    if Config.use_agentic_orchestrator():
+        from agentic import get_session_trace
+
+        trace = get_session_trace(sender)
+        print(f"\nAgent trace steps: {len(trace.get('steps', []))}")
+        print(f"FSM state: {trace.get('fsm_state')}")
 
 
 if __name__ == "__main__":

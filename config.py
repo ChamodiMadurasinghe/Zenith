@@ -78,6 +78,11 @@ class Config:
         return _env_bool("USE_TWILIO_MOCK", True)
 
     @staticmethod
+    def use_agentic_orchestrator() -> bool:
+        """Route WhatsApp intake through agentic PER pipeline (handle_event)."""
+        return _env_bool("USE_AGENTIC_ORCHESTRATOR", False)
+
+    @staticmethod
     def mock_image_path() -> str:
         return _env("MOCK_IMAGE_PATH", "")
 
