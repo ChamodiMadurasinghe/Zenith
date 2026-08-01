@@ -8,7 +8,7 @@ from typing import Any
 
 from agentic.adapters.zenith_tools import ZenithAgentTools
 from agentic.contracts.events import ActionType, OutboundAction
-from agentic.contracts.models import ForecastConstraints, InvoiceDraft
+from agentic.contracts.models import ChequePlan, ForecastConstraints, InvoiceDraft
 from agentic.contracts.repositories import InvoiceRepository
 from agentic.memory.session_store import SessionStore
 from agentic.orchestrator.per_loop import PERLoop
@@ -134,14 +134,16 @@ class InvoicePipeline:
                 cbsl_holidays=_holiday_dates(self._repo),
                 alternative_pickup_date=liaison.alternative_date,
             )
-            per = PERLoop(trace, "agent3")
-            result = per.run(
-                {"alternative_date": str(liaison.alternative_date)},
-                lambda: self._tools.liquidity.forecast(draft, constraints),
-                lambda p: (True, "continue", "re-forecast with dealer date"),
+            plan = self._run_agent3(
+                session_id,
+                store,
+                trace,
+                draft,
+                fsm,
+                constraints=constraints,
+                negotiation_round=liaison.negotiation_round,
             )
-            if result.output:
-                plan = result.output
+            if plan:
                 store.set("cheque_plan", _plan_dict(plan))
             self._transition(fsm, InvoiceState.AWAITING_DEALER, session_id, store, invoice_id)
             msg = self._tools.liaison.draft_message(plan)
@@ -211,32 +213,115 @@ class InvoicePipeline:
         return None
 
     def _run_agent2(self, session_id, store, trace, draft, dealer_id, fsm):
+        from agentic.adapters.agent_ai import ai_audit_review, needs_ai_audit
         from agentic.contracts.models import AuditResult
 
         per = PERLoop(trace, "agent2")
+        rules_result: AuditResult | None = None
+        rule_flags: list = []
+
+        def _rules_execute():
+            nonlocal rules_result, rule_flags
+            rules_result, rule_flags = self._tools.anomaly.audit_rules(draft, dealer_id)
+            return rules_result
+
         result = per.run(
-            {"dealer_id": dealer_id},
-            lambda: self._tools.anomaly.audit(draft, dealer_id),
+            {"dealer_id": dealer_id, "mode": "rules"},
+            _rules_execute,
             lambda a: (
                 not a.locked,
                 "lock" if a.locked else "continue",
                 "; ".join(a.anomalies) if a.anomalies else "pass",
             ),
         )
-        return result.output or AuditResult(passed=True)
+        audit = result.output or rules_result or AuditResult(passed=True)
 
-    def _run_agent3(self, session_id, store, trace, draft, fsm):
-        constraints = ForecastConstraints(
-            cbsl_holidays=_holiday_dates(self._repo),
-            supplier_deadline=draft.due_date,
-        )
+        if needs_ai_audit(audit, rule_flags):
+            trace.plan(
+                "agent2",
+                {"trigger": "flags_or_severity", "flag_count": len(rule_flags)},
+                decision="ai_review",
+            )
+            ai_per = PERLoop(trace, "agent2-ai")
+            ai_result = ai_per.run(
+                {"dealer_id": dealer_id, "mode": "ai", "flags": rule_flags},
+                lambda: ai_audit_review(draft, dealer_id, audit, rule_flags),
+                lambda a: (
+                    not a.locked,
+                    "lock" if a.locked else "continue",
+                    "; ".join(a.anomalies) if a.anomalies else "ai_pass",
+                ),
+            )
+            if ai_result.output:
+                audit = ai_result.output
+
+        return audit
+
+    def _run_agent3(
+        self,
+        session_id,
+        store,
+        trace,
+        draft,
+        fsm,
+        *,
+        constraints: ForecastConstraints | None = None,
+        negotiation_round: int = 0,
+    ):
+        from agentic.adapters.agent_ai import ai_forecast_review, needs_ai_forecast
+
+        if constraints is None:
+            constraints = ForecastConstraints(
+                cbsl_holidays=_holiday_dates(self._repo),
+                supplier_deadline=draft.due_date,
+            )
+
+        engine_plan: ChequePlan | None = None
+        candidates: list = []
+
+        def _engine_execute():
+            nonlocal engine_plan, candidates
+            engine_plan, candidates = self._tools.liquidity.forecast_with_candidates(
+                draft, constraints
+            )
+            return engine_plan
+
         per = PERLoop(trace, "agent3")
         result = per.run(
-            {"amount": draft.total_lkr, "deadline": str(draft.due_date)},
-            lambda: self._tools.liquidity.forecast(draft, constraints),
+            {"amount": draft.total_lkr, "deadline": str(draft.due_date), "mode": "engine"},
+            _engine_execute,
             lambda p: (True, "continue", p.rationale[:120]),
         )
-        return result.output
+        plan = result.output or engine_plan
+        if plan is None:
+            return None
+
+        if needs_ai_forecast(
+            plan,
+            draft,
+            constraints,
+            negotiation_round=negotiation_round,
+            candidate_count=len(candidates),
+        ):
+            trace.plan(
+                "agent3",
+                {
+                    "trigger": "strategic_forecast",
+                    "float_days": plan.float_days,
+                    "candidates": len(candidates),
+                },
+                decision="ai_review",
+            )
+            ai_per = PERLoop(trace, "agent3-ai")
+            ai_result = ai_per.run(
+                {"mode": "ai", "candidates": candidates[:5]},
+                lambda: ai_forecast_review(draft, plan, candidates, constraints),
+                lambda p: (True, "continue", p.rationale[:120]),
+            )
+            if ai_result.output:
+                plan = ai_result.output
+
+        return plan
 
     @staticmethod
     def _review_draft(draft: InvoiceDraft) -> tuple[bool, str, str]:

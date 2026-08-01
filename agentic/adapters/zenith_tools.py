@@ -88,7 +88,7 @@ class ZenithVisionExtractor:
 
 
 class ZenithAnomalyGuard:
-    def audit(self, draft: InvoiceDraft, dealer_id: str) -> AuditResult:
+    def audit_rules(self, draft: InvoiceDraft, dealer_id: str) -> tuple[AuditResult, list[dict]]:
         from agents.anomaly import check_invoice_anomalies
 
         extracted = _extracted_from_draft(draft)
@@ -99,24 +99,28 @@ class ZenithAnomalyGuard:
         high = any(f.get("severity") == "high" for f in flags)
         locked = high and len(flags) > 0
 
-        return AuditResult(
+        result = AuditResult(
             passed=not locked,
             anomalies=messages,
             locked=locked,
             severity="critical" if locked else ("warning" if flags else "none"),
         )
+        return result, flags
+
+    def audit(self, draft: InvoiceDraft, dealer_id: str) -> AuditResult:
+        result, _ = self.audit_rules(draft, dealer_id)
+        return result
 
 
 class ZenithLiquidityForecaster:
-    def forecast(
+    def forecast_with_candidates(
         self,
         draft: InvoiceDraft,
         constraints: ForecastConstraints,
-    ) -> ChequePlan:
+    ) -> tuple[ChequePlan, list[dict]]:
         holidays = {format_date(d) if isinstance(d, date) else str(d) for d in constraints.cbsl_holidays}
         holiday_set = set(holidays)
 
-        # Target: latest stated date still meeting supplier deadline with max float
         deadline = constraints.supplier_deadline or draft.due_date or date.today() + timedelta(days=30)
         if constraints.alternative_pickup_date:
             deadline = constraints.alternative_pickup_date
@@ -124,22 +128,39 @@ class ZenithLiquidityForecaster:
         candidate = deadline
         best_date = candidate
         best_float = 0
-        best_detail = {}
+        best_detail: dict = {}
+        seen: list[dict] = []
 
         for _ in range(45):
-            if candidate.weekday() == 6:  # Sunday — skip for cheque dating search
+            if candidate.weekday() == 6:
                 candidate -= timedelta(days=1)
                 continue
             stated_str = format_date(candidate)
             detail = apply_liquidity_dates(stated_str, holiday_set, is_interbank=False)
             float_days = int(detail.get("days_gained_by_holiday_lag") or 0)
             settlement = parse_date(detail["true_settlement_date"])
-            if settlement <= deadline and float_days >= best_float:
-                best_float = float_days
-                best_date = candidate
-                best_detail = detail
+            if settlement <= deadline:
+                seen.append(
+                    {
+                        "stated_date": stated_str,
+                        "float_days": float_days,
+                        "true_settlement_date": detail.get("true_settlement_date"),
+                    }
+                )
+                if float_days >= best_float:
+                    best_float = float_days
+                    best_date = candidate
+                    best_detail = detail
             candidate -= timedelta(days=1)
             if candidate < date.today() - timedelta(days=5):
+                break
+
+        seen.sort(key=lambda x: x["float_days"], reverse=True)
+        unique: list[dict] = []
+        for item in seen:
+            if not any(u["stated_date"] == item["stated_date"] for u in unique):
+                unique.append(item)
+            if len(unique) >= 5:
                 break
 
         clearing = None
@@ -155,7 +176,7 @@ class ZenithLiquidityForecaster:
             f"({best_detail.get('true_settlement_date', 'n/a')})."
         )
 
-        return ChequePlan(
+        plan = ChequePlan(
             recommended_date=best_date,
             float_days=best_float,
             rationale=rationale,
@@ -166,6 +187,15 @@ class ZenithLiquidityForecaster:
                 "deadline": format_date(deadline),
             },
         )
+        return plan, unique
+
+    def forecast(
+        self,
+        draft: InvoiceDraft,
+        constraints: ForecastConstraints,
+    ) -> ChequePlan:
+        plan, _ = self.forecast_with_candidates(draft, constraints)
+        return plan
 
 
 class ZenithDealerLiaison:

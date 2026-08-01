@@ -34,6 +34,16 @@ class Config:
         return _env("GEMINI_VISION_MODEL", _env("GEMINI_MODEL", "gemini-2.0-flash"))
 
     @staticmethod
+    def gemini_text_model() -> str:
+        """Text/JSON model for Agents 2–3 conditional AI calls."""
+        return _env("GEMINI_TEXT_MODEL", Config.gemini_vision_model())
+
+    @staticmethod
+    def agent_conditional_ai() -> bool:
+        """When true, Agents 2–3 call Gemini only if triggers fire (see agent_ai.py)."""
+        return _env_bool("AGENT_CONDITIONAL_AI", True)
+
+    @staticmethod
     def gemini_model() -> str:
         """Backward compatibility — maps to vision model."""
         return Config.gemini_vision_model()
