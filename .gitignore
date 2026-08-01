@@ -1,6 +1,7 @@
 .env
 __pycache__/
 *.py[cod]
+*.db
 *.db-journal
 .venv/
 venv/
@@ -8,3 +9,4 @@ storage/invoices/*
 !storage/invoices/.gitkeep
 *.egg-info/
 .pytest_cache/
+debug-*.log
