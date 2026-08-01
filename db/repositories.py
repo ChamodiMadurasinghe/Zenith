@@ -398,6 +398,101 @@ def update_invoice_dealer_id(invoice_id: int, dealer_id: int):
     )
 
 
+def ensure_whatsapp_inbox_schema():
+    """Create whatsapp_inbox table on existing databases without full migrate."""
+    execute(
+        """CREATE TABLE IF NOT EXISTS whatsapp_inbox (
+            inbox_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            sender_phone TEXT,
+            location_path TEXT NOT NULL,
+            received_at TEXT DEFAULT (datetime('now')),
+            status TEXT NOT NULL DEFAULT 'pending',
+            invoice_id INTEGER,
+            FOREIGN KEY (user_id) REFERENCES user(user_id),
+            FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+        )"""
+    )
+    execute("CREATE INDEX IF NOT EXISTS idx_whatsapp_inbox_status ON whatsapp_inbox(status)")
+    execute("CREATE INDEX IF NOT EXISTS idx_whatsapp_inbox_user ON whatsapp_inbox(user_id)")
+    _migrate_legacy_awaiting_ai_stubs()
+
+
+def _migrate_legacy_awaiting_ai_stubs():
+    """Move older ai_status=awaiting invoice stubs into whatsapp_inbox."""
+    stubs = query(
+        """SELECT invoices_id, location_path,
+                  json_extract(pending_dealer_json, '$.whatsapp_sender') AS sender_phone
+           FROM invoices
+           WHERE user_id = ? AND is_invoice_verified = 0
+             AND json_extract(pending_dealer_json, '$.ai_status') = 'awaiting'""",
+        (Config.USER_ID,),
+    )
+    if not stubs:
+        return
+    for stub in stubs:
+        path = stub.get("location_path")
+        if not path:
+            continue
+        with transaction() as conn:
+            conn.execute(
+                """INSERT INTO whatsapp_inbox (user_id, sender_phone, location_path, status)
+                   VALUES (?, ?, ?, 'pending')""",
+                (Config.USER_ID, stub.get("sender_phone"), path),
+            )
+            conn.execute("DELETE FROM item WHERE invoices_id = ?", (stub["invoices_id"],))
+            conn.execute(
+                "DELETE FROM invoices WHERE invoices_id = ? AND user_id = ?",
+                (stub["invoices_id"], Config.USER_ID),
+            )
+
+
+def save_whatsapp_inbox(sender_phone: str | None, location_path: str) -> int:
+    ensure_whatsapp_inbox_schema()
+    with transaction() as conn:
+        cursor = conn.execute(
+            """INSERT INTO whatsapp_inbox (user_id, sender_phone, location_path, status)
+               VALUES (?, ?, ?, 'pending')""",
+            (Config.USER_ID, sender_phone, location_path),
+        )
+        return cursor.lastrowid
+
+
+def get_whatsapp_inbox_pending():
+    ensure_whatsapp_inbox_schema()
+    return query(
+        """SELECT * FROM whatsapp_inbox
+           WHERE user_id = ? AND status = 'pending'
+           ORDER BY received_at DESC""",
+        (Config.USER_ID,),
+    )
+
+
+def get_whatsapp_inbox_item(inbox_id: int):
+    ensure_whatsapp_inbox_schema()
+    return query_one(
+        "SELECT * FROM whatsapp_inbox WHERE inbox_id = ? AND user_id = ?",
+        (inbox_id, Config.USER_ID),
+    )
+
+
+def mark_whatsapp_inbox_extracted(inbox_id: int, invoice_id: int):
+    execute(
+        """UPDATE whatsapp_inbox
+           SET status = 'extracted', invoice_id = ?
+           WHERE inbox_id = ? AND user_id = ?""",
+        (invoice_id, inbox_id, Config.USER_ID),
+    )
+
+
+def dismiss_whatsapp_inbox(inbox_id: int):
+    execute(
+        """UPDATE whatsapp_inbox SET status = 'dismissed'
+           WHERE inbox_id = ? AND user_id = ? AND status = 'pending'""",
+        (inbox_id, Config.USER_ID),
+    )
+
+
 def upsert_whatsapp_session(phone: str, state: str, context: dict):
     execute(
         """INSERT OR REPLACE INTO whatsapp_sessions (phone, state, context_json, updated_at)

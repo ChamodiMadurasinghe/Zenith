@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Blueprint, abort, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.utils import secure_filename
 
 from config import Config
@@ -112,10 +112,14 @@ def serve_upload(filename):
 @ingestion_bp.route("/")
 @login_required
 def dashboard():
+    whatsapp_inbox = repo.get_whatsapp_inbox_pending()
+    for row in whatsapp_inbox:
+        row["image_url"] = _image_url(row.get("location_path"))
     return render_template(
         "upload.html",
         invoices=repo.get_recent_invoices(),
         pending_invoices=repo.get_pending_verification_invoices(),
+        whatsapp_inbox=whatsapp_inbox,
         dealers=repo.get_dealers(),
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
     )
@@ -278,6 +282,40 @@ def verify(draft_id):
     _drafts().pop(draft_id, None)
     session.modified = True
     flash_t("flash_invoice_verified", "success")
+    return redirect(url_for("ingestion.dashboard"))
+
+
+@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/extract", methods=["POST"])
+@login_required
+def extract_whatsapp_inbox(inbox_id):
+    item = repo.get_whatsapp_inbox_item(inbox_id)
+    if not item or item.get("status") != "pending":
+        flash_t("flash_whatsapp_inbox_missing", "error")
+        return redirect(url_for("ingestion.dashboard"))
+
+    location_path = item.get("location_path") or ""
+    try:
+        from core.whatsapp_intake import extract_image_to_pending_invoice
+
+        invoice_id = extract_image_to_pending_invoice(
+            location_path,
+            sender_phone=item.get("sender_phone"),
+        )
+        repo.mark_whatsapp_inbox_extracted(inbox_id, invoice_id)
+        flash_t("flash_whatsapp_extracted", "success")
+        return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
+    except Exception as exc:
+        flash_t("flash_vision_unavailable", "error", error=str(exc))
+        return redirect(url_for("ingestion.dashboard"))
+
+
+@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/dismiss", methods=["POST"])
+@login_required
+def dismiss_whatsapp_inbox(inbox_id):
+    item = repo.get_whatsapp_inbox_item(inbox_id)
+    if item and item.get("status") == "pending":
+        repo.dismiss_whatsapp_inbox(inbox_id)
+        flash_t("flash_whatsapp_dismissed", "success")
     return redirect(url_for("ingestion.dashboard"))
 
 

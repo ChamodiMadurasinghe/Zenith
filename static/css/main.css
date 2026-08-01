@@ -140,6 +140,17 @@ input, select, textarea {
 .data-table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: var(--radius); overflow: hidden; }
 .data-table th, .data-table td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table th { background: #f0f3f8; font-size: 0.85rem; }
+.wa-inbox-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: block;
+  background: #f7f8fa;
+}
+.inline-form { display: inline-block; margin: 0 0.35rem 0 0; }
+.whatsapp-inbox-table td { vertical-align: middle; }
 .row-danger { background: #fdecea; }
 .row-gain { background: #e8f5e9; }
 .text-muted { color: #666; font-size: 0.9rem; }

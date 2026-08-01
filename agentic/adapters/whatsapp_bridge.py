@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
-from datetime import date
-
 from agentic import handle_event
 from agentic.contracts.events import ActionType, EventSource, EventType, InboundEvent, OutboundAction
 from agentic.orchestrator.handler import get_default_repository
-from config import Config
-from core.dates import format_date
+from core.whatsapp_intake import WHATSAPP_INBOX_REPLY
 from db import repositories as repo
 
 
@@ -64,60 +60,6 @@ def actions_to_whatsapp_reply(actions: list[OutboundAction]) -> str:
     return combined or "Processed. Open the web app for details."
 
 
-def _persist_pending_invoice(
-    actions: list[OutboundAction],
-    location_path: str,
-    sender_phone: str,
-) -> int | None:
-    """Save extracted invoice to Zenith DB for web verification (best-effort)."""
-    draft = None
-    plan = None
-    for action in actions:
-        if action.action_type != ActionType.SHOW_UI.value:
-            continue
-        draft = draft or action.payload.get("draft")
-        plan = plan or action.payload.get("cheque_plan")
-        if action.payload.get("locked"):
-            return None
-
-    if not draft or not draft.get("supplier_name"):
-        return None
-
-    supplier = draft["supplier_name"]
-    dealer = repo.find_dealer_by_name(supplier) if supplier else None
-    dealer_id = dealer["dealer_id"] if dealer else repo.get_pending_supplier_dealer_id()
-
-    invoiced_date = format_date(date.today())
-    if plan and plan.get("recommended_date"):
-        invoiced_date = plan["recommended_date"]
-
-    try:
-        return repo.save_pending_invoice(
-            {
-                "invoice_no": "WA-PENDING",
-                "invoiced_date": invoiced_date,
-                "credit_period_days": Config.DEFAULT_CREDIT_PERIOD_DAYS,
-                "total_amount": float(draft.get("total_lkr") or 0),
-                "location_path": location_path,
-            },
-            [
-                {
-                    "item_code": "",
-                    "item_name": "WhatsApp agentic intake",
-                    "item_qty": 1,
-                    "item_price": float(draft.get("total_lkr") or 0),
-                    "item_discount": 0,
-                }
-            ],
-            dealer_id,
-            pending_dealer_json=json.dumps(
-                {"supplier_name": supplier, "whatsapp_sender": sender_phone, "cheque_plan": plan}
-            ),
-        )
-    except Exception:
-        return None
-
-
 def _route_text_event(sender: str, body: str) -> InboundEvent | None:
     """Map WhatsApp text to orchestrator event based on session FSM state."""
     memory = get_default_repository().get_agent_memory(sender)
@@ -153,26 +95,18 @@ def _route_text_event(sender: str, body: str) -> InboundEvent | None:
 
 
 def process_whatsapp_via_agentic(
-    media_url: str | None,
+    media_ref: str | None,
     sender_phone: str,
     *,
     resolve_image_path,
 ) -> str:
-    """Run invoice image through the agentic orchestrator."""
-    local_path, location_path = resolve_image_path(media_url)
-    event = InboundEvent(
-        event_type=EventType.INVOICE_IMAGE,
-        session_id=sender_phone,
-        payload={
-            "image_path": str(local_path),
-            "location_path": location_path,
-            "lang": "en",
-        },
-        source=EventSource.WHATSAPP,
-    )
-    actions = handle_event(event)
-    _persist_pending_invoice(actions, location_path, sender_phone)
-    return actions_to_whatsapp_reply(actions)
+    """Save invoice image to web inbox; Gemini runs when user chooses on the portal."""
+    if media_ref and str(media_ref).startswith("http"):
+        _, location_path = resolve_image_path(media_url=media_ref)
+    else:
+        _, location_path = resolve_image_path(media_id=media_ref)
+    repo.save_whatsapp_inbox(sender_phone, location_path)
+    return WHATSAPP_INBOX_REPLY
 
 
 def process_whatsapp_text_via_agentic(sender_phone: str, body: str) -> str:

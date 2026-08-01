@@ -26,6 +26,48 @@
   </div>
 </div>
 
+<h2>{{ t('whatsapp_inbox') }}{% if whatsapp_inbox %} ({{ whatsapp_inbox|length }}){% endif %}</h2>
+<p class="muted">{{ t('whatsapp_inbox_help') }}</p>
+{% if whatsapp_inbox %}
+<table class="data-table whatsapp-inbox-table">
+  <thead>
+    <tr>
+      <th>{{ t('col_preview') }}</th>
+      <th>{{ t('col_received') }}</th>
+      <th>{{ t('col_from') }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in whatsapp_inbox %}
+    <tr>
+      <td>
+        {% if row.image_url %}
+        <a href="{{ row.image_url }}" target="_blank" rel="noopener">
+          <img class="wa-inbox-thumb" src="{{ row.image_url }}" alt="{{ t('invoice_image_label') }}">
+        </a>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+      <td>{{ row.received_at }}</td>
+      <td>{{ row.sender_phone or '—' }}</td>
+      <td>
+        <form method="post" action="{{ url_for('ingestion.extract_whatsapp_inbox', inbox_id=row.inbox_id) }}" class="inline-form">
+          <button type="submit" class="btn btn-primary btn-sm">{{ t('whatsapp_send_to_ai') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('ingestion.dismiss_whatsapp_inbox', inbox_id=row.inbox_id) }}" class="inline-form">
+          <button type="submit" class="btn btn-secondary btn-sm">{{ t('whatsapp_dismiss') }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">{{ t('no_whatsapp_inbox') }}</p>
+{% endif %}
+
 {% if pending_invoices %}
 <h2>{{ t('pending_verification') }}</h2>
 <table class="data-table">

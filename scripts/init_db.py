@@ -56,6 +56,19 @@ MIGRATIONS = [
         updated_at TEXT DEFAULT (datetime('now'))
     )""",
     "CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_updated ON whatsapp_sessions(updated_at)",
+    """CREATE TABLE IF NOT EXISTS whatsapp_inbox (
+        inbox_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        sender_phone TEXT,
+        location_path TEXT NOT NULL,
+        received_at TEXT DEFAULT (datetime('now')),
+        status TEXT NOT NULL DEFAULT 'pending',
+        invoice_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES user(user_id),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_whatsapp_inbox_status ON whatsapp_inbox(status)",
+    "CREATE INDEX IF NOT EXISTS idx_whatsapp_inbox_user ON whatsapp_inbox(user_id)",
     """CREATE TABLE IF NOT EXISTS alert_log (
         alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
         channel TEXT NOT NULL,
@@ -64,6 +77,35 @@ MIGRATIONS = [
         sent_at TEXT DEFAULT (datetime('now'))
     )""",
     "CREATE INDEX IF NOT EXISTS idx_alert_log_sent_at ON alert_log(sent_at)",
+    """CREATE TABLE IF NOT EXISTS app_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS bank_deposits (
+        deposit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_bank_acc_id INTEGER NOT NULL,
+        deposit_date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        note TEXT,
+        FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS planned_deposits (
+        planned_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_bank_acc_id INTEGER NOT NULL,
+        planned_date TEXT NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT,
+        FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS analyst_reports (
+        report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dealer_id INTEGER,
+        report_md TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (dealer_id) REFERENCES dealers(dealer_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_bank_deposits_date ON bank_deposits(deposit_date)",
+    "CREATE INDEX IF NOT EXISTS idx_planned_deposits_date ON planned_deposits(planned_date)",
 ]
 
 
@@ -104,6 +146,23 @@ def migrate_db(conn: sqlite3.Connection):
                dealer_strictness, casual_days, impossible_days)
                VALUES ('Pending Supplier', NULL, NULL, NULL, 'Medium', 3, 'Sunday')"""
         )
+    # Ensure default bank setting exists for cash-flow / bundling
+    conn.execute(
+        """INSERT OR IGNORE INTO app_settings (setting_key, setting_value)
+           VALUES ('default_bank_acc_id', '1')"""
+    )
+    # If legacy `password` column DB was half-migrated, sync hash from APP_PASSWORD
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(user)").fetchall()}
+        if "password_hash" not in cols and "password" in cols:
+            conn.execute("ALTER TABLE user ADD COLUMN password_hash TEXT")
+        password = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
+        conn.execute(
+            "UPDATE user SET password_hash = ? WHERE user_id = 1",
+            (generate_password_hash(password),),
+        )
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
 
 

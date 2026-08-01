@@ -13,8 +13,6 @@ from flask import Blueprint, Request, request
 
 from config import BASE_DIR, Config
 from core.dates import format_date
-from core.ingestion_helpers import dealer_setup_from_extraction
-from core.liquidity_engine import calculate_max_liquidity_schedule
 from core.meta_whatsapp import (
     download_media as download_meta_media,
     extract_inbound_messages,
@@ -22,7 +20,7 @@ from core.meta_whatsapp import (
     validate_meta_signature,
     verify_webhook_challenge,
 )
-from core.whatsapp_conversation import begin_dealer_confirmation, handle_text_reply
+from core.whatsapp_conversation import handle_text_reply
 from core.whatsapp_sender import send_whatsapp_message
 from db import repositories as repo
 
@@ -180,80 +178,75 @@ def build_liquidity_reply(
     return "\n".join(lines)
 
 
-def process_whatsapp_document(
-    sender_phone: str,
+def _save_whatsapp_pending(
     *,
-    media_id: str | None = None,
-    media_url: str | None = None,
-) -> str:
-    local_path, location_path = resolve_image_path(media_id=media_id, media_url=media_url)
-    try:
-        from agents.ingestion import extract_invoice
-
-        raw = extract_invoice(str(local_path))
-    except Exception:
-        return "Could not read document — try a clearer photo and ensure GEMINI_API_KEY is set."
-
-    extracted = _normalize_extracted(raw)
-    dealer_setup = dealer_setup_from_extraction(raw)
+    location_path: str,
+    extracted: dict,
+    dealer_setup: dict,
+    anomalies: list,
+    sender_phone: str,
+) -> tuple[int, bool]:
+    """Persist pending invoice; returns (invoice_id, dealer_matched)."""
     dealer = (
         repo.find_dealer_by_name(extracted["supplier_name"])
         if extracted["supplier_name"] != "Unknown"
         else None
     )
     dealer_id = dealer["dealer_id"] if dealer else repo.get_pending_supplier_dealer_id()
-
-    try:
-        from agents.anomaly import check_invoice_anomalies
-
-        anomalies = check_invoice_anomalies(extracted, dealer["dealer_id"] if dealer else None)
-    except Exception:
-        anomalies = []
-
-    account_id = _default_account_id()
-    bank_context = repo.build_bank_context(account_id) if account_id else {}
-    holidays = repo.get_holidays()
-    pending_rows = [
-        {
-            "stated_date": extracted["invoiced_date"],
-            "total_amount": extracted["total_amount"],
-            "dealer_id": dealer["dealer_id"] if dealer else None,
-            "status": "pending",
-        }
-    ]
-    schedule = calculate_max_liquidity_schedule(pending_rows, holidays, bank_context)
-    if not schedule:
-        return "Could not compute liquidity schedule for this document."
-
-    items = extracted["line_items"] or [
+    items = extracted.get("line_items") or [
         {
             "item_code": "",
             "item_name": "WhatsApp intake",
             "item_qty": 1,
-            "item_price": extracted["total_amount"],
+            "item_price": float(extracted.get("total_amount") or 0) or 1,
             "item_discount": 0,
         }
     ]
-    pending_payload = {**dealer_setup, "anomalies": anomalies}
+    pending_payload = {
+        **dealer_setup,
+        "anomalies": anomalies,
+        "whatsapp_sender": sender_phone,
+    }
     invoice_id = repo.save_pending_invoice(
         {
-            "invoice_no": extracted["invoice_no"],
-            "invoiced_date": extracted["invoiced_date"],
-            "credit_period_days": extracted["credit_period_days"],
-            "total_amount": extracted["total_amount"],
+            "invoice_no": extracted.get("invoice_no") or "PENDING",
+            "invoiced_date": extracted.get("invoiced_date") or format_date(date.today()),
+            "credit_period_days": int(
+                extracted.get("credit_period_days") or Config.DEFAULT_CREDIT_PERIOD_DAYS
+            ),
+            "total_amount": float(extracted.get("total_amount") or 0),
             "location_path": location_path,
         },
         items,
         dealer_id,
         pending_dealer_json=json.dumps(pending_payload),
     )
-    reply = build_liquidity_reply(
-        extracted, schedule[0], dealer_matched=bool(dealer), anomalies=anomalies
-    )
-    if not dealer and dealer_setup.get("dealer_name"):
-        onboarding = begin_dealer_confirmation(sender_phone, dealer_setup, invoice_id=invoice_id)
-        reply = f"{reply}\n\n{onboarding}"
-    return reply
+    return invoice_id, bool(dealer)
+
+
+def process_whatsapp_document(
+    sender_phone: str,
+    *,
+    media_id: str | None = None,
+    media_url: str | None = None,
+) -> str:
+    """Save WhatsApp image to web portal inbox; user triggers Gemini from the dashboard."""
+    from core.whatsapp_intake import WHATSAPP_INBOX_REPLY
+
+    try:
+        _, location_path = resolve_image_path(media_id=media_id, media_url=media_url)
+        repo.save_whatsapp_inbox(sender_phone, location_path)
+        print(
+            f"[whatsapp] {WHATSAPP_INTAKE_VERSION} saved inbox from {sender_phone}: {location_path}",
+            flush=True,
+        )
+        return WHATSAPP_INBOX_REPLY
+    except Exception as exc:
+        print(f"[whatsapp] inbox save failed: {exc}", flush=True)
+        return (
+            "Photo could not be saved to the web portal. "
+            "Please check that the server is running and Meta/WhatsApp settings are correct."
+        )
 
 
 def _sender_allowed(sender: str) -> bool:
@@ -286,6 +279,31 @@ def validate_twilio_request(req: Request) -> bool:
 
     validator = RequestValidator(auth_token)
     return validator.validate(req.url, req.form, signature)
+
+
+WHATSAPP_INTAKE_VERSION = "inbox-v2"
+
+
+@whatsapp_bp.route("/webhook/whatsapp/health", methods=["GET"])
+def whatsapp_webhook_health():
+    """Verify public webhook is running inbox-first intake (not Gemini-on-receive)."""
+    from flask import jsonify
+
+    return jsonify(
+        {
+            "ok": True,
+            "status": "ok",
+            "intake_version": WHATSAPP_INTAKE_VERSION,
+            "gemini_on_whatsapp_receive": False,
+            "provider": Config.whatsapp_provider(),
+            "mock": Config.use_whatsapp_mock(),
+            "meta_token_set": bool(Config.meta_whatsapp_token()),
+            "meta_phone_number_id_set": bool(Config.meta_phone_number_id()),
+            "verify_token_set": bool(Config.meta_verify_token()),
+            "agentic": Config.use_agentic_orchestrator(),
+            "hint": "intake_version must be inbox-v2. Gemini runs only after Send to AI on the web app.",
+        }
+    )
 
 
 @whatsapp_bp.route("/webhook/whatsapp", methods=["GET"])
@@ -332,24 +350,17 @@ def whatsapp_webhook():
             if not _sender_allowed(sender):
                 continue
             try:
-                if use_agentic:
+                if msg.get("media_id"):
+                    # Always store photo first; Gemini runs only from web "Send to AI"
+                    reply_text = process_whatsapp_document(sender, media_id=msg["media_id"])
+                elif use_agentic:
                     from agentic.adapters.whatsapp_bridge import (
                         process_whatsapp_text_via_agentic,
-                        process_whatsapp_via_agentic,
                     )
 
-                    if msg.get("media_id"):
-                        reply_text = process_whatsapp_via_agentic(
-                            msg["media_id"],
-                            sender,
-                            resolve_image_path=resolve_image_path,
-                        )
-                    else:
-                        reply_text = process_whatsapp_text_via_agentic(
-                            sender, msg.get("text") or ""
-                        )
-                elif msg.get("media_id"):
-                    reply_text = process_whatsapp_document(sender, media_id=msg["media_id"])
+                    reply_text = process_whatsapp_text_via_agentic(
+                        sender, msg.get("text") or ""
+                    )
                 elif msg.get("text"):
                     reply_text = (
                         handle_text_reply(sender, msg["text"])
@@ -372,20 +383,14 @@ def whatsapp_webhook():
     body = (request.form.get("Body") or "").strip()
     use_agentic = Config.use_agentic_orchestrator()
     try:
-        if use_agentic:
+        if media_url:
+            reply_text = process_whatsapp_document(sender, media_url=media_url)
+        elif use_agentic:
             from agentic.adapters.whatsapp_bridge import (
                 process_whatsapp_text_via_agentic,
-                process_whatsapp_via_agentic,
             )
 
-            if media_url:
-                reply_text = process_whatsapp_via_agentic(
-                    media_url, sender, resolve_image_path=resolve_image_path
-                )
-            else:
-                reply_text = process_whatsapp_text_via_agentic(sender, body)
-        elif media_url:
-            reply_text = process_whatsapp_document(sender, media_url=media_url)
+            reply_text = process_whatsapp_text_via_agentic(sender, body)
         else:
             reply_text = handle_text_reply(sender, body) or (
                 "Please send a photo of an invoice or cheque."
@@ -412,14 +417,7 @@ def run_mock():
     else:
         print(f"MediaUrl0: {MOCK_PAYLOAD['MediaUrl0']}")
     try:
-        if Config.use_agentic_orchestrator():
-            from agentic.adapters.whatsapp_bridge import process_whatsapp_via_agentic
-
-            reply_text = process_whatsapp_via_agentic(
-                media_url, sender, resolve_image_path=resolve_image_path
-            )
-        else:
-            reply_text = process_whatsapp_document(sender, media_url=media_url)
+        reply_text = process_whatsapp_document(sender, media_url=media_url)
     except Exception as exc:
         reply_text = f"Processing failed: {exc}"
     print("\n--- Reply ---\n")

@@ -150,6 +150,18 @@ CREATE TABLE whatsapp_sessions (
     updated_at      TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE whatsapp_inbox (
+    inbox_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    sender_phone    TEXT,
+    location_path   TEXT NOT NULL,
+    received_at     TEXT DEFAULT (datetime('now')),
+    status          TEXT NOT NULL DEFAULT 'pending',
+    invoice_id      INTEGER,
+    FOREIGN KEY (user_id) REFERENCES user(user_id),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+);
+
 CREATE TABLE alert_log (
     alert_id        INTEGER PRIMARY KEY AUTOINCREMENT,
     channel         TEXT NOT NULL,
@@ -176,4 +188,6 @@ CREATE INDEX idx_deposit_timetable_account ON deposit_timetable(user_bank_acc_id
 CREATE INDEX idx_deposit_timetable_status ON deposit_timetable(status);
 CREATE INDEX idx_deposit_timetable_stated ON deposit_timetable(stated_date);
 CREATE INDEX idx_whatsapp_sessions_updated ON whatsapp_sessions(updated_at);
+CREATE INDEX idx_whatsapp_inbox_status ON whatsapp_inbox(status);
+CREATE INDEX idx_whatsapp_inbox_user ON whatsapp_inbox(user_id);
 CREATE INDEX idx_alert_log_sent_at ON alert_log(sent_at);
