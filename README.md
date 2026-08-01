@@ -29,17 +29,26 @@ python app.py
 
 Open http://127.0.0.1:5000 and sign in with `APP_PASSWORD`.
 
-## WhatsApp invoice agent (Twilio)
+## WhatsApp invoice agent (Meta Cloud API)
 
-Cashiers can snap invoice/cheque photos on WhatsApp instead of using the web upload form.
+Cashiers can snap invoice/cheque photos on WhatsApp instead of using the web upload form. Default provider is **Meta WhatsApp Cloud API** (`WHATSAPP_PROVIDER=meta`).
 
-1. Add Twilio credentials to `.env` (see `.env.example`): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`
-2. Keep `USE_TWILIO_MOCK=true` for local testing; set a real invoice image at `MOCK_IMAGE_PATH=storage/invoices/your-sample.jpg`
-3. Run the mock pipeline: `python whatsapp_agent.py` (prints TwiML reply to the terminal)
-4. For live Twilio sandbox: run `python app.py`, expose port 5000 with [ngrok](https://ngrok.com/) (`ngrok http 5000`), and set the webhook URL in Twilio Console → WhatsApp Sandbox → **When a message comes in** to `https://YOUR-NGROK-HOST/webhook/whatsapp`
-5. Set `USE_TWILIO_MOCK=false` and optionally restrict senders with `WHATSAPP_ALLOWED_NUMBERS=whatsapp:+94...`
+1. Create a Meta app with WhatsApp → copy **Temporary/permanent access token** and **Phone number ID** into `.env`:
+   - `META_WHATSAPP_TOKEN`
+   - `META_PHONE_NUMBER_ID`
+   - `META_VERIFY_TOKEN` (any secret string you choose)
+2. Keep `USE_WHATSAPP_MOCK=true` for local testing; set a sample invoice at `MOCK_IMAGE_PATH=storage/invoices/your-sample.jpg`
+3. Run the mock pipeline: `python whatsapp_agent.py` (prints the reply text)
+4. Live webhook:
+   - Run `python app.py` and expose with [ngrok](https://ngrok.com/) (`ngrok http 5000`)
+   - In Meta → WhatsApp → Configuration, set callback URL to `https://YOUR-NGROK-HOST/webhook/whatsapp`
+   - Use the same `META_VERIFY_TOKEN` for Verify Token
+   - Subscribe to `messages`
+5. Set `USE_WHATSAPP_MOCK=false` and optionally restrict senders with `WHATSAPP_ALLOWED_NUMBERS=+9477...`
 
-The webhook downloads the image, runs Gemini extraction, computes CBSL holiday liquidity, replies on WhatsApp, and saves matched suppliers as pending verification in the web app.
+Optional legacy Twilio: set `WHATSAPP_PROVIDER=twilio` and fill `TWILIO_*` vars.
+
+The webhook downloads the image, runs Gemini extraction, computes CBSL holiday liquidity, replies on WhatsApp, and saves intakes as pending verification in the web app.
 
 ## Database
 

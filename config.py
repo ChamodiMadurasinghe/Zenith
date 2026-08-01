@@ -65,6 +65,33 @@ class Config:
         return _env_bool("USE_FAKE_AI", False)
 
     @staticmethod
+    def whatsapp_provider() -> str:
+        """meta (default) | twilio — WhatsApp channel backend."""
+        raw = _env("WHATSAPP_PROVIDER", "meta").strip().lower()
+        return raw if raw in ("meta", "twilio") else "meta"
+
+    @staticmethod
+    def meta_whatsapp_token() -> str:
+        return _env("META_WHATSAPP_TOKEN", _env("WHATSAPP_TOKEN", ""))
+
+    @staticmethod
+    def meta_phone_number_id() -> str:
+        return _env("META_PHONE_NUMBER_ID", _env("WHATSAPP_PHONE_NUMBER_ID", ""))
+
+    @staticmethod
+    def meta_verify_token() -> str:
+        return _env("META_VERIFY_TOKEN", "zenith-meta-verify")
+
+    @staticmethod
+    def meta_app_secret() -> str:
+        """Optional: validates X-Hub-Signature-256 on inbound webhooks."""
+        return _env("META_APP_SECRET", "")
+
+    @staticmethod
+    def meta_graph_version() -> str:
+        return _env("META_GRAPH_VERSION", "v21.0")
+
+    @staticmethod
     def twilio_account_sid() -> str:
         return _env("TWILIO_ACCOUNT_SID", "")
 
@@ -84,8 +111,16 @@ class Config:
         return [n.strip() for n in raw.split(",") if n.strip()]
 
     @staticmethod
-    def use_twilio_mock() -> bool:
+    def use_whatsapp_mock() -> bool:
+        # Prefer USE_WHATSAPP_MOCK; fall back to legacy USE_TWILIO_MOCK
+        if _env("USE_WHATSAPP_MOCK", ""):
+            return _env_bool("USE_WHATSAPP_MOCK", True)
         return _env_bool("USE_TWILIO_MOCK", True)
+
+    @staticmethod
+    def use_twilio_mock() -> bool:
+        """Backward-compatible alias for use_whatsapp_mock()."""
+        return Config.use_whatsapp_mock()
 
     @staticmethod
     def use_agentic_orchestrator() -> bool:

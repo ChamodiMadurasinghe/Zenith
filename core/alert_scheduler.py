@@ -4,7 +4,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import Config
 from core.cash_flow import build_cash_flow_projection
-from core.twilio_client import send_whatsapp_message
+from core.whatsapp_sender import send_whatsapp_message
 from db import repositories as repo
 
 _scheduler: BackgroundScheduler | None = None
