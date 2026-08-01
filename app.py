@@ -14,6 +14,7 @@ from routes.guide import guide_bp
 from routes.i18n import i18n_bp
 from routes.dealers import dealers_bp
 from routes.ingestion import ingestion_bp
+from routes.orchestration import orchestration_bp
 from whatsapp_agent import whatsapp_bp
 
 
@@ -30,6 +31,7 @@ def create_app():
     app.register_blueprint(dealers_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(guide_bp)
+    app.register_blueprint(orchestration_bp)
     app.register_blueprint(whatsapp_bp)
 
     @app.context_processor
