@@ -118,7 +118,7 @@ def build_reviewer_context(
     pending = repo.get_pending_verification_invoices(dealer_id)
     committed = repo.get_committed_cheque_bundles(dealer_id)
 
-    merchant_acc_id = int(repo.get_setting("default_bank_acc_id", "1"))
+    merchant_acc_id = repo.paying_account_id_for_dealer(dealer_id)
     merchant_acc = repo.get_bank_account(merchant_acc_id)
     today = date.today()
 

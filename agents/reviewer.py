@@ -56,12 +56,14 @@ Actions (same as bundling assistant):
 - set_cheque_date {action, cheque_group, date}
 - move_invoice {action, invoice_id, to_group}
 - postpone_cheque {action, cheque_group, days}
-- split_invoice {action, invoice_id}
+- split_invoice {action, invoice_id} OR {action, invoice_id, num_parts: N} OR {action, invoice_id, amounts: [...]}
+  (use num_parts/amounts to pay one invoice across multiple cheques as ·1 ·2 parts)
 - recalculate_dates {action}
 
 Rules:
-- Every invoice in current_bundles must appear exactly once in the final layout.
+- Every invoice in current_bundles must appear in the final layout (as a whole invoice OR as a complete set of split parts ·1..·N summing to the original total).
 - Prefer assign_invoices with a complete assignments map when regrouping.
+- When you suggested splitting an invoice, emit split_invoice with num_parts (or amounts).
 - Align stated dates with nearby CBSL holidays when it gains float.
 - Respect ceiling_lkr unless allow_exceed_ceiling is true.
 - Use only invoice_ids and dates from the context JSON.

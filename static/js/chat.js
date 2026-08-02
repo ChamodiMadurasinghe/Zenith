@@ -204,6 +204,14 @@ window.appendChatMsg = appendChatMsg;
 window.renderChatHistory = renderChatHistory;
 window.applyReviewerSuggestions = applyReviewerSuggestions;
 
+function resizeChatInput() {
+  const input = document.getElementById("chat-input");
+  if (!input || input.tagName !== "TEXTAREA") return;
+  input.style.height = "auto";
+  const max = 160; // ~10rem
+  input.style.height = `${Math.min(input.scrollHeight, max)}px`;
+}
+
 async function sendChat() {
   if (chatBusy) return;
 
@@ -221,7 +229,10 @@ async function sendChat() {
   stopSpeech();
   chatBusy = true;
   appendChatMsg("user", text);
-  if (input) input.value = "";
+  if (input) {
+    input.value = "";
+    resizeChatInput();
+  }
   if (sendBtn) sendBtn.disabled = true;
   syncMuteButtons();
 
@@ -369,6 +380,7 @@ function initVoiceInput() {
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     input.value = (input.value ? `${input.value} ` : "") + transcript;
+    resizeChatInput();
   };
 
   micBtn.addEventListener("click", () => {
@@ -409,12 +421,14 @@ function bindChatControls() {
   }
   if (input && !input.dataset.chatBound) {
     input.dataset.chatBound = "1";
+    input.addEventListener("input", resizeChatInput);
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendChat();
       }
     });
+    resizeChatInput();
   }
   document.getElementById("chat-reset")?.addEventListener("click", () => {
     muteChatbot({ announce: false });

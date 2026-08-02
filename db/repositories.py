@@ -15,6 +15,14 @@ def get_setting(key: str, default: str = "") -> str:
     return row["setting_value"] if row else default
 
 
+def set_setting(key: str, value: str):
+    execute(
+        """INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)
+           ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value""",
+        (key, str(value)),
+    )
+
+
 def get_bank_accounts():
     return query(
         "SELECT * FROM user_bank_account WHERE user_id = ? ORDER BY user_bank_acc_id",
@@ -29,25 +37,92 @@ def get_bank_account(acc_id: int):
     )
 
 
+def create_bank_account(data: dict) -> int:
+    return execute(
+        """INSERT INTO user_bank_account
+           (user_id, account_name, nickname, available_balance, branch_name, bank_name)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            Config.USER_ID,
+            (data.get("account_name") or "").strip(),
+            (data.get("nickname") or data.get("account_name") or "").strip() or None,
+            float(data.get("available_balance") or 0),
+            (data.get("branch_name") or "").strip() or None,
+            (data.get("bank_name") or "").strip(),
+        ),
+    )
+
+
+def update_bank_account(acc_id: int, data: dict):
+    execute(
+        """UPDATE user_bank_account
+           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?
+           WHERE user_bank_acc_id = ? AND user_id = ?""",
+        (
+            (data.get("account_name") or "").strip(),
+            (data.get("nickname") or data.get("account_name") or "").strip() or None,
+            (data.get("branch_name") or "").strip() or None,
+            (data.get("bank_name") or "").strip(),
+            acc_id,
+            Config.USER_ID,
+        ),
+    )
+
+
 def update_balance(acc_id: int, balance: float):
     execute(
-        "UPDATE user_bank_account SET available_balance = ? WHERE user_bank_acc_id = ?",
-        (balance, acc_id),
+        "UPDATE user_bank_account SET available_balance = ? WHERE user_bank_acc_id = ? AND user_id = ?",
+        (balance, acc_id, Config.USER_ID),
     )
+
+
+def paying_account_id_for_dealer(dealer_id: int | None = None) -> int:
+    """Merchant account used when paying this dealer (else app default)."""
+    if dealer_id:
+        dealer = get_dealer(dealer_id)
+        if dealer and dealer.get("default_user_bank_acc_id"):
+            acc = get_bank_account(int(dealer["default_user_bank_acc_id"]))
+            if acc:
+                return int(acc["user_bank_acc_id"])
+    return int(get_setting("default_bank_acc_id", "1"))
+
+
+def validate_bank_account_input(data: dict) -> str | None:
+    if not (data.get("account_name") or "").strip():
+        return "flash_bank_account_name_required"
+    if not (data.get("bank_name") or "").strip():
+        return "flash_bank_name_required"
+    return None
 
 
 def get_dealers():
     return query("SELECT * FROM dealers ORDER BY dealer_name")
 
 
-def find_dealer_by_name(name: str):
-    dealers = get_dealers()
-    normalized = name.strip().lower()
-    for d in dealers:
+def find_dealer_by_name_exact(name: str, exclude_dealer_id: int | None = None):
+    """Exact name match (case-insensitive). Used to block/reuse duplicate dealers."""
+    normalized = (name or "").strip().lower()
+    if not normalized:
+        return None
+    for d in get_dealers():
+        if exclude_dealer_id is not None and int(d["dealer_id"]) == int(exclude_dealer_id):
+            continue
         if d["dealer_name"].strip().lower() == PENDING_SUPPLIER_NAME.lower():
             continue
         if d["dealer_name"].strip().lower() == normalized:
             return d
+    return None
+
+
+def find_dealer_by_name(name: str):
+    """Prefer exact match, then substring (OCR fuzzy). Skip Pending Supplier."""
+    exact = find_dealer_by_name_exact(name)
+    if exact:
+        return exact
+    dealers = get_dealers()
+    normalized = (name or "").strip().lower()
+    if not normalized:
+        return None
     for d in dealers:
         if d["dealer_name"].strip().lower() == PENDING_SUPPLIER_NAME.lower():
             continue
@@ -295,7 +370,24 @@ def get_invoice_items(invoice_id: int):
     return query("SELECT * FROM item WHERE invoices_id = ?", (invoice_id,))
 
 
-def find_invoice_by_no_and_dealer(invoice_no: str, dealer_id: int):
+def find_invoice_by_no_and_dealer(
+    invoice_no: str,
+    dealer_id: int,
+    exclude_invoice_id: int | None = None,
+):
+    """Same dealer + same invoice_no is a duplicate (per user)."""
+    invoice_no = (invoice_no or "").strip()
+    if not invoice_no:
+        return None
+    if exclude_invoice_id is not None:
+        return query_one(
+            """SELECT invoices_id, invoice_no, total_amount, invoiced_date
+               FROM invoices
+               WHERE user_id = ? AND dealer_id = ? AND invoice_no = ?
+                 AND invoices_id != ?
+               ORDER BY invoices_id DESC LIMIT 1""",
+            (Config.USER_ID, dealer_id, invoice_no, int(exclude_invoice_id)),
+        )
     return query_one(
         """SELECT invoices_id, invoice_no, total_amount, invoiced_date
            FROM invoices
@@ -731,9 +823,18 @@ def build_bank_context(account_id: int) -> dict:
 
 
 def get_upcoming_cheques(account_id: int):
+    """Committed cheques drawn on this merchant bank account (with payee)."""
     return query(
-        """SELECT * FROM cheque WHERE user_bank_acc_id = ?
-           AND verification_status = 1 ORDER BY predicted_clearance_date""",
+        """SELECT c.*,
+                  (SELECT d.dealer_name
+                   FROM invoices i
+                   JOIN dealers d ON d.dealer_id = i.dealer_id
+                   WHERE i.cheque_id = c.cheque_id
+                   LIMIT 1) AS dealer_name
+           FROM cheque c
+           WHERE c.user_bank_acc_id = ?
+             AND c.verification_status = 1
+           ORDER BY COALESCE(c.predicted_clearance_date, c.cheque_date), c.cheque_id""",
         (account_id,),
     )
 
@@ -802,10 +903,13 @@ def get_recent_deposits_total(weeks=4):
 
 
 def save_cheques(cheques: list, invoice_map: dict):
-    """cheques: list of dicts with bank_acc_id, cheque_no, cheque_date, amount, words, clearance
-    invoice_map: {cheque_index: [invoice_ids]}
+    """Persist cheques and invoice links.
+
+    invoice_map: {cheque_index: [invoice_id | {invoices_id, amount, part_index, part_count}]}
+    Split parts write cheque_invoice_allocation rows so one invoice can fund multiple cheques.
     """
     with transaction() as conn:
+        first_cheque_for_invoice: dict[int, int] = {}
         for idx, ch in enumerate(cheques):
             cursor = conn.execute(
                 """INSERT INTO cheque (user_bank_acc_id, cheque_no, cheque_date, amount_in_words,
@@ -821,21 +925,50 @@ def save_cheques(cheques: list, invoice_map: dict):
                 ),
             )
             cheque_id = cursor.lastrowid
-            inv_ids = invoice_map.get(idx, [])
-            dealer_id = None
-            for inv_id in inv_ids:
-                conn.execute("UPDATE invoices SET cheque_id = ? WHERE invoices_id = ?", (cheque_id, inv_id))
-                if dealer_id is None:
+            for entry in invoice_map.get(idx, []) or []:
+                if isinstance(entry, dict):
+                    inv_id = int(entry["invoices_id"])
+                    amount = float(entry.get("amount") or entry.get("total_amount") or 0)
+                    part_index = int(entry.get("part_index") or 1)
+                    part_count = int(entry.get("part_count") or 1)
+                else:
+                    inv_id = int(entry)
+                    amount = None
+                    part_index = 1
+                    part_count = 1
                     row = conn.execute(
-                        "SELECT dealer_id FROM invoices WHERE invoices_id = ?", (inv_id,)
+                        "SELECT total_amount FROM invoices WHERE invoices_id = ?",
+                        (inv_id,),
                     ).fetchone()
-                    if row:
-                        dealer_id = row[0]
+                    amount = float(row[0]) if row else 0.0
+
+                conn.execute(
+                    """INSERT INTO cheque_invoice_allocation
+                       (cheque_id, invoices_id, amount, part_index, part_count)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (cheque_id, inv_id, amount, part_index, part_count),
+                )
+                if inv_id not in first_cheque_for_invoice:
+                    first_cheque_for_invoice[inv_id] = cheque_id
+                    conn.execute(
+                        "UPDATE invoices SET cheque_id = ? WHERE invoices_id = ? AND cheque_id IS NULL",
+                        (cheque_id, inv_id),
+                    )
+                    # Also set when previously unset on this commit path
+                    conn.execute(
+                        """UPDATE invoices SET cheque_id = ?
+                           WHERE invoices_id = ? AND (cheque_id IS NULL OR cheque_id = ?)""",
+                        (first_cheque_for_invoice[inv_id], inv_id, first_cheque_for_invoice[inv_id]),
+                    )
+
     for idx, ch in enumerate(cheques):
-        inv_ids = invoice_map.get(idx, [])
+        entries = invoice_map.get(idx, []) or []
         dealer_id = None
-        if inv_ids:
-            row = query_one("SELECT dealer_id FROM invoices WHERE invoices_id = ?", (inv_ids[0],))
+        first_inv = None
+        if entries:
+            first = entries[0]
+            first_inv = int(first["invoices_id"] if isinstance(first, dict) else first)
+            row = query_one("SELECT dealer_id FROM invoices WHERE invoices_id = ?", (first_inv,))
             if row:
                 dealer_id = row["dealer_id"]
         cheque_row = query_one(

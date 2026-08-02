@@ -37,7 +37,7 @@
   <div class="tab-pane-body">
   <div class="tab-panel active" role="tabpanel" id="panel-upload" aria-labelledby="tab-upload" data-panel="upload">
     <div class="card card-lg intake-card">
-      <form class="upload-form" method="post" action="{{ url_for('ingestion.upload') }}" enctype="multipart/form-data">
+      <form class="upload-form" method="post" action="{{ url_for('ingestion.upload') }}" enctype="multipart/form-data" data-zenith-validate>
         <h2 class="card-title">{{ t('upload_invoice_image') }}</h2>
         <p class="help-tip">{{ t('help_tip_upload') }}</p>
         <label class="upload-zone" for="invoice_image">

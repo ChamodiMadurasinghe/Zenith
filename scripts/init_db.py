@@ -106,6 +106,21 @@ MIGRATIONS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_bank_deposits_date ON bank_deposits(deposit_date)",
     "CREATE INDEX IF NOT EXISTS idx_planned_deposits_date ON planned_deposits(planned_date)",
+    # Unique invoice_no per dealer+user (fails quietly if duplicates already exist)
+    """CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_user_dealer_invoice_no
+       ON invoices(user_id, dealer_id, invoice_no)""",
+    """CREATE TABLE IF NOT EXISTS cheque_invoice_allocation (
+        allocation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cheque_id INTEGER NOT NULL,
+        invoices_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        part_index INTEGER NOT NULL DEFAULT 1,
+        part_count INTEGER NOT NULL DEFAULT 1,
+        FOREIGN KEY (cheque_id) REFERENCES cheque(cheque_id),
+        FOREIGN KEY (invoices_id) REFERENCES invoices(invoices_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_cheque ON cheque_invoice_allocation(cheque_id)",
+    "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_invoice ON cheque_invoice_allocation(invoices_id)",
 ]
 
 

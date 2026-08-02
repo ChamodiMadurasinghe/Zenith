@@ -49,6 +49,9 @@ class DivideIntoChequesInput(BaseModel):
 class MoveInvoiceInput(BaseModel):
     invoice_id: int
     to_group: int = Field(..., ge=1, description="1-based cheque group number.")
+    part_index: int | None = Field(
+        None, description="When invoice is split, which part to move (1-based)."
+    )
     dry_run: bool = True
 
 
@@ -74,6 +77,19 @@ class PostponeChequeInput(BaseModel):
 
 class SplitInvoiceInput(BaseModel):
     invoice_id: int
+    num_parts: int | None = Field(
+        None,
+        ge=2,
+        description="Split into N equal amount parts (each typically on its own cheque). Omit to put whole invoice alone.",
+    )
+    amounts: list[float] | None = Field(
+        None,
+        description="Explicit part amounts in LKR that sum to the invoice total.",
+    )
+    separate_cheques: bool = Field(
+        True,
+        description="If true, each part goes on its own cheque group.",
+    )
     dry_run: bool = True
 
 
@@ -284,13 +300,17 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
             dry_run,
         )
 
-    def move_invoice(invoice_id: int, to_group: int, dry_run: bool = True) -> str:
-        """Move one invoice to another cheque group (1-based). Uses Python guardrails."""
-        return _apply_actions(
-            ctx,
-            [{"action": "move_invoice", "invoice_id": int(invoice_id), "to_group": int(to_group)}],
-            dry_run,
-        )
+    def move_invoice(
+        invoice_id: int,
+        to_group: int,
+        part_index: int | None = None,
+        dry_run: bool = True,
+    ) -> str:
+        """Move one invoice (or split part) to another cheque group (1-based). Uses Python guardrails."""
+        action = {"action": "move_invoice", "invoice_id": int(invoice_id), "to_group": int(to_group)}
+        if part_index is not None:
+            action["part_index"] = int(part_index)
+        return _apply_actions(ctx, [action], dry_run)
 
     def rebatch_invoice(invoice_id: int, to_group: int, dry_run: bool = True) -> str:
         """Move invoice to another group and recalculate liquidity dates in Python."""
@@ -325,13 +345,22 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
             dry_run,
         )
 
-    def split_invoice(invoice_id: int, dry_run: bool = True) -> str:
-        """Put one invoice alone on its own cheque."""
-        return _apply_actions(
-            ctx,
-            [{"action": "split_invoice", "invoice_id": int(invoice_id)}],
-            dry_run,
-        )
+    def split_invoice(
+        invoice_id: int,
+        num_parts: int | None = None,
+        amounts: list[float] | None = None,
+        separate_cheques: bool = True,
+        dry_run: bool = True,
+    ) -> str:
+        """Split an invoice into amount parts (red ·1 ·2 labels) or put whole invoice alone on its own cheque."""
+        action: dict = {"action": "split_invoice", "invoice_id": int(invoice_id)}
+        if amounts:
+            action["amounts"] = amounts
+            action["separate_cheques"] = bool(separate_cheques)
+        elif num_parts is not None and int(num_parts) >= 2:
+            action["num_parts"] = int(num_parts)
+            action["separate_cheques"] = bool(separate_cheques)
+        return _apply_actions(ctx, [action], dry_run)
 
     def recalculate_dates(dry_run: bool = True) -> str:
         """Re-run enrich_bundle_liquidity on all current groups."""
@@ -378,7 +407,10 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
                     "notes": "No bundles to audit yet.",
                 }
             )
-        audits = audit_bundle_day_limits(copy.deepcopy(bundles))
+        audits = audit_bundle_day_limits(
+            copy.deepcopy(bundles),
+            account_id=repo.paying_account_id_for_dealer(ctx.dealer_id),
+        )
         return json.dumps(
             {
                 "ok": True,
@@ -469,7 +501,7 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
         StructuredTool.from_function(
             split_invoice,
             name="split_invoice",
-            description="Put one invoice on its own cheque.",
+            description="Split invoice into amount parts (num_parts/amounts) or alone on its own cheque.",
             args_schema=SplitInvoiceInput,
         ),
         StructuredTool.from_function(

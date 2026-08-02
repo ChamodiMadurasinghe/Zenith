@@ -87,6 +87,12 @@
       }
       return text;
     };
+    {% if session.get('user_id') %}
+    window.__zenithChecks = {
+      dealerName: {{ url_for('ingestion.api_check_dealer_name') | tojson }},
+      invoiceNo: {{ url_for('ingestion.api_check_invoice_no') | tojson }}
+    };
+    {% endif %}
   </script>
 
   {% if session.get('user_id') %}
@@ -121,6 +127,7 @@
   {% endif %}
 
   <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/forms.js') }}?v=1"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

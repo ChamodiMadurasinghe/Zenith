@@ -3,6 +3,7 @@
 import json
 
 from core.guardrails import collect_bundle_issues
+from core.invoice_parts import hydrate_invoice_from_meta, slim_invoice_meta
 from db import repositories as repo
 from db.connection import query_one
 
@@ -20,9 +21,12 @@ _BUNDLE_KEYS = (
 
 
 def slim_bundle(bundle: dict) -> dict:
-    invoice_ids = [int(inv["invoices_id"]) for inv in bundle.get("invoices", [])]
+    invoices = bundle.get("invoices") or []
+    invoice_ids = [int(inv["invoices_id"]) for inv in invoices]
     slim = {k: bundle[k] for k in _BUNDLE_KEYS if k in bundle}
     slim["invoice_ids"] = invoice_ids
+    # Persist split part amounts/labels (hydrate reloads base invoice from DB).
+    slim["invoices_meta"] = [slim_invoice_meta(inv) for inv in invoices]
     return slim
 
 
@@ -31,13 +35,25 @@ def slim_bundles(bundles: list) -> list:
 
 
 def hydrate_bundle(slim: dict) -> dict:
-    if slim.get("invoices"):
+    if slim.get("invoices") and not slim.get("invoice_ids") and not slim.get("invoices_meta"):
         return slim
+
+    meta_list = slim.get("invoices_meta")
     invoices = []
-    for inv_id in slim.get("invoice_ids", []):
-        inv = query_one("SELECT * FROM invoices WHERE invoices_id = ?", (int(inv_id),))
-        if inv:
-            invoices.append(inv)
+    if meta_list:
+        for meta in meta_list:
+            inv_id = int(meta["invoices_id"])
+            row = query_one("SELECT * FROM invoices WHERE invoices_id = ?", (inv_id,))
+            if row:
+                invoices.append(hydrate_invoice_from_meta(row, meta))
+    elif slim.get("invoices"):
+        return slim
+    else:
+        for inv_id in slim.get("invoice_ids", []):
+            inv = query_one("SELECT * FROM invoices WHERE invoices_id = ?", (int(inv_id),))
+            if inv:
+                invoices.append(inv)
+
     bundle = {k: slim[k] for k in _BUNDLE_KEYS if k in slim}
     bundle["invoices"] = invoices
     bundle["total_lkr"] = slim.get("total_lkr") or sum(float(i["total_amount"]) for i in invoices)

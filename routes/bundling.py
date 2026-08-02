@@ -529,20 +529,64 @@ def manual_bundling(dealer_id):
     ceiling = float(data.get("ceiling_lkr", 500000))
     separate = data.get("one_per_invoice", False)
     empty_groups = data.get("empty_groups") or []
+    invoice_parts = data.get("invoice_parts") or {}
+    actions = data.get("actions") or []
+
+    state = _load_state(dealer_id)
+
+    # Prefer explicit actions (split / move with part_index) on current draft
+    if actions:
+        bundles, validation_issues, allow_exceed = apply_proposed_actions(
+            state["bundles"],
+            actions,
+            dealer_id,
+            ceiling,
+        )
+        _save_state(
+            dealer_id,
+            bundles,
+            ceiling,
+            state["chat_history"],
+            validation_issues,
+            allow_exceed_ceiling=allow_exceed or state.get("allow_exceed_ceiling", False),
+        )
+        return jsonify(
+            {
+                "bundles": bundles,
+                "validation_issues": validation_issues,
+                "valid": not validation_issues,
+                "bundling_complete": bool(bundles),
+            }
+        )
 
     if separate and assignments:
-        invoice_ids = [int(k) for k in assignments.keys()]
-        manual_assignments = {str(inv_id): i + 1 for i, inv_id in enumerate(invoice_ids)}
+        invoice_ids = []
+        for k in assignments.keys():
+            from core.invoice_parts import parse_part_key
+
+            invoice_ids.append(parse_part_key(k)[0])
+        # unique preserve order
+        seen = set()
+        uniq = []
+        for i in invoice_ids:
+            if i not in seen:
+                seen.add(i)
+                uniq.append(i)
+        manual_assignments = {str(inv_id): i + 1 for i, inv_id in enumerate(uniq)}
         bundles = build_bundles_from_assignments(dealer_id, manual_assignments, cheque_dates, ceiling)
     elif assignments or empty_groups:
         bundles = build_bundles_from_assignments(
-            dealer_id, assignments, cheque_dates, ceiling, empty_groups=empty_groups
+            dealer_id,
+            assignments,
+            cheque_dates,
+            ceiling,
+            empty_groups=empty_groups,
+            invoice_parts=invoice_parts,
         )
     else:
         return jsonify({"error": "No invoice assignments provided"}), 400
 
     validation_issues = collect_bundle_issues({"bundles": bundles}, dealer_id, ceiling)
-    state = _load_state(dealer_id)
     _save_state(dealer_id, bundles, ceiling, state["chat_history"], validation_issues)
     return jsonify(
         {
@@ -650,7 +694,14 @@ def commit():
         return redirect(url_for("bundling.bundling_home"))
 
     bundles = hydrate_bundles(pending["bundles"])
-    bank_acc_id = int(request.form.get("user_bank_acc_id", 1))
+    bank_raw = (request.form.get("user_bank_acc_id") or "").strip()
+    if not bank_raw:
+        flash_t("flash_select_paying_account", "error")
+        return redirect(url_for("bundling.bundling_home"))
+    bank_acc_id = int(bank_raw)
+    if not repo.get_bank_account(bank_acc_id):
+        flash_t("flash_bank_account_missing", "error")
+        return redirect(url_for("bundling.bundling_home"))
     cheques = []
     invoice_map = {}
     for i, b in enumerate(bundles):
@@ -665,7 +716,15 @@ def commit():
                 "predicted_clearance_date": b["predicted_clearance_date"],
             }
         )
-        invoice_map[i] = [inv["invoices_id"] for inv in b["invoices"]]
+        invoice_map[i] = [
+            {
+                "invoices_id": inv["invoices_id"],
+                "amount": float(inv["total_amount"]),
+                "part_index": int(inv.get("part_index") or 1),
+                "part_count": int(inv.get("part_count") or 1),
+            }
+            for inv in b["invoices"]
+        ]
 
     repo.save_cheques(cheques, invoice_map)
     session.pop("pending_cheques", None)

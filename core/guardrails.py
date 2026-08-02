@@ -12,6 +12,15 @@ from core.bundling import (
 )
 from core.cheque_batcher import audit_bundle_day_limits
 from core.dates import add_business_days, format_date, parse_date
+from core.invoice_parts import (
+    collect_parts_of_invoice,
+    equal_part_amounts,
+    is_split_part,
+    make_split_parts,
+    original_amount,
+    part_key,
+    remove_invoice_occurrences,
+)
 from db import repositories as repo
 
 
@@ -25,9 +34,17 @@ def build_invoice_lookup(bundles: list, dealer_id: int) -> dict:
     lookup = {}
     for bundle in bundles or []:
         for inv in bundle.get("invoices", []):
-            lookup[int(inv["invoices_id"])] = inv
+            lookup[part_key(inv)] = inv
+            iid = int(inv["invoices_id"])
+            # Legacy id → first occurrence (unsplit or part 1)
+            if iid not in lookup:
+                lookup[iid] = inv
+            if not is_split_part(inv):
+                lookup[iid] = inv
     for inv in repo.get_verified_unassigned_invoices(dealer_id):
-        lookup[int(inv["invoices_id"])] = inv
+        iid = int(inv["invoices_id"])
+        lookup.setdefault(str(iid), inv)
+        lookup.setdefault(iid, inv)
     return lookup
 
 
@@ -41,7 +58,8 @@ def collect_bundle_issues(
     issues: list[str] = []
     today = date.today()
     bundles = state.get("bundles") or []
-    seen_invoices: dict[int, int] = {}
+    seen_parts: dict[str, int] = {}
+    parts_by_invoice: dict[int, list] = {}
 
     if not bundles:
         issues.append("No cheques proposed yet.")
@@ -84,20 +102,53 @@ def collect_bundle_issues(
                 issues.append(f"Cheque {group}: invalid funding date '{fund_by}'.")
 
         for inv in invoices:
+            key = part_key(inv)
             inv_id = int(inv["invoices_id"])
-            inv_no = inv.get("invoice_no") or inv_id
-            if inv_id in seen_invoices:
+            inv_no = inv.get("invoice_no_display") or inv.get("invoice_no") or inv_id
+            if key in seen_parts:
                 issues.append(
-                    f"Invoice {inv_no} appears in both cheque {seen_invoices[inv_id]} and cheque {group}."
+                    f"Invoice {inv_no} appears in both cheque {seen_parts[key]} and cheque {group}."
                 )
-            seen_invoices[inv_id] = group
+            seen_parts[key] = group
+            parts_by_invoice.setdefault(inv_id, []).append(inv)
 
-            if inv.get("cheque_id"):
+            if inv.get("cheque_id") and not is_split_part(inv):
                 issues.append(f"Invoice {inv_no} is already on committed cheque #{inv.get('cheque_id')}.")
 
+    for inv_id, parts in parts_by_invoice.items():
+        split_parts = [p for p in parts if is_split_part(p)]
+        if not split_parts:
+            if len(parts) > 1:
+                issues.append(f"Invoice {inv_id} appears more than once without being split into parts.")
+            continue
+        if len(split_parts) != len(parts):
+            issues.append(f"Invoice {inv_id}: mix of split parts and full invoice is not allowed.")
+            continue
+        expected = int(split_parts[0].get("part_count") or 0)
+        indexes = sorted(int(p["part_index"]) for p in split_parts)
+        if expected and len(split_parts) != expected:
+            issues.append(
+                f"Invoice {split_parts[0].get('invoice_no') or inv_id}: "
+                f"expected {expected} parts, found {len(split_parts)}."
+            )
+        if indexes != list(range(1, len(indexes) + 1)):
+            issues.append(
+                f"Invoice {split_parts[0].get('invoice_no') or inv_id}: part numbers are incomplete."
+            )
+        orig = original_amount(split_parts[0])
+        part_sum = sum(float(p["total_amount"]) for p in split_parts)
+        if abs(part_sum - orig) > 0.05:
+            issues.append(
+                f"Invoice {split_parts[0].get('invoice_no') or inv_id}: "
+                f"parts sum Rs. {part_sum:,.2f} != original Rs. {orig:,.2f}."
+            )
+
     # Zenith-1 casual daily limit audit (deposit_timetable day exposure)
+    account_id = repo.paying_account_id_for_dealer(dealer_id)
     audits = audit_bundle_day_limits(
-        bundles, casual_limit=Config.CASUAL_DAILY_LIMIT_LKR
+        bundles,
+        casual_limit=Config.CASUAL_DAILY_LIMIT_LKR,
+        account_id=account_id,
     )
     for audit in audits:
         if audit.get("verdict") == "LIMIT_BREACH_WARNING":
@@ -237,12 +288,15 @@ def apply_action(
     if action_type == "move_invoice":
         inv_id = int(action["invoice_id"])
         to_group = int(action.get("to_group", 1)) - 1
-        inv = invoice_lookup.get(inv_id)
-        if not inv:
+        part_index = action.get("part_index")
+        part_index = int(part_index) if part_index is not None else None
+
+        removed = remove_invoice_occurrences(bundles, inv_id, part_index=part_index)
+        if not removed:
+            removed = invoice_lookup.get(inv_id) or invoice_lookup.get(str(inv_id))
+        if not removed:
             return GuardrailResult(False, f"Invoice {inv_id} not found")
-        for bundle in bundles:
-            bundle["invoices"] = [i for i in bundle.get("invoices", []) if i["invoices_id"] != inv_id]
-            bundle["total_lkr"] = sum(float(i["total_amount"]) for i in bundle["invoices"])
+
         while to_group >= len(bundles):
             bundles.append(
                 {
@@ -252,8 +306,10 @@ def apply_action(
                     "cheque_date": bundles[0]["cheque_date"] if bundles else "",
                 }
             )
-        bundles[to_group]["invoices"].append(inv)
-        bundles[to_group]["total_lkr"] = sum(float(i["total_amount"]) for i in bundles[to_group]["invoices"])
+        bundles[to_group]["invoices"].append(copy.deepcopy(removed))
+        bundles[to_group]["total_lkr"] = sum(
+            float(i["total_amount"]) for i in bundles[to_group]["invoices"]
+        )
         bundles[:] = [b for b in bundles if b.get("invoices")]
         for i, b in enumerate(bundles):
             b["group"] = i + 1
@@ -272,21 +328,125 @@ def apply_action(
 
     if action_type == "split_invoice":
         inv_id = int(action["invoice_id"])
-        inv = invoice_lookup.get(inv_id)
+        amounts = action.get("amounts")
+        num_parts = action.get("num_parts")
+        separate = bool(action.get("separate_cheques", True))
+
+        # Unsplit: recombine parts into one full invoice on one cheque
+        if num_parts is not None and int(num_parts) == 1 and not amounts:
+            existing = collect_parts_of_invoice(bundles, inv_id)
+            if not existing:
+                return GuardrailResult(False, f"Invoice {inv_id} not in any bundle")
+            base = copy.deepcopy(existing[0])
+            full_amt = original_amount(base) if is_split_part(base) else float(base["total_amount"])
+            source_date = bundles[0]["cheque_date"] if bundles else ""
+            for b in bundles:
+                if any(int(x["invoices_id"]) == inv_id for x in b.get("invoices") or []):
+                    source_date = b.get("cheque_date") or source_date
+                    break
+            remove_invoice_occurrences(bundles, inv_id, part_index=None)
+            whole = dict(base)
+            whole["total_amount"] = full_amt
+            for k in ("part_index", "part_count", "original_amount", "invoice_no_display"):
+                whole.pop(k, None)
+            host = {
+                "group": len(bundles) + 1,
+                "invoices": [whole],
+                "total_lkr": full_amt,
+                "cheque_date": source_date,
+            }
+            if dealer_id:
+                _recalc_bundle(host, dealer_id)
+            bundles.append(host)
+            bundles[:] = [b for b in bundles if b.get("invoices")]
+            for i, b in enumerate(bundles):
+                b["group"] = i + 1
+            return GuardrailResult(True)
+
+        # Amount / multi-part split (UI + AI)
+        if amounts or (num_parts is not None and int(num_parts) >= 2):
+            existing = collect_parts_of_invoice(bundles, inv_id)
+            source_date = bundles[0]["cheque_date"] if bundles else ""
+            if existing:
+                base = copy.deepcopy(existing[0])
+                if is_split_part(base):
+                    base["total_amount"] = original_amount(base)
+                    base.pop("part_index", None)
+                    base.pop("part_count", None)
+                    base.pop("original_amount", None)
+                    base.pop("invoice_no_display", None)
+                for b in bundles:
+                    if any(int(x["invoices_id"]) == inv_id for x in b.get("invoices") or []):
+                        source_date = b.get("cheque_date") or source_date
+                        break
+                remove_invoice_occurrences(bundles, inv_id, part_index=None)
+            else:
+                base = invoice_lookup.get(inv_id) or invoice_lookup.get(str(inv_id))
+                if not base:
+                    return GuardrailResult(False, f"Invoice {inv_id} not found")
+                base = copy.deepcopy(base)
+                remove_invoice_occurrences(bundles, inv_id, part_index=None)
+
+            try:
+                if amounts:
+                    parts = make_split_parts(base, list(amounts))
+                else:
+                    parts = make_split_parts(
+                        base, equal_part_amounts(float(base["total_amount"]), int(num_parts))
+                    )
+            except ValueError as exc:
+                return GuardrailResult(False, str(exc))
+
+            if separate:
+                for part in parts:
+                    new_group = {
+                        "group": len(bundles) + 1,
+                        "invoices": [part],
+                        "total_lkr": float(part["total_amount"]),
+                        "cheque_date": source_date,
+                    }
+                    if dealer_id:
+                        _recalc_bundle(new_group, dealer_id)
+                    bundles.append(new_group)
+            else:
+                host = {
+                    "group": len(bundles) + 1,
+                    "invoices": parts,
+                    "total_lkr": sum(float(p["total_amount"]) for p in parts),
+                    "cheque_date": source_date,
+                }
+                if dealer_id:
+                    _recalc_bundle(host, dealer_id)
+                bundles.append(host)
+
+            bundles[:] = [b for b in bundles if b.get("invoices")]
+            for i, b in enumerate(bundles):
+                b["group"] = i + 1
+            return GuardrailResult(True)
+
+        # Legacy: put whole invoice alone on its own cheque
+        inv = invoice_lookup.get(inv_id) or invoice_lookup.get(str(inv_id))
         if not inv:
             return GuardrailResult(False, f"Invoice {inv_id} not found")
         source_idx = None
         for i, bundle in enumerate(bundles):
-            if any(i2["invoices_id"] == inv_id for i2 in bundle.get("invoices", [])):
+            if any(
+                int(i2["invoices_id"]) == inv_id and not is_split_part(i2)
+                for i2 in bundle.get("invoices", [])
+            ):
                 source_idx = i
-                bundle["invoices"] = [i2 for i2 in bundle["invoices"] if i2["invoices_id"] != inv_id]
+                bundle["invoices"] = [
+                    i2
+                    for i2 in bundle["invoices"]
+                    if not (int(i2["invoices_id"]) == inv_id and not is_split_part(i2))
+                ]
                 bundle["total_lkr"] = sum(float(i2["total_amount"]) for i2 in bundle["invoices"])
                 break
         if source_idx is None:
             return GuardrailResult(False, f"Invoice {inv_id} not in any bundle")
         new_group = {
             "group": len(bundles) + 1,
-            "invoices": [inv],
+            "invoices": [copy.deepcopy(inv)],
             "total_lkr": float(inv["total_amount"]),
             "cheque_date": bundles[source_idx]["cheque_date"],
         }
@@ -321,6 +481,7 @@ def apply_proposed_actions(
     for action in actions or []:
         if action.get("allow_exceed_ceiling"):
             allow_exceed = True
+        invoice_lookup = build_invoice_lookup(state["bundles"], dealer_id)
         result = apply_action(
             state,
             action,
