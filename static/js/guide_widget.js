@@ -8,6 +8,8 @@
   let listening = false;
   let drag = null;
   let fabWasDragged = false;
+  let abortController = null;
+  let userStopped = false;
 
   function i18n(key, vars) {
     if (typeof window.__ === "function") return window.__(key, vars);
@@ -22,10 +24,43 @@
       input: document.getElementById("guide-input"),
       send: document.getElementById("guide-send"),
       mic: document.getElementById("guide-mic"),
+      mute: document.getElementById("guide-mute"),
       reset: document.getElementById("guide-reset"),
       minimize: document.getElementById("guide-minimize"),
       handle: document.getElementById("guide-drag-handle"),
     };
+  }
+
+  function syncMute() {
+    const { mute, send } = els();
+    const active = busy || listening;
+    if (mute) mute.hidden = !active;
+    if (send) send.disabled = busy;
+  }
+
+  function muteGuide() {
+    userStopped = true;
+    try {
+      window.speechSynthesis?.cancel();
+    } catch (e) {}
+    if (listening && recognition) {
+      try {
+        recognition.stop();
+      } catch (e) {}
+      listening = false;
+      const { mic } = els();
+      if (mic) mic.textContent = "🎤";
+    }
+    if (abortController) {
+      try {
+        abortController.abort();
+      } catch (e) {}
+      abortController = null;
+    }
+    const wasBusy = busy;
+    busy = false;
+    syncMute();
+    if (wasBusy) appendMsg("assistant", i18n("js_chat_stopped"));
   }
 
   function setCollapsed(collapsed) {
@@ -121,26 +156,29 @@
     const text = (input?.value || "").trim();
     if (!text) return;
 
+    userStopped = false;
     busy = true;
     appendMsg("user", text);
     if (input) input.value = "";
     if (send) send.disabled = true;
+    syncMute();
 
     const thinking = appendMsg("assistant", i18n("guide_thinking"));
     thinking?.classList.add("chat-thinking");
 
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 90000);
+      abortController = new AbortController();
+      const timer = setTimeout(() => abortController?.abort(), 90000);
       const res = await fetch("/api/guide/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ message: text, page_path: window.location.pathname }),
-        signal: controller.signal,
+        signal: abortController.signal,
       });
       clearTimeout(timer);
       thinking?.remove();
+      if (userStopped) return;
 
       const ctype = res.headers.get("content-type") || "";
       if (!ctype.includes("application/json")) {
@@ -159,10 +197,14 @@
       executeGuideActions(data.actions);
     } catch (err) {
       thinking?.remove();
-      appendMsg("assistant", err?.name === "AbortError" ? i18n("js_timeout") : i18n("js_unreachable"));
+      if (!userStopped) {
+        appendMsg("assistant", err?.name === "AbortError" ? i18n("js_timeout") : i18n("js_unreachable"));
+      }
     } finally {
+      abortController = null;
       busy = false;
       if (send) send.disabled = false;
+      syncMute();
     }
   }
 
@@ -279,26 +321,33 @@
     recognition.addEventListener("end", () => {
       listening = false;
       mic.textContent = "🎤";
+      syncMute();
     });
     recognition.addEventListener("error", () => {
       listening = false;
       mic.textContent = "🎤";
+      syncMute();
     });
     mic.addEventListener("click", () => {
-      if (listening) return;
+      if (listening) {
+        muteGuide();
+        return;
+      }
       try {
         listening = true;
         mic.textContent = "…";
         recognition.start();
+        syncMute();
       } catch (e) {
         listening = false;
         mic.textContent = "🎤";
+        syncMute();
       }
     });
   }
 
   function init() {
-    const { root, fab, send, input, reset, minimize } = els();
+    const { root, fab, send, input, reset, minimize, mute } = els();
     if (!root) return;
     setCollapsed(loadCollapsed());
     loadPosition();
@@ -311,13 +360,18 @@
       setCollapsed(false);
     });
     minimize?.addEventListener("click", () => setCollapsed(true));
-    reset?.addEventListener("click", resetGuide);
+    reset?.addEventListener("click", () => {
+      muteGuide();
+      resetGuide();
+    });
+    mute?.addEventListener("click", muteGuide);
     send?.addEventListener("click", sendGuide);
     input?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendGuide();
     });
     initDrag();
     initVoice();
+    syncMute();
     window.addEventListener("resize", clampPosition);
   }
 

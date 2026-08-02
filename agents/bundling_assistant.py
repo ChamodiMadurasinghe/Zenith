@@ -116,14 +116,13 @@ def run_bundling_assistant(
     )
     context_json = json.dumps(context, default=str, indent=2)
     lang_line = LANG_INSTRUCTIONS.get(lang, LANG_INSTRUCTIONS["en"])
-    system = (
-        f"{BUNDLING_ASSISTANT_SYSTEM}\n{lang_line}\n\n"
-        f"Current bundling context (JSON):\n{context_json}"
-    )
+    # Pass JSON context as an invoke-time variable — never embed raw JSON in the
+    # template string, or LangChain treats {"assistant_role": ...} as placeholders.
+    system = f"{BUNDLING_ASSISTANT_SYSTEM}\n{lang_line}\n\nCurrent bundling context (JSON):\n{context_json}"
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system),
+            ("system", "{system_prompt}"),
             MessagesPlaceholder("chat_history", optional=True),
             ("human", "{input}"),
             MessagesPlaceholder("agent_scratchpad"),
@@ -153,6 +152,7 @@ def run_bundling_assistant(
         {
             "input": message,
             "chat_history": history_msgs,
+            "system_prompt": system,
         }
     )
     reply = (result.get("output") or "").strip()

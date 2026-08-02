@@ -65,6 +65,11 @@ class LiquidityScheduleRow:
         }
 
 
+def float_days_gained(stated: date, target: date) -> int:
+    """Calendar days the merchant can keep funds from stated date until funding day."""
+    return max(0, (target - stated).days)
+
+
 def apply_liquidity_dates(
     stated_date_str: str,
     holidays: set,
@@ -78,7 +83,8 @@ def apply_liquidity_dates(
     return {
         "true_settlement_date": format_date(true_settlement),
         "target_funding_date": format_date(target),
-        "days_gained_by_holiday_lag": (true_settlement - stated).days,
+        # Extra days = full float to "Keep money until" (weekend/holiday roll + interbank +1)
+        "days_gained_by_holiday_lag": float_days_gained(stated, target),
         "is_interbank": is_interbank,
         "predicted_clearance_date": format_date(target),
     }
@@ -132,7 +138,7 @@ def calculate_max_liquidity_schedule(
                 true_settlement_date=format_date(true_settlement),
                 target_funding_date=format_date(target),
                 total_amount=g["amount"],
-                days_gained_by_holiday_lag=(true_settlement - stated).days,
+                days_gained_by_holiday_lag=float_days_gained(stated, target),
                 is_interbank=g["is_interbank"],
                 cheque_ids=sorted(set(g["cheque_ids"])),
                 dealer_ids=sorted(g["dealer_ids"]),

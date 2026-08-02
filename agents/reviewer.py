@@ -15,7 +15,7 @@ all invoices, Python's proposed bundles, per-cheque liquidity metrics, CBSL holi
 
 Evaluate using:
 - stated cheque date vs true_settlement_date vs target_funding_date
-- days_gained_by_holiday_lag (extra float from holidays on/near stated dates)
+- days_gained_by_holiday_lag (extra float from stated date to Keep money until — weekends/holidays + interbank)
 - is_interbank (+1 business day when merchant bank differs from supplier bank)
 - dealer casual_days and impossible_days
 - whether the LKR ceiling forced earlier funding than necessary

@@ -5,6 +5,9 @@ let recognition = null;
 let isListening = false;
 let chatBusy = false;
 let applyBusy = false;
+let chatAbortController = null;
+let isSpeaking = false;
+let userStoppedChat = false;
 
 function i18n(key, vars) {
   if (typeof window.__ === "function") return window.__(key, vars);
@@ -14,12 +17,71 @@ function i18n(key, vars) {
 function chatEls() {
   return {
     sendBtn: document.getElementById("chat-send"),
+    stopBtn: document.getElementById("chat-stop-btn"),
+    muteBtn: document.getElementById("chat-mute-btn"),
     input: document.getElementById("chat-input"),
     messages: document.getElementById("chat-messages"),
     micBtn: document.getElementById("chat-mic"),
     speakToggle: document.getElementById("chat-speak-toggle"),
   };
 }
+
+function stopSpeech() {
+  isSpeaking = false;
+  try {
+    window.speechSynthesis?.cancel();
+  } catch (e) {
+    /* ignore */
+  }
+  syncMuteButtons();
+}
+
+function stopMic() {
+  if (!recognition || !isListening) return;
+  try {
+    recognition.stop();
+  } catch (e) {
+    /* ignore */
+  }
+  isListening = false;
+  chatEls().micBtn?.classList.remove("listening");
+}
+
+function syncMuteButtons() {
+  const { muteBtn, stopBtn, sendBtn } = chatEls();
+  const active = chatBusy || isSpeaking || isListening;
+  if (muteBtn) muteBtn.hidden = !active;
+  if (stopBtn) {
+    stopBtn.hidden = !chatBusy;
+    if (sendBtn) sendBtn.hidden = chatBusy;
+  }
+}
+
+/** Mute speech and/or abort an in-flight chatbot reply. */
+function muteChatbot(opts) {
+  const announce = opts?.announce !== false;
+  const wasBusy = chatBusy;
+  userStoppedChat = true;
+  stopSpeech();
+  stopMic();
+  if (chatAbortController) {
+    try {
+      chatAbortController.abort();
+    } catch (e) {
+      /* ignore */
+    }
+    chatAbortController = null;
+  }
+  chatBusy = false;
+  const { sendBtn } = chatEls();
+  if (sendBtn) sendBtn.disabled = false;
+  syncMuteButtons();
+  if (announce && (wasBusy || opts?.forceAnnounce)) {
+    appendChatMsg("assistant", i18n("js_chat_stopped"));
+  }
+}
+
+window.zenithMuteChatbot = muteChatbot;
 
 function getDealerId() {
   const { sendBtn } = chatEls();
@@ -155,26 +217,31 @@ async function sendChat() {
     return;
   }
 
+  userStoppedChat = false;
+  stopSpeech();
   chatBusy = true;
   appendChatMsg("user", text);
   if (input) input.value = "";
   if (sendBtn) sendBtn.disabled = true;
+  syncMuteButtons();
 
   const thinking = appendChatMsg("assistant", i18n("js_thinking"));
   thinking?.classList.add("chat-thinking");
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90000);
+    chatAbortController = new AbortController();
+    const timer = setTimeout(() => chatAbortController?.abort(), 90000);
     const res = await fetch(`/api/chat/bundling/${dealerId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ message: text }),
-      signal: controller.signal,
+      signal: chatAbortController.signal,
     });
     clearTimeout(timer);
     thinking?.remove();
+
+    if (userStoppedChat) return;
 
     const ctype = res.headers.get("content-type") || "";
     if (!ctype.includes("application/json")) {
@@ -198,14 +265,18 @@ async function sendChat() {
     }
   } catch (err) {
     thinking?.remove();
-    if (err?.name === "AbortError") {
+    if (userStoppedChat) {
+      /* muteChatbot already announced stop */
+    } else if (err?.name === "AbortError") {
       appendChatMsg("assistant", i18n("js_timeout"));
     } else {
       appendChatMsg("assistant", i18n("js_unreachable"));
     }
   } finally {
+    chatAbortController = null;
     chatBusy = false;
     if (sendBtn) sendBtn.disabled = false;
+    syncMuteButtons();
   }
 }
 
@@ -221,9 +292,23 @@ function isAiSpeakEnabled() {
 
 function speakReply(text) {
   if (!isAiSpeakEnabled() || !text || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
+  stopSpeech();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = window.__speechLang || "en-LK";
+  utterance.onstart = () => {
+    isSpeaking = true;
+    syncMuteButtons();
+  };
+  utterance.onend = () => {
+    isSpeaking = false;
+    syncMuteButtons();
+  };
+  utterance.onerror = () => {
+    isSpeaking = false;
+    syncMuteButtons();
+  };
+  isSpeaking = true;
+  syncMuteButtons();
   window.speechSynthesis.speak(utterance);
 }
 
@@ -238,6 +323,10 @@ function initAiSpeak() {
       localStorage.setItem(AI_SPEAK_KEY, toggle.checked ? "1" : "0");
     } catch (e) {
       /* ignore */
+    }
+    // Unchecking while AI is talking immediately mutes speech.
+    if (!toggle.checked) {
+      stopSpeech();
     }
   });
 }
@@ -263,12 +352,14 @@ function initVoiceInput() {
     isListening = true;
     micBtn.classList.add("listening");
     micBtn.title = i18n("js_voice_listening");
+    syncMuteButtons();
   };
 
   recognition.onend = () => {
     isListening = false;
     micBtn.classList.remove("listening");
     micBtn.title = i18n("voice_input");
+    syncMuteButtons();
   };
 
   recognition.onerror = () => {
@@ -308,7 +399,7 @@ async function resetChat() {
 }
 
 function bindChatControls() {
-  const { input, sendBtn } = chatEls();
+  const { input, sendBtn, muteBtn, stopBtn } = chatEls();
   if (sendBtn && !sendBtn.dataset.chatBound) {
     sendBtn.dataset.chatBound = "1";
     sendBtn.addEventListener("click", (e) => {
@@ -325,7 +416,17 @@ function bindChatControls() {
       }
     });
   }
-  document.getElementById("chat-reset")?.addEventListener("click", resetChat);
+  document.getElementById("chat-reset")?.addEventListener("click", () => {
+    muteChatbot({ announce: false });
+    resetChat();
+  });
+  const onMute = (e) => {
+    e.preventDefault();
+    muteChatbot({ announce: true });
+  };
+  muteBtn?.addEventListener("click", onMute);
+  stopBtn?.addEventListener("click", onMute);
+  syncMuteButtons();
 }
 
 function setChatCollapsed(collapsed) {

@@ -72,7 +72,8 @@ def test_schedule_grouping():
     assert len(schedule) == 1
     assert schedule[0]["Total_Amount"] == 150000
     assert schedule[0]["Is_Interbank"] is True
-    assert schedule[0]["Days_Gained_By_Holiday_Lag"] == 2
+    # Sat → Mon settlement + interbank Tue = 3 calendar float days
+    assert schedule[0]["Days_Gained_By_Holiday_Lag"] == 3
     print("OK: Schedule groups by stated date and flags interbank")
 
 
@@ -81,8 +82,25 @@ def test_apply_liquidity_dates():
     d = apply_liquidity_dates("2026-04-11", holidays, is_interbank=True)
     assert d["true_settlement_date"] == "2026-04-13"
     assert d["target_funding_date"] == "2026-04-14"
-    assert d["days_gained_by_holiday_lag"] == 2
+    assert d["days_gained_by_holiday_lag"] == 3
     print("OK: apply_liquidity_dates bundle helper")
+
+
+def test_friday_interbank_extra_days():
+    """Matches UI case: Fri stated + other bank → fund Monday, Extra days = 3."""
+    holidays = set()
+    d = apply_liquidity_dates("2026-09-25", holidays, is_interbank=True)
+    assert d["true_settlement_date"] == "2026-09-25"
+    assert d["target_funding_date"] == "2026-09-28"
+    assert d["days_gained_by_holiday_lag"] == 3
+    print("OK: Friday interbank Extra days = 3 (not 0)")
+
+
+def test_weekday_same_bank_zero_extra():
+    holidays = set()
+    d = apply_liquidity_dates("2026-09-25", holidays, is_interbank=False)
+    assert d["days_gained_by_holiday_lag"] == 0
+    print("OK: Friday same-bank Extra days = 0")
 
 
 if __name__ == "__main__":
@@ -93,4 +111,6 @@ if __name__ == "__main__":
     test_same_bank_no_extra()
     test_schedule_grouping()
     test_apply_liquidity_dates()
+    test_friday_interbank_extra_days()
+    test_weekday_same_bank_zero_extra()
     print("\nAll liquidity verification checks passed.")
