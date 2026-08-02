@@ -30,7 +30,7 @@
   </div>
 
   <div class="card review-form-pane">
-    <form method="post" action="{{ url_for('ingestion.verify', draft_id=draft_id) }}" id="verify-form">
+    <form method="post" action="{{ url_for('ingestion.verify', draft_id=draft_id) }}" id="verify-form" data-zenith-validate>
       <p class="ai-label">{{ t('ai_fields') }}</p>
       <div class="grid-2">
         <label>{{ t('col_invoice_no') }} <input name="invoice_no" value="{{ extracted.invoice_no or '' }}" required></label>

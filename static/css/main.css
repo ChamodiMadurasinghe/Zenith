@@ -13,6 +13,9 @@
 }
 
 * { box-sizing: border-box; }
+html {
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
   font-family: "Nirmala UI", "Iskoola Pota", "Noto Sans Sinhala", "Noto Sans Tamil", "Segoe UI", system-ui, sans-serif;
@@ -95,13 +98,20 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 800; font-size: 1.45rem; color: var(--primary); text-decoration: none; }
-.nav-links { display: flex; flex-wrap: wrap; gap: 0.5rem 0.35rem; align-items: stretch; }
+.nav-links {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  align-items: stretch;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .nav-link {
   color: var(--text);
   text-decoration: none;
   font-size: 1rem;
   font-weight: 700;
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 0.65rem;
   min-height: var(--touch-min);
   display: inline-flex;
   flex-direction: column;
@@ -115,7 +125,9 @@ body {
   cursor: pointer;
   line-height: 1.2;
   text-align: center;
-  min-width: 5.5rem;
+  flex: 0 0 7rem;
+  width: 7rem;
+  max-width: 7rem;
 }
 .nav-links a.nav-link:hover,
 .nav-link-logout:hover {
@@ -139,9 +151,21 @@ body {
 .nav-label {
   display: block;
   font-size: 0.95rem;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  width: 100%;
 }
-.nav-logout-form { margin: 0; display: inline-flex; }
+.nav-logout-form {
+  margin: 0;
+  display: inline-flex;
+  flex: 0 0 7rem;
+  width: 7rem;
+  max-width: 7rem;
+}
+.nav-logout-form .nav-link {
+  width: 100%;
+  max-width: 100%;
+}
 .nav-link-logout {
   color: var(--muted);
 }
@@ -239,7 +263,13 @@ input, select, textarea {
 .row-gain { background: #e8f5e9; }
 .text-muted { color: #666; font-size: 0.9rem; }
 #chat-mic.listening { background: #c62828; color: #fff; }
-.chat-controls { margin-bottom: 0.5rem; }
+.chat-controls {
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
 .chat-speak-toggle {
   display: inline-flex;
   align-items: center;
@@ -249,6 +279,28 @@ input, select, textarea {
   user-select: none;
 }
 .chat-speak-toggle input { width: auto; min-height: auto; margin: 0; }
+.chat-mute-btn {
+  background: #c62828;
+  color: #fff;
+  border-color: #b71c1c;
+}
+.chat-mute-btn:hover { background: #b71c1c; color: #fff; }
+#chat-stop-btn {
+  background: #c62828;
+  color: #fff;
+  border-color: #b71c1c;
+}
+#chat-stop-btn:hover { background: #b71c1c; color: #fff; }
+.btn-danger {
+  background: #c62828;
+  color: #fff;
+  border: 1px solid #b71c1c;
+}
+.btn-danger:hover { background: #b71c1c; color: #fff; }
+.guide-icon-btn#guide-mute:not([hidden]) {
+  color: #c62828;
+  font-size: 1.1rem;
+}
 .badge-demo { background: #ff9800; color: #fff; font-size: 0.75rem; vertical-align: middle; }
 .badge-live { background: #2e7d32; color: #fff; font-size: 0.75rem; vertical-align: middle; }
 .chat-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
@@ -290,13 +342,58 @@ input, select, textarea {
   display: flex; align-items: center; justify-content: center; font-weight: 700;
 }
 
-.layout-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.layout-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+  gap: 1.75rem;
+  align-items: start;
+  column-gap: 2rem;
+}
 .layout-split.chat-collapsed { grid-template-columns: 1fr; }
 .layout-split.chat-collapsed .chat-panel { display: none; }
+
+/* Cheques page needs more width so invoices + chat are not cramped */
+.container:has(#cheques-layout) {
+  max-width: 1280px;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+#cheques-layout #bundle-workspace {
+  min-width: 0;
+}
+
+#cheques-layout .chat-panel {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  min-width: 0;
+  max-width: 400px;
+  width: 100%;
+  justify-self: end;
+  margin-left: 0.5rem;
+}
+
+/* Keep floating guide clear of the chat column on the cheques page */
+body:has(#cheques-layout) .guide-widget {
+  right: auto;
+  left: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .layout-split {
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.9fr);
+    gap: 1.35rem;
+    column-gap: 1.35rem;
+  }
+  #cheques-layout .chat-panel { max-width: none; }
+}
+
 @media (max-width: 900px) {
-  .layout-split { grid-template-columns: 1fr; }
-  .layout-split .chat-panel { order: -1; }
+  .layout-split { grid-template-columns: 1fr; gap: 1.25rem; }
+  .layout-split .chat-panel { order: -1; max-width: none; position: static; justify-self: stretch; }
   .layout-split.chat-collapsed .chat-panel { display: none; }
+  .container:has(#cheques-layout) { max-width: 960px; }
 }
 
 .chat-expand-fab {
@@ -378,6 +475,43 @@ input, select, textarea {
 .invoice-chip:active { cursor: grabbing; }
 .invoice-chip.dragging { opacity: 0.5; }
 .invoice-chip-label { white-space: nowrap; }
+.invoice-chip--split {
+  border-color: #c0392b;
+  background: #fdf2f2;
+}
+.invoice-chip-label--split {
+  color: #c0392b;
+  font-weight: 700;
+}
+.invoice-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 180px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.invoice-context-menu button {
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+.invoice-context-menu button:hover {
+  background: #f0f4f8;
+}
+[data-theme="dark"] .invoice-chip--split { background: #3a2224; border-color: #c06060; }
+[data-theme="dark"] .invoice-chip-label--split { color: #f0a0a0; }
+[data-theme="dark"] .invoice-context-menu { background: var(--card); border-color: #3a4354; }
+[data-theme="dark"] .invoice-context-menu button:hover { background: #222833; }
 .invoice-chip .move-invoice-select {
   width: auto;
   min-width: 7rem;
@@ -447,16 +581,22 @@ input, select, textarea {
 }
 .select-all-row .confirm-label { margin: 0; }
 
-.chat-panel { display: flex; flex-direction: column; min-height: 400px; }
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: min(68vh, 680px);
+  height: auto;
+  padding: 1.15rem 1.2rem 1.25rem;
+}
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  min-height: 120px;
-  max-height: 320px;
-  margin-bottom: 0.75rem;
+  min-height: 280px;
+  max-height: min(58vh, 520px);
+  margin-bottom: 0.85rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.5rem;
+  padding: 0.75rem;
   background: #fafbfc;
 }
 .chat-welcome { color: var(--muted); font-size: 0.9rem; padding: 0.5rem; }
@@ -486,8 +626,33 @@ input, select, textarea {
   font-style: italic;
 }
 .chat-thinking { opacity: 0.75; font-style: italic; }
-.chat-input { display: flex; gap: 0.5rem; }
-.chat-input input { flex: 1; margin: 0; }
+.chat-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.chat-input textarea {
+  width: 100%;
+  margin: 0;
+  min-height: 2.75rem;
+  max-height: 10rem;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.4;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  box-sizing: border-box;
+}
+.chat-input-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.chat-input-actions .btn { margin: 0; }
 
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
 @media (max-width: 700px) { .summary-grid { grid-template-columns: 1fr; } }
@@ -736,14 +901,28 @@ input, select, textarea {
 @media (max-width: 900px) {
   .wa-inbox-grid { grid-template-columns: repeat(3, 1fr); }
 }
+@media (max-width: 960px) {
+  .nav-links { flex-wrap: wrap; }
+}
 @media (max-width: 700px) {
   .wa-inbox-grid { grid-template-columns: repeat(2, 1fr); }
   .action-cards { grid-template-columns: 1fr; }
   h1 { font-size: 1.65rem; }
   .tab { flex: 1 1 calc(50% - 0.5rem); justify-content: center; text-align: center; }
-  .nav-links { justify-content: center; width: 100%; }
-  .nav-link { min-width: 4.75rem; padding: 0.45rem 0.5rem; }
-  .nav-label { font-size: 0.82rem; white-space: normal; max-width: 5.5rem; }
+  .nav-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    margin-left: 0;
+  }
+  .nav-link,
+  .nav-logout-form {
+    flex: 0 1 4.75rem;
+    width: 4.75rem;
+    max-width: 4.75rem;
+    padding: 0.45rem 0.5rem;
+  }
+  .nav-label { font-size: 0.82rem; }
   .nav-icon { width: 1.75rem; height: 1.75rem; }
 }
 @media (max-width: 420px) {
@@ -986,4 +1165,76 @@ input, select, textarea {
 [data-theme="dark"] .alert-card { background: #3a3020; border-color: #6a5020; }
 [data-theme="dark"] .confirm-box { background: #3a3020; border-color: #6a5020; }
 [data-theme="dark"] .section-title { border-bottom-color: #3a4354; }
+
+/* Form validation */
+.field-invalid {
+  border-color: var(--danger, #c0392b) !important;
+  outline-color: var(--danger, #c0392b);
+}
+.field-error-msg {
+  display: block;
+  color: var(--danger, #c0392b);
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+  font-weight: 500;
+}
+[data-theme="dark"] .field-error-msg {
+  color: #f0a0a0;
+}
+
+/* Multi-bank account switcher */
+.bank-accounts-panel { margin-bottom: 1.5rem; }
+.bank-accounts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.bank-accounts-header h2 { margin: 0; }
+.account-switcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.account-card:hover {
+  border-color: var(--accent, #2a6f97);
+}
+.account-card.active {
+  border-color: var(--accent, #2a6f97);
+  box-shadow: 0 0 0 2px rgba(42, 111, 151, 0.2);
+}
+.account-card-name { font-weight: 650; }
+.account-card-bank { font-size: 0.85rem; }
+.account-card-balance { font-size: 1.05rem; font-weight: 600; margin-top: 0.35rem; }
+.account-card-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: #e8f1f7;
+  color: #1a4a66;
+}
+.account-details-card { margin-bottom: 1.5rem; }
+[data-theme="dark"] .account-card { background: var(--card); border-color: #3a4354; }
+[data-theme="dark"] .account-card.active { box-shadow: 0 0 0 2px rgba(120, 180, 220, 0.25); }
+[data-theme="dark"] .account-card-badge { background: #243040; color: #a8d0e8; }
 

@@ -4,6 +4,88 @@
 <h1>{{ t('page_cash_flow') }}</h1>
 <p class="help-tip">{{ t('help_tip_cash') }}</p>
 
+{# --- Account switcher --- #}
+<section class="bank-accounts-panel">
+  <div class="bank-accounts-header">
+    <h2>{{ t('your_bank_accounts') }}</h2>
+    <a href="{{ url_for('cash_flow.cash_flow', account_id=selected_account_id, add=1) if selected_account_id else url_for('cash_flow.cash_flow', add=1) }}"
+       class="btn btn-secondary">{{ t('add_bank_account') }}</a>
+  </div>
+
+  {% if accounts %}
+  <div class="account-switcher" role="tablist" aria-label="{{ t('your_bank_accounts') }}">
+    {% for acc in accounts %}
+    <a href="{{ url_for('cash_flow.cash_flow', account_id=acc.user_bank_acc_id) }}"
+       class="account-card {% if selected_account_id == acc.user_bank_acc_id %}active{% endif %}"
+       role="tab"
+       aria-selected="{{ 'true' if selected_account_id == acc.user_bank_acc_id else 'false' }}">
+      <span class="account-card-name">{{ acc.nickname or acc.account_name }}</span>
+      <span class="account-card-bank muted">{{ acc.bank_name }}{% if acc.branch_name %} · {{ acc.branch_name }}{% endif %}</span>
+      <span class="account-card-balance">Rs. {{ "{:,.2f}".format(acc.available_balance or 0) }}</span>
+      {% if default_bank_acc_id == acc.user_bank_acc_id %}
+      <span class="account-card-badge">{{ t('default_account_badge') }}</span>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">{{ t('no_bank_accounts_yet') }}</p>
+  {% endif %}
+</section>
+
+{% if show_add_form or not accounts %}
+<form class="card" method="post" action="{{ url_for('cash_flow.create_account') }}" data-zenith-validate>
+  <h3>{{ t('add_bank_account') }}</h3>
+  <p class="muted">{{ t('add_bank_account_help') }}</p>
+  <div class="grid-2">
+    <label>{{ t('bank_nickname') }} <input name="nickname" placeholder="{{ t('bank_nickname_ph') }}"></label>
+    <label>{{ t('bank_account_name') }} <input name="account_name" required placeholder="{{ t('bank_account_name_ph') }}"></label>
+    <label>{{ t('bank_name_label') }} <input name="bank_name" required placeholder="e.g. Commercial Bank"></label>
+    <label>{{ t('bank_branch') }} <input name="branch_name" placeholder="e.g. Colombo 07"></label>
+    <label>{{ t('opening_balance') }} <input type="number" step="0.01" name="available_balance" value="0" required></label>
+  </div>
+  <label class="confirm-label">
+    <input type="checkbox" name="set_as_default" value="1" {% if not accounts %}checked{% endif %}>
+    {{ t('set_as_default_account') }}
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_bank_account') }}</button>
+    {% if accounts %}
+    <a href="{{ url_for('cash_flow.cash_flow', account_id=selected_account_id) }}" class="btn btn-secondary">{{ t('cancel') }}</a>
+    {% endif %}
+  </div>
+</form>
+{% endif %}
+
+{% if selected_account and report %}
+<div class="card account-details-card">
+  <h3>{{ t('account_details') }}: {{ selected_account.nickname or selected_account.account_name }}</h3>
+  <form method="post" action="{{ url_for('cash_flow.edit_account', account_id=selected_account_id) }}" data-zenith-validate>
+    <div class="grid-2">
+      <label>{{ t('bank_nickname') }}
+        <input name="nickname" value="{{ selected_account.nickname or '' }}">
+      </label>
+      <label>{{ t('bank_account_name') }}
+        <input name="account_name" value="{{ selected_account.account_name }}" required>
+      </label>
+      <label>{{ t('bank_name_label') }}
+        <input name="bank_name" value="{{ selected_account.bank_name }}" required>
+      </label>
+      <label>{{ t('bank_branch') }}
+        <input name="branch_name" value="{{ selected_account.branch_name or '' }}">
+      </label>
+    </div>
+    <label class="confirm-label">
+      <input type="checkbox" name="set_as_default" value="1"
+             {% if default_bank_acc_id == selected_account_id %}checked{% endif %}>
+      {{ t('set_as_default_account') }}
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn btn-secondary">{{ t('save_account_details') }}</button>
+    </div>
+  </form>
+</div>
+
 <div class="summary-grid">
   <div class="stat-card">
     <span class="stat-label">{{ t('current_balance') }}</span>
@@ -31,6 +113,35 @@
 <p class="success-msg">{{ t('no_alerts') }}</p>
 {% endif %}
 
+<h2>{{ t('cheques_from_this_account') }}</h2>
+<p class="text-muted">{{ t('cheques_from_this_account_help') }}</p>
+{% if upcoming_cheques %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>{{ t('cheque_number') }}</th>
+      <th>{{ t('dealer') }}</th>
+      <th>{{ t('cheque_date') }}</th>
+      <th>{{ t('col_fund_by') }}</th>
+      <th>{{ t('col_amount') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ch in upcoming_cheques %}
+    <tr>
+      <td>{{ ch.cheque_no }}</td>
+      <td>{{ ch.dealer_name or '—' }}</td>
+      <td>{{ ch.cheque_date }}</td>
+      <td><strong>{{ ch.predicted_clearance_date or '—' }}</strong></td>
+      <td>Rs. {{ "{:,.2f}".format(ch.amount_in_numerals or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>{{ t('no_cheques_this_account') }}</p>
+{% endif %}
+
 <h2>{{ t('timetable_title') }}</h2>
 <p class="text-muted">{{ t('timetable_help') }}</p>
 {% if report.liquidity_schedule %}
@@ -52,7 +163,7 @@
       <td>{{ row.True_Settlement_Date }}</td>
       <td><strong>{{ row.Target_Funding_Date }}</strong></td>
       <td>{{ "{:,.2f}".format(row.Total_Amount) }}</td>
-      <td>{{ row.Days_Gained_By_Holiday_Lag }}</td>
+      <td>{{ row.Days_Gained_Total }}</td>
       <td>{{ t('yes') if row.Is_Interbank else t('no') }}</td>
     </tr>
     {% endfor %}
@@ -82,14 +193,14 @@
 {% endif %}
 
 <div class="grid-2">
-  <form class="card" method="post" action="{{ url_for('cash_flow.update_balance') }}">
+  <form class="card" method="post" action="{{ url_for('cash_flow.update_balance') }}" data-zenith-validate>
     <h3>{{ t('update_balance') }}</h3>
     <input type="hidden" name="account_id" value="{{ selected_account_id }}">
     <label>{{ t('new_balance') }} <input type="number" step="0.01" name="balance" value="{{ report.current_balance }}" required></label>
     <button type="submit" class="btn btn-secondary btn-lg">{{ t('save_balance') }}</button>
   </form>
 
-  <form class="card" method="post" action="{{ url_for('cash_flow.add_planned') }}">
+  <form class="card" method="post" action="{{ url_for('cash_flow.add_planned') }}" data-zenith-validate>
     <h3>{{ t('plan_deposit') }}</h3>
     <input type="hidden" name="account_id" value="{{ selected_account_id }}">
     <label>{{ t('col_date') }} <input type="date" name="planned_date" required></label>
@@ -118,6 +229,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 {% endblock %}
 {% block scripts %}

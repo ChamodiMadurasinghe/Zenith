@@ -115,11 +115,19 @@
         <input type="checkbox" id="chat-speak-toggle">
         {{ t('ai_speak') }}
       </label>
+      <button type="button" id="chat-mute-btn" class="btn btn-secondary btn-sm chat-mute-btn" title="{{ t('mute_chat_hint') }}" hidden>
+        {{ t('mute_chat') }}
+      </button>
     </div>
     <div class="chat-input">
-      <input type="text" id="chat-input" placeholder="{{ t('chat_placeholder') }}">
-      <button type="button" id="chat-mic" class="btn btn-secondary" title="{{ t('voice_input') }}">🎤</button>
-      <button type="button" id="chat-send" class="btn btn-secondary btn-lg" data-dealer="{{ dealer.dealer_id }}">{{ t('send') }}</button>
+      <textarea id="chat-input" rows="1" placeholder="{{ t('chat_placeholder') }}"></textarea>
+      <div class="chat-input-actions">
+        <button type="button" id="chat-mic" class="btn btn-secondary" title="{{ t('voice_input') }}">🎤</button>
+        <button type="button" id="chat-send" class="btn btn-secondary btn-lg" data-dealer="{{ dealer.dealer_id }}">{{ t('send') }}</button>
+        <button type="button" id="chat-stop-btn" class="btn btn-danger btn-lg" title="{{ t('mute_chat_hint') }}" hidden>
+          {{ t('stop_chat') }}
+        </button>
+      </div>
     </div>
   </div>
 </div>

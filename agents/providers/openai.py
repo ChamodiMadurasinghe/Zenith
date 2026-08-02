@@ -20,7 +20,7 @@ def _client():
 
 def openai_text(prompt: str, system: str = "", model: str | None = None) -> str:
     client = _client()
-    model_name = model or Config.openai_chat_model()
+    model_name = Config.resolve_openai_model(model, Config.openai_chat_model())
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -33,7 +33,7 @@ def openai_json(prompt: str, system: str = "", model: str | None = None) -> dict
     text = openai_text(
         prompt + "\n\nRespond with valid JSON only, no markdown fences.",
         system,
-        model=model,
+        model=Config.resolve_openai_model(model, Config.openai_chat_model()),
     )
     text = text.strip()
     if text.startswith("```"):

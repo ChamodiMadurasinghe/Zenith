@@ -12,8 +12,8 @@ def invoice_due_date(invoice: dict) -> date:
     return inv_date + timedelta(days=int(invoice["credit_period_days"]))
 
 
-def _merchant_bank_name() -> str:
-    acc_id = int(repo.get_setting("default_bank_acc_id", "1"))
+def _merchant_bank_name(dealer_id: int | None = None) -> str:
+    acc_id = repo.paying_account_id_for_dealer(dealer_id)
     acc = repo.get_bank_account(acc_id)
     return acc["bank_name"] if acc else ""
 
@@ -21,7 +21,7 @@ def _merchant_bank_name() -> str:
 def enrich_bundle_liquidity(bundle: dict, dealer_id: int, holidays: set) -> dict:
     dealer_bank = repo.get_dealer_preferred_bank(dealer_id)
     interbank = is_interbank(
-        _merchant_bank_name(),
+        _merchant_bank_name(dealer_id),
         dealer_bank["bank_name"] if dealer_bank else "",
     )
     dates = apply_liquidity_dates(bundle["cheque_date"], holidays, is_interbank=interbank)
@@ -42,6 +42,7 @@ def compute_bundles(dealer_id: int, invoice_ids: list, ceiling_lkr: float) -> li
     impossible = dealer.get("impossible_days", "") if dealer else ""
     casual = int(dealer.get("casual_days") or 0)
     today = date.today()
+    account_id = repo.paying_account_id_for_dealer(dealer_id)
 
     from db.connection import query_one
 
@@ -91,7 +92,9 @@ def compute_bundles(dealer_id: int, invoice_ids: list, ceiling_lkr: float) -> li
         enrich_bundle_liquidity(entry, dealer_id, holidays)
         result.append(entry)
 
-    audit_bundle_day_limits(result, casual_limit=Config.CASUAL_DAILY_LIMIT_LKR)
+    audit_bundle_day_limits(
+        result, casual_limit=Config.CASUAL_DAILY_LIMIT_LKR, account_id=account_id
+    )
     return result
 
 
@@ -111,17 +114,29 @@ def build_bundles_from_assignments(
     ceiling_lkr: float,
     enforce_ceiling: bool = True,
     empty_groups: list | None = None,
+    invoice_parts: dict | None = None,
 ) -> list:
-    """Build bundles from manual invoice-to-group assignments."""
+    """Build bundles from manual invoice-to-group assignments.
+
+    invoice_assignments keys may be \"12\" or \"12:1\" (split part).
+    invoice_parts maps those keys to amount/part metadata.
+    """
     from db.connection import query_one
 
+    from core.invoice_parts import hydrate_invoice_from_meta, parse_part_key
+
+    parts_map = {str(k): v for k, v in (invoice_parts or {}).items()}
     groups: dict[int, list] = {}
-    for inv_id_str, group_no in invoice_assignments.items():
-        inv_id = int(inv_id_str)
+    for inv_key, group_no in invoice_assignments.items():
+        key = str(inv_key)
+        inv_id, _part_idx = parse_part_key(key)
         group_no = int(group_no)
-        inv = query_one("SELECT * FROM invoices WHERE invoices_id = ?", (inv_id,))
-        if inv:
-            groups.setdefault(group_no, []).append(inv)
+        row = query_one("SELECT * FROM invoices WHERE invoices_id = ?", (inv_id,))
+        if not row:
+            continue
+        meta = parts_map.get(key) or {}
+        inv = hydrate_invoice_from_meta(row, meta) if meta.get("part_count") else dict(row)
+        groups.setdefault(group_no, []).append(inv)
 
     empty_set = {int(g) for g in (empty_groups or [])}
     all_group_nos = set(groups.keys()) | empty_set
@@ -160,7 +175,11 @@ def build_bundles_from_assignments(
         }
         enrich_bundle_liquidity(entry, dealer_id, holidays)
         result.append(entry)
-    audit_bundle_day_limits(result, casual_limit=Config.CASUAL_DAILY_LIMIT_LKR)
+    audit_bundle_day_limits(
+        result,
+        casual_limit=Config.CASUAL_DAILY_LIMIT_LKR,
+        account_id=repo.paying_account_id_for_dealer(dealer_id),
+    )
     return result
 
 

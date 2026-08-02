@@ -137,7 +137,12 @@ class ZenithLiquidityForecaster:
                 continue
             stated_str = format_date(candidate)
             detail = apply_liquidity_dates(stated_str, holiday_set, is_interbank=False)
-            float_days = int(detail.get("days_gained_by_holiday_lag") or 0)
+            float_days = int(
+                detail.get("days_gained_total")
+                if detail.get("days_gained_total") is not None
+                else detail.get("days_gained_by_holiday_lag")
+                or 0
+            )
             settlement = parse_date(detail["true_settlement_date"])
             if settlement <= deadline:
                 seen.append(

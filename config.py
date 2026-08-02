@@ -52,13 +52,28 @@ class Config:
     def openai_api_key() -> str:
         return _env("OPENAI_API_KEY", "")
 
+    # Only these OpenAI models are allowed for this project (Gemini is separate).
+    OPENAI_ALLOWED_MODELS = frozenset({"gpt-5.6-luna", "gpt-5.6-sol"})
+
+    @staticmethod
+    def resolve_openai_model(model: str | None, default: str = "gpt-5.6-luna") -> str:
+        """Clamp any OpenAI model id to the allowed set; unknown → default."""
+        name = (model or default).strip()
+        if name not in Config.OPENAI_ALLOWED_MODELS:
+            return default if default in Config.OPENAI_ALLOWED_MODELS else "gpt-5.6-luna"
+        return name
+
+    @staticmethod
+    def _openai_model(env_key: str, default: str) -> str:
+        return Config.resolve_openai_model(_env(env_key, default), default)
+
     @staticmethod
     def openai_chat_model() -> str:
-        return _env("OPENAI_CHAT_MODEL", "gpt-3.5-turbo")
+        return Config._openai_model("OPENAI_CHAT_MODEL", "gpt-5.6-luna")
 
     @staticmethod
     def openai_analyst_model() -> str:
-        return _env("OPENAI_ANALYST_MODEL", "gpt-3.5-turbo")
+        return Config._openai_model("OPENAI_ANALYST_MODEL", "gpt-5.6-sol")
 
     @staticmethod
     def use_fake_ai() -> bool:
@@ -126,6 +141,11 @@ class Config:
     def use_agentic_orchestrator() -> bool:
         """Route WhatsApp intake through agentic PER pipeline (handle_event)."""
         return _env_bool("USE_AGENTIC_ORCHESTRATOR", False)
+
+    @staticmethod
+    def use_bundling_tool_agent() -> bool:
+        """Use LangChain tool-calling Bundling Assistant (fallback: JSON proposed_actions)."""
+        return _env_bool("USE_BUNDLING_TOOL_AGENT", True)
 
     @staticmethod
     def mock_image_path() -> str:

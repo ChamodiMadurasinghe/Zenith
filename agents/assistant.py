@@ -33,10 +33,12 @@ Actions:
 - set_cheque_date {action, cheque_group, date}
 - move_invoice {action, invoice_id, to_group}
 - postpone_cheque {action, cheque_group, days}
-- split_invoice {action, invoice_id}
+- split_invoice {action, invoice_id} OR {action, invoice_id, num_parts: N} OR {action, invoice_id, amounts: [a,b,...]}
+  (num_parts/amounts = equal/custom amount parts shown as invoice · 1, · 2 in red, each on its own cheque by default)
 - recalculate_dates {action}
 
 Use divide_into_cheques when the user wants N cheques (e.g. "divide into 5 cheques").
+When the user asks to split one invoice into parts/payments, use split_invoice with num_parts or amounts.
 Set allow_exceed_ceiling true when the user says exceeding the limit is OK.
 Use invoice_ids from current_bundles and/or ready_invoices. Every invoice in the bundle request should appear once.
 When you finish proposing a bundle layout, say bundling is complete and tell the user to review cheques on the left.

@@ -19,7 +19,19 @@ def _chat_error_hint(err: str) -> str:
         return "Guide unavailable. Set OPENAI_API_KEY in .env and restart the app."
     if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
         return "Invalid OpenAI API key. Replace OPENAI_API_KEY in .env and restart."
-    if "429" in err or "rate_limit" in err.lower() or "ResourceExhausted" in err:
+    err_l = err.lower()
+    if (
+        "insufficient_quota" in err_l
+        or "credit_balance_exhausted" in err_l
+        or "no credits remaining" in err_l
+    ):
+        return (
+            "OpenAI API billing for this key's organization has no credits left "
+            "(ChatGPT Plus ≠ API credits). Add funds at "
+            "https://platform.openai.com/settings/organization/billing/ "
+            "or set USE_FAKE_AI=true for UI testing."
+        )
+    if "429" in err or "rate_limit" in err_l or "resourceexhausted" in err_l:
         return "Rate limit exceeded. Try USE_FAKE_AI=true for UI testing, or reset the guide chat."
     return f"Guide unavailable: {err[:200]}"
 

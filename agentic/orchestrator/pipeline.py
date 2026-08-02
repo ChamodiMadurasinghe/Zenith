@@ -61,6 +61,14 @@ class InvoicePipeline:
         # --- Agent 2: Anomaly ---
         self._transition(fsm, InvoiceState.AUDITING, session_id, store, invoice_id)
         audit = self._run_agent2(session_id, store, trace, draft, str(dealer_id), fsm)
+        # Persist for Bundling Assistant context (not the legacy chat "Agent 2" name).
+        store.set(
+            "anomaly_flags",
+            [
+                {"message": a} if isinstance(a, str) else a
+                for a in (audit.anomalies or [])
+            ],
+        )
         if audit.locked:
             self._transition(fsm, InvoiceState.LOCKED, session_id, store, invoice_id)
             self._persist_trace(session_id, trace)
@@ -77,6 +85,7 @@ class InvoicePipeline:
         if plan is None:
             self._persist_trace(session_id, trace)
             return self._ui(session_id, fsm.state.value, "Liquidity forecast failed.")
+        # cheque_plan seeds Bundling Assistant when agentic_session_id is supplied.
         store.set("cheque_plan", _plan_dict(plan))
 
         # --- Agent 4: Dealer liaison (draft message) ---

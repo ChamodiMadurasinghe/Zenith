@@ -410,7 +410,7 @@ def build_document() -> Document:
 
     add_heading(doc, "Implementation", 2)
     add_bullet(doc, "agents/assistant.py", "Code: ")
-    add_bullet(doc, "OpenAI gpt-3.5-turbo (or configured OPENAI_CHAT_MODEL)", "AI: ")
+    add_bullet(doc, "OpenAI gpt-5.6-luna / gpt-5.6-sol (OPENAI_CHAT_MODEL)", "AI: ")
 
     # ========================================================================
     # LEGACY — AGENT 3 ANALYST

@@ -30,7 +30,8 @@
   </div>
 
   <div class="card review-form-pane">
-    <form method="post" action="{{ url_for('ingestion.verify_invoice', invoice_id=invoice_id) }}">
+    <form method="post" action="{{ url_for('ingestion.verify_invoice', invoice_id=invoice_id) }}"
+          data-zenith-validate data-check-invoice-exclude="{{ invoice_id }}">
       <div class="grid-2">
         <label>{{ t('col_invoice_no') }} <input name="invoice_no" value="{{ extracted.invoice_no or '' }}" required></label>
         <label>{{ t('col_date') }} <input type="date" name="invoiced_date" value="{{ extracted.invoiced_date or '' }}" required></label>

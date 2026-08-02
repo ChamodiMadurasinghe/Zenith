@@ -10,14 +10,19 @@
 {{ bundle_warnings_panel(validation_issues) }}
 {% endif %}
 
-<form method="post" action="{{ url_for('bundling.commit') }}">
+<form method="post" action="{{ url_for('bundling.commit') }}" data-zenith-validate>
   <label>{{ t('bank_account') }}
-    <select name="user_bank_acc_id">
+    <select name="user_bank_acc_id" required>
+      <option value="">{{ t('select_paying_account') }}</option>
       {% for acc in accounts %}
-      <option value="{{ acc.user_bank_acc_id }}" {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>{{ acc.nickname }} ({{ acc.bank_name }})</option>
+      <option value="{{ acc.user_bank_acc_id }}" {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
+        {{ acc.nickname or acc.account_name }} — {{ acc.bank_name }}
+        (Rs. {{ "{:,.2f}".format(acc.available_balance or 0) }})
+      </option>
       {% endfor %}
     </select>
   </label>
+  <p class="muted help-tip">{{ t('cheque_bank_select_help') }}</p>
 
   {% for b in bundles %}
   <div class="cheque-print card">

@@ -3,7 +3,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from flask import Blueprint, abort, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.utils import secure_filename
 
 from config import Config
@@ -50,12 +50,28 @@ def _parse_items_from_form():
 
 def _parse_invoice_data_from_form(location_path=None):
     return {
-        "invoice_no": request.form["invoice_no"],
+        "invoice_no": (request.form.get("invoice_no") or "").strip(),
         "invoiced_date": request.form["invoiced_date"],
         "credit_period_days": request.form["credit_period_days"],
         "total_amount": request.form["total_amount"],
         "location_path": location_path,
     }
+
+
+def _block_duplicate_invoice(
+    invoice_no: str,
+    dealer_id: int,
+    *,
+    exclude_invoice_id: int | None = None,
+) -> bool:
+    """Flash and return True when this dealer already has the invoice number."""
+    existing = repo.find_invoice_by_no_and_dealer(
+        invoice_no, int(dealer_id), exclude_invoice_id=exclude_invoice_id
+    )
+    if existing:
+        flash_t("flash_invoice_duplicate", "error", invoice_no=invoice_no.strip())
+        return True
+    return False
 
 
 def _parse_dealer_form_data():
@@ -214,8 +230,13 @@ def review(draft_id):
             return redirect(url_for("ingestion.review", draft_id=draft_id))
 
         name = request.form.get("dealer_name", "").strip()
-        if repo.find_dealer_by_name(name):
-            flash_t("flash_dealer_duplicate", "error")
+        existing = repo.find_dealer_by_name_exact(name)
+        if existing:
+            # Same supplier already registered — reuse; do not create a second row.
+            draft["dealer_id"] = int(existing["dealer_id"])
+            draft["new_dealer"] = False
+            session.modified = True
+            flash_t("flash_dealer_reused", "success", name=existing["dealer_name"])
             return redirect(url_for("ingestion.review", draft_id=draft_id))
 
         data = _parse_dealer_form_data()
@@ -278,6 +299,11 @@ def verify(draft_id):
 
     items = _parse_items_from_form()
     data = _parse_invoice_data_from_form(draft["location_path"])
+    if not data["invoice_no"]:
+        flash_t("flash_invoice_no_required", "error")
+        return redirect(url_for("ingestion.review", draft_id=draft_id))
+    if _block_duplicate_invoice(data["invoice_no"], int(dealer_id)):
+        return redirect(url_for("ingestion.review", draft_id=draft_id))
     repo.save_verified_invoice(data, items, int(dealer_id))
     _drafts().pop(draft_id, None)
     session.modified = True
@@ -360,8 +386,10 @@ def verify_invoice(invoice_id):
             return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
 
         name = request.form.get("dealer_name", "").strip()
-        if repo.find_dealer_by_name(name):
-            flash_t("flash_dealer_duplicate", "error")
+        existing = repo.find_dealer_by_name_exact(name)
+        if existing:
+            repo.update_invoice_dealer_id(invoice_id, int(existing["dealer_id"]))
+            flash_t("flash_dealer_reused", "success", name=existing["dealer_name"])
             return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
 
         data = _parse_dealer_form_data()
@@ -394,6 +422,13 @@ def verify_invoice(invoice_id):
             return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
 
         data = _parse_invoice_data_from_form(invoice.get("location_path"))
+        if not data["invoice_no"]:
+            flash_t("flash_invoice_no_required", "error")
+            return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
+        if _block_duplicate_invoice(
+            data["invoice_no"], int(dealer_id), exclude_invoice_id=invoice_id
+        ):
+            return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
         repo.update_verified_invoice(invoice_id, data, _parse_items_from_form(), int(dealer_id))
         flash_t("flash_invoice_verified", "success")
         return redirect(url_for("ingestion.dashboard"))
@@ -430,6 +465,11 @@ def manual_invoice():
 
         items = _parse_items_from_form()
         data = _parse_invoice_data_from_form(None)
+        if not data["invoice_no"]:
+            flash_t("flash_invoice_no_required", "error")
+            return redirect(url_for("ingestion.manual_invoice"))
+        if _block_duplicate_invoice(data["invoice_no"], int(dealer_id)):
+            return redirect(url_for("ingestion.manual_invoice"))
         repo.save_verified_invoice(data, items, int(dealer_id))
         flash_t("flash_invoice_saved", "success")
         return redirect(url_for("ingestion.dashboard"))
@@ -438,4 +478,42 @@ def manual_invoice():
         "manual_invoice.html",
         dealers=dealers,
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+    )
+
+
+@ingestion_bp.route("/api/check-dealer-name")
+@login_required
+def api_check_dealer_name():
+    name = (request.args.get("name") or "").strip()
+    exclude_id = request.args.get("exclude_id", type=int)
+    if not name:
+        return jsonify({"ok": True, "available": True})
+    existing = repo.find_dealer_by_name_exact(name, exclude_dealer_id=exclude_id)
+    return jsonify(
+        {
+            "ok": True,
+            "available": existing is None,
+            "existing_id": int(existing["dealer_id"]) if existing else None,
+            "existing_name": existing["dealer_name"] if existing else None,
+        }
+    )
+
+
+@ingestion_bp.route("/api/check-invoice-no")
+@login_required
+def api_check_invoice_no():
+    invoice_no = (request.args.get("invoice_no") or "").strip()
+    dealer_id = request.args.get("dealer_id", type=int)
+    exclude_id = request.args.get("exclude_id", type=int)
+    if not invoice_no or not dealer_id:
+        return jsonify({"ok": True, "available": True})
+    existing = repo.find_invoice_by_no_and_dealer(
+        invoice_no, dealer_id, exclude_invoice_id=exclude_id
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "available": existing is None,
+            "existing_id": int(existing["invoices_id"]) if existing else None,
+        }
     )

@@ -144,7 +144,12 @@ def _normalize_extracted(extracted: dict) -> dict:
 def build_liquidity_reply(
     extracted: dict, schedule_row: dict, *, dealer_matched: bool, anomalies: list[dict]
 ) -> str:
-    days_gained = int(schedule_row.get("Days_Gained_By_Holiday_Lag") or 0)
+    days_gained = int(
+        schedule_row.get("Days_Gained_Total")
+        if schedule_row.get("Days_Gained_Total") is not None
+        else schedule_row.get("Days_Gained_By_Holiday_Lag")
+        or 0
+    )
     day_word = "day" if days_gained == 1 else "days"
     lines = [
         "Zenith Liquidity Agent Status Update",

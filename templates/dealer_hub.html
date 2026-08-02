@@ -12,7 +12,8 @@
 </div>
 
 {% if active_tab == 'details' %}
-<form class="card" method="post" action="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}">
+<form class="card" method="post" action="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
+      data-zenith-validate data-check-dealer-exclude="{{ dealer.dealer_id }}">
   <div class="grid-2">
     <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_data.dealer_name }}" required></label>
     <label>{{ t('email') }} <input name="dealer_email" value="{{ dealer_data.dealer_email or '' }}"></label>
@@ -44,7 +45,7 @@
   {% if pending_review %}window.__pendingReview = {{ pending_review | tojson }};{% endif %}
   {% if chat_history %}window.__chatHistory = {{ chat_history | tojson }};{% endif %}
 </script>
-<script src="{{ url_for('static', filename='js/bundling.js') }}?v=16"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/bundling.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=17"></script>
 {% endif %}
 {% endblock %}

@@ -4,7 +4,7 @@
 <h1>{{ t('page_add_dealer') }}</h1>
 <p class="lead">{{ t('lead_add_dealer') }}</p>
 
-<form class="card" method="post" action="{{ url_for('dealers.new_dealer') }}">
+<form class="card" method="post" action="{{ url_for('dealers.new_dealer') }}" data-zenith-validate>
   <div class="grid-2">
     <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_data.get('dealer_name', '') }}" required></label>
     <label>{{ t('email') }} <input name="dealer_email" value="{{ dealer_data.get('dealer_email', '') or '' }}"></label>

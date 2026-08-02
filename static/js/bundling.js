@@ -140,9 +140,56 @@ function bindWarningAcknowledgement() {
   sync();
 }
 
+function partKey(inv) {
+  const id = inv.invoices_id;
+  const count = parseInt(inv.part_count || 1, 10);
+  const idx = inv.part_index;
+  if (count > 1 && idx != null) return `${id}:${idx}`;
+  return String(id);
+}
+
+function parsePartKey(key) {
+  const s = String(key);
+  if (s.includes(":")) {
+    const [id, part] = s.split(":");
+    return { invoiceId: parseInt(id, 10), partIndex: parseInt(part, 10) };
+  }
+  return { invoiceId: parseInt(s, 10), partIndex: null };
+}
+
+function displayInvoiceNo(inv) {
+  if (inv.invoice_no_display) return inv.invoice_no_display;
+  const base = inv.invoice_no || `#${inv.invoices_id}`;
+  const count = parseInt(inv.part_count || 1, 10);
+  if (count > 1 && inv.part_index != null) return `${base} · ${inv.part_index}`;
+  return base;
+}
+
+function isSplitPart(inv) {
+  return parseInt(inv.part_count || 1, 10) > 1 && inv.part_index != null;
+}
+
+function buildInvoicePartsPayload(bundles) {
+  const parts = {};
+  (bundles || []).forEach((b) => {
+    (b.invoices || []).forEach((inv) => {
+      if (isSplitPart(inv)) {
+        parts[partKey(inv)] = {
+          invoices_id: inv.invoices_id,
+          total_amount: inv.total_amount,
+          part_index: inv.part_index,
+          part_count: inv.part_count,
+          original_amount: inv.original_amount,
+          invoice_no: inv.invoice_no,
+        };
+      }
+    });
+  });
+  return parts;
+}
+
 function buildMoveOptions(bundles, currentGroup, invoiceId) {
   const groups = (bundles || []).map((b) => b.group);
-  const maxGroup = groups.length ? Math.max(...groups) : 0;
   let html = `<option value="">${i18n("js_move_to")}</option>`;
   groups.forEach((g) => {
     if (g !== currentGroup) {
@@ -154,10 +201,17 @@ function buildMoveOptions(bundles, currentGroup, invoiceId) {
 }
 
 function renderInvoiceChip(inv, bundles, currentGroup) {
+  const key = partKey(inv);
   const moveOpts = buildMoveOptions(bundles, currentGroup, inv.invoices_id);
-  return `<li class="invoice-chip" draggable="true" data-invoice-id="${inv.invoices_id}">
-    <span class="invoice-chip-label">${escapeHtml(inv.invoice_no)} — Rs. ${formatLkr(inv.total_amount)}</span>
-    <select class="move-invoice-select" data-invoice="${inv.invoices_id}" data-from-group="${currentGroup}" aria-label="${i18n("js_move_to")}">
+  const splitClass = isSplitPart(inv) ? " invoice-chip--split" : "";
+  const labelClass = isSplitPart(inv) ? " invoice-chip-label--split" : "";
+  return `<li class="invoice-chip${splitClass}" draggable="true"
+      data-invoice-id="${inv.invoices_id}"
+      data-part-key="${escapeHtml(key)}"
+      data-part-index="${inv.part_index != null ? inv.part_index : ""}"
+      data-part-count="${inv.part_count || 1}">
+    <span class="invoice-chip-label${labelClass}">${escapeHtml(displayInvoiceNo(inv))} — Rs. ${formatLkr(inv.total_amount)}</span>
+    <select class="move-invoice-select" data-part-key="${escapeHtml(key)}" data-invoice="${inv.invoices_id}" data-from-group="${currentGroup}" aria-label="${i18n("js_move_to")}">
       ${moveOpts}
     </select>
   </li>`;
@@ -187,7 +241,7 @@ function renderBundleCard(b, bundles) {
         <span class="bundle-liquidity-meta">
           ${i18n("settlement")}: ${b.true_settlement_date || "—"}
           | ${i18n("fund_by")}: ${b.target_funding_date || b.predicted_clearance_date || "—"}
-          | ${i18n("days_gained")}: ${b.days_gained_by_holiday_lag ?? 0}
+          | ${i18n("days_gained")}: ${b.days_gained_total ?? b.days_gained_by_holiday_lag ?? 0}
         </span>
       </div>
     </div>
@@ -234,13 +288,14 @@ function renderBundles(bundles, validationIssues) {
   bindMoveSelects();
   bindAddCheque();
   bindAutoReviewButton();
+  bindInvoiceContextMenu();
 }
 
 function buildAssignmentsFromBundles(bundles) {
   const assignments = {};
   bundles.forEach((b) => {
     (b.invoices || []).forEach((inv) => {
-      assignments[inv.invoices_id] = b.group;
+      assignments[partKey(inv)] = b.group;
     });
   });
   return assignments;
@@ -266,21 +321,23 @@ function resolveTargetGroup(bundles, target) {
   return parseInt(target, 10);
 }
 
-function applyInvoiceMove(bundles, invoiceId, targetGroup) {
+function applyInvoiceMove(bundles, partKeyOrId, targetGroup) {
   const assignments = buildAssignmentsFromBundles(bundles);
-  assignments[invoiceId] = targetGroup;
+  assignments[String(partKeyOrId)] = targetGroup;
   const emptyGroups = getEmptyGroups(bundles).filter((g) => g !== targetGroup);
 
   return {
     assignments,
     chequeDates: buildChequeDatesFromBundles(bundles),
     emptyGroups,
+    invoiceParts: buildInvoicePartsPayload(bundles),
   };
 }
 
-async function postManualUpdate(assignments, chequeDates, onePerInvoice = false, emptyGroups = []) {
+async function postManualUpdate(assignments, chequeDates, onePerInvoice = false, emptyGroups = [], invoiceParts = null) {
   const dealerId = getDealerId();
   if (!dealerId) return;
+  const current = window.__currentBundles || [];
   const res = await fetch(`/bundling/${dealerId}/manual`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -290,6 +347,28 @@ async function postManualUpdate(assignments, chequeDates, onePerInvoice = false,
       ceiling_lkr: getCeiling(),
       one_per_invoice: onePerInvoice,
       empty_groups: emptyGroups,
+      invoice_parts: invoiceParts || buildInvoicePartsPayload(current),
+    }),
+  });
+  const data = await res.json();
+  if (data.error && !data.bundles) {
+    alert(data.error);
+    return;
+  }
+  if (data.bundles) {
+    renderBundles(data.bundles, data.validation_issues);
+  }
+}
+
+async function postManualActions(actions) {
+  const dealerId = getDealerId();
+  if (!dealerId) return;
+  const res = await fetch(`/bundling/${dealerId}/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      actions,
+      ceiling_lkr: getCeiling(),
     }),
   });
   const data = await res.json();
@@ -319,18 +398,18 @@ function bindBundleControls(bundles) {
 }
 
 function bindDragDrop() {
-  let draggedInvoiceId = null;
+  let draggedPartKey = null;
 
   document.querySelectorAll(".invoice-chip").forEach((chip) => {
     chip.addEventListener("dragstart", (e) => {
-      draggedInvoiceId = parseInt(chip.dataset.invoiceId, 10);
+      draggedPartKey = chip.dataset.partKey || String(chip.dataset.invoiceId);
       chip.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", String(draggedInvoiceId));
+      e.dataTransfer.setData("text/plain", draggedPartKey);
     });
     chip.addEventListener("dragend", () => {
       chip.classList.remove("dragging");
-      draggedInvoiceId = null;
+      draggedPartKey = null;
       document.querySelectorAll(".bundle-invoice-list.drag-over").forEach((el) => {
         el.classList.remove("drag-over");
       });
@@ -351,20 +430,28 @@ function bindDragDrop() {
     list.addEventListener("drop", (e) => {
       e.preventDefault();
       list.classList.remove("drag-over");
-      const invId = draggedInvoiceId || parseInt(e.dataTransfer.getData("text/plain"), 10);
+      const key = draggedPartKey || e.dataTransfer.getData("text/plain");
       const toGroup = parseInt(list.dataset.dropGroup, 10);
-      if (!invId || !toGroup) return;
+      if (!key || !toGroup) return;
 
       const current = window.__currentBundles || [];
       const fromGroup = parseInt(
-        document.querySelector(`.invoice-chip[data-invoice-id="${invId}"]`)?.closest(".bundle-card")
+        document.querySelector(`.invoice-chip[data-part-key="${String(key).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"]`)?.closest(".bundle-card")
           ?.dataset.group,
         10
       );
       if (fromGroup === toGroup) return;
 
-      const { assignments, chequeDates, emptyGroups } = applyInvoiceMove(current, invId, toGroup);
-      postManualUpdate(assignments, chequeDates, false, emptyGroups);
+      const parsed = parsePartKey(key);
+      const actions = [
+        {
+          action: "move_invoice",
+          invoice_id: parsed.invoiceId,
+          to_group: toGroup,
+          ...(parsed.partIndex != null ? { part_index: parsed.partIndex } : {}),
+        },
+      ];
+      postManualActions(actions);
     });
   });
 }
@@ -375,14 +462,100 @@ function bindMoveSelects() {
       const value = select.value;
       if (!value) return;
 
-      const invId = parseInt(select.dataset.invoice, 10);
+      const key = select.dataset.partKey || String(select.dataset.invoice);
       const current = window.__currentBundles || [];
       const targetGroup = resolveTargetGroup(current, value);
-      const { assignments, chequeDates, emptyGroups } = applyInvoiceMove(current, invId, targetGroup);
-      postManualUpdate(assignments, chequeDates, false, emptyGroups);
+      const parsed = parsePartKey(key);
+      postManualActions([
+        {
+          action: "move_invoice",
+          invoice_id: parsed.invoiceId,
+          to_group: targetGroup,
+          ...(parsed.partIndex != null ? { part_index: parsed.partIndex } : {}),
+        },
+      ]);
       select.value = "";
     });
   });
+}
+
+function hideInvoiceContextMenu() {
+  document.getElementById("invoice-context-menu")?.remove();
+}
+
+function bindInvoiceContextMenu() {
+  hideInvoiceContextMenu();
+  document.querySelectorAll(".invoice-chip").forEach((chip) => {
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      hideInvoiceContextMenu();
+      const invoiceId = parseInt(chip.dataset.invoiceId, 10);
+      const partCount = parseInt(chip.dataset.partCount || "1", 10);
+      const menu = document.createElement("div");
+      menu.id = "invoice-context-menu";
+      menu.className = "invoice-context-menu";
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      menu.innerHTML = `
+        <button type="button" data-act="split">${i18n("js_split_invoice")}</button>
+        <button type="button" data-act="split-keep">${i18n("js_split_same_cheque")}</button>
+        ${partCount > 1 ? `<button type="button" data-act="unsplit">${i18n("js_unsplit_invoice")}</button>` : ""}
+      `;
+      document.body.appendChild(menu);
+
+      menu.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const act = btn.dataset.act;
+          hideInvoiceContextMenu();
+          if (act === "unsplit") {
+            // Re-merge by splitting into 1 is not supported — reload full via num_parts omit + assign alone
+            // Recombine: split with num_parts of original into 1 cheque by using amounts = [full]
+            // Use split with separate_cheques false after restoring — simplest: ask user to recompute.
+            // Better: call split with amounts=[original] is invalid (<2). Emit move of all parts onto group 1 then...
+            // For unsplit: apply action that reconstructs — use custom path via split with merging in guardrails
+            // We'll send split_invoice num_parts: 1 meaning "put alone as whole" after removing parts —
+            // Implement unsplit as: get original from first part and replace all parts with one full invoice via actions
+            const current = window.__currentBundles || [];
+            let original = null;
+            let hostGroup = 1;
+            current.forEach((b) => {
+              (b.invoices || []).forEach((inv) => {
+                if (inv.invoices_id === invoiceId && isSplitPart(inv)) {
+                  original = inv.original_amount || inv.total_amount;
+                  hostGroup = b.group;
+                }
+              });
+            });
+            if (original == null) return;
+            // Remove parts by re-splitting to 2 then... hack: use assign rebuild
+            // Prefer dedicated: split_invoice with amounts that is invalid.
+            // Server: if num_parts==1 treat as unsplit — add quickly
+            postManualActions([
+              { action: "split_invoice", invoice_id: invoiceId, num_parts: 1 },
+            ]);
+            return;
+          }
+          const raw = window.prompt(i18n("js_split_how_many"), "2");
+          if (raw == null) return;
+          const n = parseInt(raw, 10);
+          if (!n || n < 2) {
+            alert(i18n("js_split_need_two"));
+            return;
+          }
+          postManualActions([
+            {
+              action: "split_invoice",
+              invoice_id: invoiceId,
+              num_parts: n,
+              separate_cheques: act !== "split-keep",
+            },
+          ]);
+        });
+      });
+    });
+  });
+
+  document.addEventListener("click", hideInvoiceContextMenu, { once: true });
 }
 
 function bindAddCheque() {

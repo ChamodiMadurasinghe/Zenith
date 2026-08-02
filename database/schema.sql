@@ -81,6 +81,18 @@ CREATE TABLE item (
     FOREIGN KEY (invoices_id) REFERENCES invoices(invoices_id)
 );
 
+-- One invoice may fund multiple cheques via amount parts
+CREATE TABLE cheque_invoice_allocation (
+    allocation_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    cheque_id       INTEGER NOT NULL,
+    invoices_id     INTEGER NOT NULL,
+    amount          REAL    NOT NULL,
+    part_index      INTEGER NOT NULL DEFAULT 1,
+    part_count      INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (cheque_id) REFERENCES cheque(cheque_id),
+    FOREIGN KEY (invoices_id) REFERENCES invoices(invoices_id)
+);
+
 CREATE TABLE cbsl_bank_holidays (
     holiday_date    TEXT PRIMARY KEY,
     description     TEXT
@@ -191,3 +203,7 @@ CREATE INDEX idx_whatsapp_sessions_updated ON whatsapp_sessions(updated_at);
 CREATE INDEX idx_whatsapp_inbox_status ON whatsapp_inbox(status);
 CREATE INDEX idx_whatsapp_inbox_user ON whatsapp_inbox(user_id);
 CREATE INDEX idx_alert_log_sent_at ON alert_log(sent_at);
+
+-- One invoice number per dealer (per user). Different dealers may reuse the same number.
+CREATE UNIQUE INDEX idx_invoices_user_dealer_invoice_no
+    ON invoices(user_id, dealer_id, invoice_no);

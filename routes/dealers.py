@@ -59,9 +59,10 @@ def new_dealer():
             flash_t("flash_dealer_name_required", "error")
             return render_template("dealer_form.html", **_form_context(data))
 
-        if repo.find_dealer_by_name(data["dealer_name"]):
+        existing = repo.find_dealer_by_name_exact(data["dealer_name"])
+        if existing:
             flash_t("flash_dealer_duplicate", "error")
-            return render_template("dealer_form.html", **_form_context(data))
+            return redirect(url_for("dealers.details", dealer_id=existing["dealer_id"]))
 
         bank_err = repo.validate_dealer_bank_input(data)
         if bank_err:
@@ -92,8 +93,10 @@ def details(dealer_id):
             flash_t("flash_dealer_name_required", "error")
             return redirect(url_for("dealers.details", dealer_id=dealer_id))
 
-        existing = repo.find_dealer_by_name(data["dealer_name"])
-        if existing and existing["dealer_id"] != dealer_id:
+        existing = repo.find_dealer_by_name_exact(
+            data["dealer_name"], exclude_dealer_id=dealer_id
+        )
+        if existing:
             flash_t("flash_dealer_duplicate", "error")
             return redirect(url_for("dealers.details", dealer_id=dealer_id))
 
