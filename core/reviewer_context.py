@@ -28,6 +28,10 @@ def _liquidity_bundle(b: dict, today: date) -> dict:
         "target_funding_date": fund_by,
         "predicted_clearance_date": b.get("predicted_clearance_date"),
         "days_gained_by_holiday_lag": b.get("days_gained_by_holiday_lag", 0),
+        "days_gained_total": b.get(
+            "days_gained_total",
+            b.get("days_gained_by_holiday_lag", 0),
+        ),
         "days_until_funding_from_today": _days_until(fund_by, today),
         "total_lkr": b.get("total_lkr"),
         "is_interbank": b.get("is_interbank"),
@@ -127,6 +131,10 @@ def build_reviewer_context(
         default=0,
     )
     total_holiday_lag = sum(int(lb.get("days_gained_by_holiday_lag") or 0) for lb in liquidity_bundles)
+    total_float_days = sum(
+        int(lb.get("days_gained_total") if lb.get("days_gained_total") is not None else lb.get("days_gained_by_holiday_lag") or 0)
+        for lb in liquidity_bundles
+    )
 
     return {
         "trigger": trigger,
@@ -176,6 +184,7 @@ def build_reviewer_context(
             "total_lkr_in_proposal": total_at_risk,
             "max_days_until_funding": max_funding_days,
             "total_days_gained_by_holiday_lag": total_holiday_lag,
+            "total_days_gained": total_float_days,
             "num_cheques": len(bundles),
         },
         "holidays_near_cheques": holidays_near,

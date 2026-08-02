@@ -187,7 +187,7 @@ function renderBundleCard(b, bundles) {
         <span class="bundle-liquidity-meta">
           ${i18n("settlement")}: ${b.true_settlement_date || "—"}
           | ${i18n("fund_by")}: ${b.target_funding_date || b.predicted_clearance_date || "—"}
-          | ${i18n("days_gained")}: ${b.days_gained_by_holiday_lag ?? 0}
+          | ${i18n("days_gained")}: ${b.days_gained_total ?? b.days_gained_by_holiday_lag ?? 0}
         </span>
       </div>
     </div>

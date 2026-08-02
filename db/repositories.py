@@ -681,7 +681,7 @@ def sync_timetable_from_cheque(cheque_id: int, dealer_id: int = None):
         ch["amount_in_numerals"],
         dates["true_settlement_date"],
         dates["target_funding_date"],
-        dates["days_gained_by_holiday_lag"],
+        dates["days_gained_total"],
         cheque_id=cheque_id,
         dealer_id=dealer_id,
     )

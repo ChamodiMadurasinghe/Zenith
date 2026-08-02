@@ -12,7 +12,7 @@ BUNDLING_ALGORITHM = """Python bundling rules (compute_bundles):
 4. Any single invoice above the ceiling gets its own cheque.
 5. Cheque date = latest due date in the group + dealer casual_days (business days), respecting CBSL holidays and dealer impossible_days.
 6. If that date is in the past, use tomorrow (next business day) instead.
-7. enrich_bundle_liquidity adds true_settlement_date, target_funding_date, days_gained_by_holiday_lag (float to Keep money until), and is_interbank (dealer bank vs merchant bank).
+7. enrich_bundle_liquidity adds true_settlement_date, target_funding_date, days_gained_by_holiday_lag (weekend/CBSL only), days_gained_total (float to Keep money until), and is_interbank (dealer bank vs merchant bank).
 8. calculate_optimal_cheque_batch (Zenith-1 tool) rolls settlement past CBSL holidays and audits deposit_timetable day exposure vs CASUAL_DAILY_LIMIT_LKR; verdict CLEAR_TO_BATCH or LIMIT_BREACH_WARNING."""
 
 
@@ -39,6 +39,7 @@ def _slim_bundle(b: dict) -> dict:
         "target_funding_date": b.get("target_funding_date"),
         "predicted_clearance_date": b.get("predicted_clearance_date"),
         "days_gained_by_holiday_lag": b.get("days_gained_by_holiday_lag"),
+        "days_gained_total": b.get("days_gained_total"),
         "total_lkr": b.get("total_lkr"),
         "is_interbank": b.get("is_interbank"),
         "day_limit_verdict": audit.get("verdict"),

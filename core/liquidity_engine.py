@@ -48,6 +48,7 @@ class LiquidityScheduleRow:
     target_funding_date: str
     total_amount: float
     days_gained_by_holiday_lag: int
+    days_gained_total: int
     is_interbank: bool = False
     cheque_ids: list = field(default_factory=list)
     dealer_ids: list = field(default_factory=list)
@@ -59,10 +60,16 @@ class LiquidityScheduleRow:
             "Target_Funding_Date": self.target_funding_date,
             "Total_Amount": round(self.total_amount, 2),
             "Days_Gained_By_Holiday_Lag": self.days_gained_by_holiday_lag,
+            "Days_Gained_Total": self.days_gained_total,
             "Is_Interbank": self.is_interbank,
             "Cheque_Ids": self.cheque_ids,
             "Dealer_Ids": self.dealer_ids,
         }
+
+
+def holiday_lag_days(stated: date, true_settlement: date) -> int:
+    """Calendar days from stated date to first banking settlement (weekends/CBSL only)."""
+    return max(0, (true_settlement - stated).days)
 
 
 def float_days_gained(stated: date, target: date) -> int:
@@ -83,8 +90,10 @@ def apply_liquidity_dates(
     return {
         "true_settlement_date": format_date(true_settlement),
         "target_funding_date": format_date(target),
-        # Extra days = full float to "Keep money until" (weekend/holiday roll + interbank +1)
-        "days_gained_by_holiday_lag": float_days_gained(stated, target),
+        # Weekend/CBSL roll only (stated → true settlement)
+        "days_gained_by_holiday_lag": holiday_lag_days(stated, true_settlement),
+        # Full float to "Keep money until" (holiday lag + interbank business-day shift)
+        "days_gained_total": float_days_gained(stated, target),
         "is_interbank": is_interbank,
         "predicted_clearance_date": format_date(target),
     }
@@ -138,7 +147,8 @@ def calculate_max_liquidity_schedule(
                 true_settlement_date=format_date(true_settlement),
                 target_funding_date=format_date(target),
                 total_amount=g["amount"],
-                days_gained_by_holiday_lag=float_days_gained(stated, target),
+                days_gained_by_holiday_lag=holiday_lag_days(stated, true_settlement),
+                days_gained_total=float_days_gained(stated, target),
                 is_interbank=g["is_interbank"],
                 cheque_ids=sorted(set(g["cheque_ids"])),
                 dealer_ids=sorted(g["dealer_ids"]),

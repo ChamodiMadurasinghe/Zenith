@@ -14,6 +14,7 @@ _BUNDLE_KEYS = (
     "target_funding_date",
     "predicted_clearance_date",
     "days_gained_by_holiday_lag",
+    "days_gained_total",
     "is_interbank",
 )
 

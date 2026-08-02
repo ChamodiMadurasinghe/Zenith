@@ -127,6 +127,8 @@ def _slim_bundles_for_tool(bundles: list) -> list[dict]:
                 "true_settlement_date": b.get("true_settlement_date"),
                 "target_funding_date": b.get("target_funding_date"),
                 "total_lkr": b.get("total_lkr"),
+                "days_gained_by_holiday_lag": b.get("days_gained_by_holiday_lag"),
+                "days_gained_total": b.get("days_gained_total"),
                 "day_limit_verdict": audit.get("verdict"),
                 "total_day_exposure": audit.get("total_day_exposure"),
                 "invoice_ids": [int(i["invoices_id"]) for i in b.get("invoices") or []],

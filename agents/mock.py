@@ -62,7 +62,12 @@ def mock_bundle_review(
         dealer_id, bundles, ceiling_lkr, validation_issues, trigger=trigger
     )
     summary = ctx.get("liquidity_summary") or {}
-    lag = int(summary.get("total_days_gained_by_holiday_lag") or 0)
+    lag = int(
+        summary.get("total_days_gained")
+        if summary.get("total_days_gained") is not None
+        else summary.get("total_days_gained_by_holiday_lag")
+        or 0
+    )
     max_days = summary.get("max_days_until_funding") or 0
     holidays = ctx.get("holidays_near_cheques") or []
     holiday_note = ""
@@ -134,7 +139,12 @@ def mock_apply_reviewer_suggestions(
         actions.append({"action": "postpone_cheque", "cheque_group": 1, "days": 3})
         actions.append({"action": "recalculate_dates"})
 
-    lag = int((ctx.get("liquidity_summary") or {}).get("total_days_gained_by_holiday_lag") or 0)
+    lag = int(
+        (ctx.get("liquidity_summary") or {}).get("total_days_gained")
+        if (ctx.get("liquidity_summary") or {}).get("total_days_gained") is not None
+        else (ctx.get("liquidity_summary") or {}).get("total_days_gained_by_holiday_lag")
+        or 0
+    )
     summary = translate(
         "mock_apply_review_summary",
         lang,

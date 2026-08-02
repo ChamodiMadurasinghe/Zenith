@@ -52,7 +52,7 @@
       <td>{{ row.True_Settlement_Date }}</td>
       <td><strong>{{ row.Target_Funding_Date }}</strong></td>
       <td>{{ "{:,.2f}".format(row.Total_Amount) }}</td>
-      <td>{{ row.Days_Gained_By_Holiday_Lag }}</td>
+      <td>{{ row.Days_Gained_Total }}</td>
       <td>{{ t('yes') if row.Is_Interbank else t('no') }}</td>
     </tr>
     {% endfor %}
