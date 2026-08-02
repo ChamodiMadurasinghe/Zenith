@@ -1,11 +1,13 @@
 ﻿(function () {
   const POS_KEY = "zenith_guide_pos";
   const COLLAPSED_KEY = "zenith_guide_collapsed";
+  const DRAG_THRESHOLD = 6;
 
   let busy = false;
   let recognition = null;
   let listening = false;
   let drag = null;
+  let fabWasDragged = false;
 
   function i18n(key, vars) {
     if (typeof window.__ === "function") return window.__(key, vars);
@@ -178,46 +180,85 @@
     messages.appendChild(el);
   }
 
-  function initDrag() {
-    const { root, handle } = els();
+  function attachDrag(handle, options) {
+    const { root } = els();
     if (!root || !handle) return;
 
+    const threshold = options?.threshold ?? 0;
+    let localDrag = null;
+    let moved = false;
+
     function onDown(clientX, clientY) {
+      if (options?.skipIfButton && options.skipIfButton()) return;
+      moved = false;
+      fabWasDragged = false;
       const rect = root.getBoundingClientRect();
-      drag = { offsetX: clientX - rect.left, offsetY: clientY - rect.top };
+      localDrag = {
+        offsetX: clientX - rect.left,
+        offsetY: clientY - rect.top,
+        startX: clientX,
+        startY: clientY,
+      };
       applyPosition(rect.left, rect.top);
+      root.classList.add("guide-dragging");
     }
 
     function onMove(clientX, clientY) {
-      if (!drag) return;
-      applyPosition(clientX - drag.offsetX, clientY - drag.offsetY);
+      if (!localDrag) return;
+      if (threshold > 0 && !moved) {
+        if (
+          Math.abs(clientX - localDrag.startX) > threshold ||
+          Math.abs(clientY - localDrag.startY) > threshold
+        ) {
+          moved = true;
+        }
+        if (!moved) return;
+      }
+      applyPosition(clientX - localDrag.offsetX, clientY - localDrag.offsetY);
     }
 
     function onUp() {
-      if (!drag) return;
-      drag = null;
+      if (!localDrag) return;
+      localDrag = null;
+      root.classList.remove("guide-dragging");
       clampPosition();
+      if (options?.markFabDrag && moved) fabWasDragged = true;
+      moved = false;
     }
 
     handle.addEventListener("mousedown", (e) => {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button") && handle !== e.currentTarget) return;
       e.preventDefault();
       onDown(e.clientX, e.clientY);
     });
     window.addEventListener("mousemove", (e) => onMove(e.clientX, e.clientY));
     window.addEventListener("mouseup", onUp);
 
-    handle.addEventListener("touchstart", (e) => {
-      if (e.target.closest("button")) return;
-      const t = e.touches[0];
-      onDown(t.clientX, t.clientY);
-    }, { passive: true });
-    window.addEventListener("touchmove", (e) => {
-      if (!drag) return;
-      const t = e.touches[0];
-      onMove(t.clientX, t.clientY);
-    }, { passive: true });
+    handle.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.target.closest("button") && handle !== e.currentTarget) return;
+        const t = e.touches[0];
+        onDown(t.clientX, t.clientY);
+      },
+      { passive: true }
+    );
+    window.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!localDrag) return;
+        const t = e.touches[0];
+        onMove(t.clientX, t.clientY);
+      },
+      { passive: true }
+    );
     window.addEventListener("touchend", onUp);
+  }
+
+  function initDrag() {
+    const { handle, fab } = els();
+    attachDrag(handle, { threshold: 0 });
+    attachDrag(fab, { threshold: DRAG_THRESHOLD, markFabDrag: true });
   }
 
   function initVoice() {
@@ -261,7 +302,14 @@
     if (!root) return;
     setCollapsed(loadCollapsed());
     loadPosition();
-    fab?.addEventListener("click", () => setCollapsed(false));
+    fab?.addEventListener("click", (e) => {
+      if (fabWasDragged) {
+        e.preventDefault();
+        fabWasDragged = false;
+        return;
+      }
+      setCollapsed(false);
+    });
     minimize?.addEventListener("click", () => setCollapsed(true));
     reset?.addEventListener("click", resetGuide);
     send?.addEventListener("click", sendGuide);

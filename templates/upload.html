@@ -1,113 +1,169 @@
 {% extends "base.html" %}
+{% from '_icons.html' import tab_camera, tab_whatsapp %}
 {% block title %}{{ t('page_upload') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<h1>{{ t('page_upload') }}</h1>
-<p class="lead">{{ t('lead_upload') }}</p>
-<p class="help-tip">{{ t('help_tip_upload') }}</p>
+<header class="page-header">
+  <h1>{{ t('page_upload') }}</h1>
+  <p class="lead">{{ t('lead_upload') }}</p>
+</header>
 
-<div class="grid-2">
-  <form class="card upload-form" method="post" action="{{ url_for('ingestion.upload') }}" enctype="multipart/form-data">
-    <h3>{{ t('upload_invoice_image') }}</h3>
-    <label for="invoice_image">{{ t('invoice_image_label') }}</label>
-    <input type="file" id="invoice_image" name="invoice_image" accept="image/*" required>
-    <button type="submit" class="btn btn-primary btn-lg">{{ t('upload_extract') }}</button>
-  </form>
-
-  <div class="card">
-    <h3>{{ t('add_manual') }}</h3>
-    <p class="muted">{{ t('manual_desc') }}</p>
-    <a href="{{ url_for('ingestion.manual_invoice') }}" class="btn btn-secondary btn-lg">{{ t('manual_entry') }}</a>
+<div class="intake-tabs">
+  <div class="tab-bar tab-bar-lg tab-bar-pane" role="tablist" aria-label="{{ t('page_upload') }}">
+    <button type="button"
+            class="tab tab-btn active"
+            role="tab"
+            id="tab-upload"
+            aria-selected="true"
+            aria-controls="panel-upload"
+            data-tab="upload">
+      <span class="tab-icon">{{ tab_camera() }}</span>
+      <span class="tab-label">{{ t('tab_upload_image') }}</span>
+    </button>
+    <button type="button"
+            class="tab tab-btn"
+            role="tab"
+            id="tab-whatsapp"
+            aria-selected="false"
+            aria-controls="panel-whatsapp"
+            data-tab="whatsapp">
+      <span class="tab-icon">{{ tab_whatsapp() }}</span>
+      <span class="tab-label">{{ t('tab_whatsapp_inbox') }}</span>
+      {% if whatsapp_inbox %}
+      <span class="tab-badge" aria-label="{{ whatsapp_inbox|length }}">{{ whatsapp_inbox|length }}</span>
+      {% endif %}
+    </button>
   </div>
 
-  <div class="card">
-    <h3>{{ t('add_dealer_manual') }}</h3>
-    <p class="muted">{{ t('lead_add_dealer') }}</p>
-    <a href="{{ url_for('dealers.new_dealer') }}" class="btn btn-secondary btn-lg">{{ t('add_dealer_manual') }}</a>
+  <div class="tab-pane-body">
+  <div class="tab-panel active" role="tabpanel" id="panel-upload" aria-labelledby="tab-upload" data-panel="upload">
+    <div class="card card-lg intake-card">
+      <form class="upload-form" method="post" action="{{ url_for('ingestion.upload') }}" enctype="multipart/form-data">
+        <h2 class="card-title">{{ t('upload_invoice_image') }}</h2>
+        <p class="help-tip">{{ t('help_tip_upload') }}</p>
+        <label class="upload-zone" for="invoice_image">
+          <span class="upload-zone-icon" aria-hidden="true">📷</span>
+          <span class="upload-zone-text">{{ t('invoice_image_label') }}</span>
+          <span class="upload-zone-hint muted">{{ t('upload_zone_hint') }}</span>
+          <input type="file" id="invoice_image" name="invoice_image" accept="image/*" required class="upload-zone-input">
+        </label>
+        <p class="upload-filename muted" id="upload-filename" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary btn-xl btn-block">{{ t('upload_extract') }}</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-whatsapp" aria-labelledby="tab-whatsapp" data-panel="whatsapp" hidden>
+    <div class="card card-lg intake-card">
+      <h2 class="card-title">{{ t('whatsapp_inbox') }}</h2>
+      <p class="muted intake-help">{{ t('whatsapp_inbox_help') }}</p>
+
+      {% if whatsapp_inbox %}
+      <ul class="wa-inbox-grid">
+        {% for row in whatsapp_inbox %}
+        <li class="wa-inbox-icon">
+          {% if row.image_url %}
+          <a href="{{ row.image_url }}" target="_blank" rel="noopener" class="wa-inbox-icon-thumb" title="{{ t('wa_tap_to_enlarge') }}">
+            <img src="{{ row.image_url }}" alt="{{ t('invoice_image_label') }}">
+          </a>
+          {% else %}
+          <div class="wa-inbox-icon-thumb wa-inbox-icon-empty" aria-hidden="true">—</div>
+          {% endif %}
+          <p class="wa-inbox-icon-meta" title="{{ row.sender_phone or '' }}">
+            <span class="wa-inbox-icon-date">{{ row.received_at }}</span>
+            {% if row.sender_phone %}
+            <span class="wa-inbox-icon-phone muted">{{ row.sender_phone }}</span>
+            {% endif %}
+          </p>
+          <div class="wa-inbox-icon-actions">
+            <form method="post" action="{{ url_for('ingestion.extract_whatsapp_inbox', inbox_id=row.inbox_id) }}">
+              <button type="submit" class="btn btn-primary btn-block wa-inbox-btn">{{ t('whatsapp_send_to_ai') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('ingestion.dismiss_whatsapp_inbox', inbox_id=row.inbox_id) }}">
+              <button type="submit" class="btn btn-secondary btn-block wa-inbox-btn">{{ t('whatsapp_dismiss') }}</button>
+            </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty-state">
+        <span class="empty-state-icon" aria-hidden="true">💬</span>
+        <p class="empty-state-text">{{ t('no_whatsapp_inbox') }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
   </div>
 </div>
 
-<h2>{{ t('whatsapp_inbox') }}{% if whatsapp_inbox %} ({{ whatsapp_inbox|length }}){% endif %}</h2>
-<p class="muted">{{ t('whatsapp_inbox_help') }}</p>
-{% if whatsapp_inbox %}
-<table class="data-table whatsapp-inbox-table">
-  <thead>
-    <tr>
-      <th>{{ t('col_preview') }}</th>
-      <th>{{ t('col_received') }}</th>
-      <th>{{ t('col_from') }}</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in whatsapp_inbox %}
-    <tr>
-      <td>
-        {% if row.image_url %}
-        <a href="{{ row.image_url }}" target="_blank" rel="noopener">
-          <img class="wa-inbox-thumb" src="{{ row.image_url }}" alt="{{ t('invoice_image_label') }}">
-        </a>
-        {% else %}
-        —
-        {% endif %}
-      </td>
-      <td>{{ row.received_at }}</td>
-      <td>{{ row.sender_phone or '—' }}</td>
-      <td>
-        <form method="post" action="{{ url_for('ingestion.extract_whatsapp_inbox', inbox_id=row.inbox_id) }}" class="inline-form">
-          <button type="submit" class="btn btn-primary btn-sm">{{ t('whatsapp_send_to_ai') }}</button>
-        </form>
-        <form method="post" action="{{ url_for('ingestion.dismiss_whatsapp_inbox', inbox_id=row.inbox_id) }}" class="inline-form">
-          <button type="submit" class="btn btn-secondary btn-sm">{{ t('whatsapp_dismiss') }}</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="muted">{{ t('no_whatsapp_inbox') }}</p>
-{% endif %}
+<section class="section-block">
+  <h2 class="section-title">{{ t('section_other_actions') }}</h2>
+  <div class="action-cards">
+    <div class="card action-card">
+      <h3>{{ t('add_manual') }}</h3>
+      <p class="muted">{{ t('manual_desc') }}</p>
+      <a href="{{ url_for('ingestion.manual_invoice') }}" class="btn btn-secondary btn-lg btn-block">{{ t('manual_entry') }}</a>
+    </div>
+    <div class="card action-card">
+      <h3>{{ t('add_dealer_manual') }}</h3>
+      <p class="muted">{{ t('lead_add_dealer') }}</p>
+      <a href="{{ url_for('dealers.new_dealer') }}" class="btn btn-secondary btn-lg btn-block">{{ t('add_dealer_manual') }}</a>
+    </div>
+  </div>
+</section>
 
 {% if pending_invoices %}
-<h2>{{ t('pending_verification') }}</h2>
-<table class="data-table">
-  <thead>
-    <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for inv in pending_invoices %}
-    <tr>
-      <td>{{ inv.invoice_no }}</td>
-      <td>{{ inv.display_dealer_name or inv.dealer_name }}</td>
-      <td>{{ inv.invoiced_date }}</td>
-      <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
-      <td><a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-secondary btn-sm">{{ t('verify') }}</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<section class="section-block">
+  <h2 class="section-title">{{ t('pending_verification') }}</h2>
+  <div class="table-scroll">
+    <table class="data-table data-table-lg">
+      <thead>
+        <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for inv in pending_invoices %}
+        <tr>
+          <td>{{ inv.invoice_no }}</td>
+          <td>{{ inv.display_dealer_name or inv.dealer_name }}</td>
+          <td>{{ inv.invoiced_date }}</td>
+          <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
+          <td><a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-primary btn-lg">{{ t('verify') }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endif %}
 
-<h2>{{ t('recent_invoices') }}</h2>
-{% if invoices %}
-<table class="data-table">
-  <thead>
-    <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_verified') }}</th><th>{{ t('col_cheque') }}</th></tr>
-  </thead>
-  <tbody>
-    {% for inv in invoices %}
-    <tr>
-      <td>{{ inv.invoice_no }}</td>
-      <td>{{ inv.dealer_name }}</td>
-      <td>{{ inv.invoiced_date }}</td>
-      <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
-      <td>{{ t('yes') if inv.is_invoice_verified else t('no') }}</td>
-      <td>{{ inv.cheque_id or '—' }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p>{{ t('no_invoices') }}</p>
-{% endif %}
+<section class="section-block">
+  <h2 class="section-title">{{ t('recent_invoices') }}</h2>
+  {% if invoices %}
+  <div class="table-scroll">
+    <table class="data-table data-table-lg">
+      <thead>
+        <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_verified') }}</th><th>{{ t('col_cheque') }}</th></tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr>
+          <td>{{ inv.invoice_no }}</td>
+          <td>{{ inv.dealer_name }}</td>
+          <td>{{ inv.invoiced_date }}</td>
+          <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
+          <td>{{ t('yes') if inv.is_invoice_verified else t('no') }}</td>
+          <td>{{ inv.cheque_id or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted section-empty">{{ t('no_invoices') }}</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload_tabs.js') }}"></script>
 {% endblock %}

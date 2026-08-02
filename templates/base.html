@@ -4,27 +4,62 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ t('app_name') }}{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("zenith_theme") === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body class="lang-{{ current_lang }}">
+  {% from '_icons.html' import nav_invoice, nav_cheque, nav_bank, nav_reports, nav_logout, theme_sun, theme_moon %}
   <div class="lang-bar">
     <span class="lang-label">{{ t('language') }}:</span>
     {% for code, label in supported_langs.items() %}
     <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
        class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
     {% endfor %}
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
+            title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
+      <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
+      <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
+      <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
+    </button>
   </div>
 
   {% if session.get('user_id') %}
   <nav class="nav">
     <a href="{{ url_for('ingestion.dashboard') }}" class="brand">{{ t('app_name') }}</a>
     <div class="nav-links">
-      <a href="{{ url_for('ingestion.dashboard') }}">{{ t('nav_upload') }}</a>
-      <a href="{{ url_for('bundling.bundling_home') }}">{{ t('nav_cheques') }}</a>
-      <a href="{{ url_for('cash_flow.cash_flow') }}">{{ t('nav_cash_flow') }}</a>
-      <a href="{{ url_for('analytics.analytics') }}">{{ t('nav_analytics') }}</a>
-      <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="inline">
-        <button type="submit" class="link-btn">{{ t('nav_logout') }}</button>
+      <a href="{{ url_for('ingestion.dashboard') }}"
+         class="nav-link{% if request.endpoint in ('ingestion.dashboard', 'ingestion.upload', 'ingestion.review_invoice', 'ingestion.verify_invoice', 'ingestion.manual_invoice') %} active{% endif %}">
+        <span class="nav-icon">{{ nav_invoice() }}</span>
+        <span class="nav-label">{{ t('nav_upload') }}</span>
+      </a>
+      <a href="{{ url_for('bundling.bundling_home') }}"
+         class="nav-link{% if request.endpoint and request.endpoint.startswith('bundling.') or request.endpoint and request.endpoint.startswith('dealers.') %} active{% endif %}">
+        <span class="nav-icon">{{ nav_cheque() }}</span>
+        <span class="nav-label">{{ t('nav_cheques') }}</span>
+      </a>
+      <a href="{{ url_for('cash_flow.cash_flow') }}"
+         class="nav-link{% if request.endpoint and request.endpoint.startswith('cash_flow.') %} active{% endif %}">
+        <span class="nav-icon">{{ nav_bank() }}</span>
+        <span class="nav-label">{{ t('nav_cash_flow') }}</span>
+      </a>
+      <a href="{{ url_for('analytics.analytics') }}"
+         class="nav-link{% if request.endpoint and request.endpoint.startswith('analytics.') %} active{% endif %}">
+        <span class="nav-icon">{{ nav_reports() }}</span>
+        <span class="nav-label">{{ t('nav_analytics') }}</span>
+      </a>
+      <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="inline nav-logout-form">
+        <button type="submit" class="nav-link nav-link-logout link-btn">
+          <span class="nav-icon">{{ nav_logout() }}</span>
+          <span class="nav-label">{{ t('nav_logout') }}</span>
+        </button>
       </form>
     </div>
   </nav>
@@ -84,6 +119,7 @@
   <script src="{{ url_for('static', filename='js/guide_widget.js') }}"></script>
   {% endif %}
 
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
