@@ -128,6 +128,11 @@ class Config:
         return _env_bool("USE_AGENTIC_ORCHESTRATOR", False)
 
     @staticmethod
+    def use_bundling_tool_agent() -> bool:
+        """Use LangChain tool-calling Bundling Assistant (fallback: JSON proposed_actions)."""
+        return _env_bool("USE_BUNDLING_TOOL_AGENT", True)
+
+    @staticmethod
     def mock_image_path() -> str:
         return _env("MOCK_IMAGE_PATH", "")
 

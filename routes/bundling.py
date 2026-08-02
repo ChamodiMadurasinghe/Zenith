@@ -110,7 +110,21 @@ def chat_health(dealer_id):
     dealer = repo.get_dealer(dealer_id)
     if not dealer:
         return jsonify({"ok": False, "error": "dealer_not_found"}), 404
-    return jsonify({"ok": True, "dealer_id": dealer_id, "demo_mode": Config.use_fake_ai()})
+    tool_agent = False
+    try:
+        from agents.bundling_assistant import bundling_tool_agent_available
+
+        tool_agent = Config.use_bundling_tool_agent() and bundling_tool_agent_available()
+    except Exception:
+        tool_agent = False
+    return jsonify(
+        {
+            "ok": True,
+            "dealer_id": dealer_id,
+            "demo_mode": Config.use_fake_ai(),
+            "bundling_tool_agent": tool_agent,
+        }
+    )
 
 
 @bundling_bp.route("/api/chat/bundling/<int:dealer_id>", methods=["POST"])
@@ -132,14 +146,56 @@ def chat(dealer_id):
         if not dealer:
             return jsonify({"error": "dealer_not_found", "reply": "Dealer not found."}), 404
 
+        lang = get_lang()
+        agentic_session_id = (
+            data.get("agentic_session_id")
+            or session.get("agentic_session_id")
+            or state.get("agentic_session_id")
+        )
+        from core.agentic_bundling_bridge import load_agentic_hints_for_bundling
+
+        agentic_hints = load_agentic_hints_for_bundling(agentic_session_id)
+
+        use_tool_agent = (
+            not Config.use_fake_ai()
+            and Config.use_bundling_tool_agent()
+        )
+        tool_trace = []
+        pending_commit = False
+
         try:
-            lang = get_lang()
             if Config.use_fake_ai():
                 from agents.mock import mock_bundling_chat
 
                 result = mock_bundling_chat(
                     message, dealer_id, bundles, dealer, history, ceiling, lang
                 )
+                use_tool_agent = False
+            elif use_tool_agent:
+                try:
+                    from agents.bundling_assistant import (
+                        bundling_tool_agent_available,
+                        run_bundling_assistant,
+                    )
+
+                    if not bundling_tool_agent_available():
+                        raise ImportError("LangChain tool-calling agent unavailable")
+                    result = run_bundling_assistant(
+                        dealer_id=dealer_id,
+                        message=message,
+                        chat_history=history,
+                        bundles=bundles,
+                        ceiling_lkr=ceiling,
+                        lang=lang,
+                        agentic_hints=agentic_hints,
+                    )
+                except ImportError:
+                    use_tool_agent = False
+                    from agents.assistant import bundling_chat
+
+                    result = bundling_chat(
+                        message, dealer_id, bundles, dealer, history, ceiling, lang
+                    )
             else:
                 from agents.assistant import bundling_chat
 
@@ -150,30 +206,48 @@ def chat(dealer_id):
             err = str(e)
             return jsonify({"error": err, "reply": _chat_error_hint(err)}), 500
 
-        proposed_actions = normalize_proposed_actions(result.get("proposed_actions"))
-        if not proposed_actions:
-            proposed_actions = infer_bundling_actions(message, bundles, dealer_id)
-
         allow_exceed = state.get("allow_exceed_ceiling", False)
         bundling_complete = False
-        if proposed_actions:
-            bundles, validation_issues, allow_exceed = apply_proposed_actions(
-                bundles, proposed_actions, dealer_id, ceiling
-            )
-            if not bundles:
-                fallback_actions = infer_bundling_actions(message, bundles, dealer_id)
-                if fallback_actions:
-                    bundles, validation_issues, allow_exceed = apply_proposed_actions(
-                        bundles, fallback_actions, dealer_id, ceiling
-                    )
-            bundling_complete = bool(bundles)
+        validation_issues: list = []
+
+        if use_tool_agent and "pending_commit" in result:
+            # Tools already ran through Python; persist when commit/dry_run=False happened.
+            bundles = result.get("bundles") or bundles
+            validation_issues = list(result.get("validation_issues") or [])
+            allow_exceed = bool(result.get("allow_exceed_ceiling", allow_exceed))
+            pending_commit = bool(result.get("pending_commit"))
+            tool_trace = result.get("tool_trace") or []
+            bundling_complete = pending_commit and bool(bundles)
+            if not validation_issues:
+                validation_issues = collect_bundle_issues(
+                    {"bundles": bundles},
+                    dealer_id,
+                    ceiling,
+                    allow_exceed_ceiling=allow_exceed,
+                )
         else:
-            validation_issues = collect_bundle_issues(
-                {"bundles": bundles},
-                dealer_id,
-                ceiling,
-                allow_exceed_ceiling=allow_exceed,
-            )
+            proposed_actions = normalize_proposed_actions(result.get("proposed_actions"))
+            if not proposed_actions:
+                proposed_actions = infer_bundling_actions(message, bundles, dealer_id)
+
+            if proposed_actions:
+                bundles, validation_issues, allow_exceed = apply_proposed_actions(
+                    bundles, proposed_actions, dealer_id, ceiling
+                )
+                if not bundles:
+                    fallback_actions = infer_bundling_actions(message, bundles, dealer_id)
+                    if fallback_actions:
+                        bundles, validation_issues, allow_exceed = apply_proposed_actions(
+                            bundles, fallback_actions, dealer_id, ceiling
+                        )
+                bundling_complete = bool(bundles)
+            else:
+                validation_issues = collect_bundle_issues(
+                    {"bundles": bundles},
+                    dealer_id,
+                    ceiling,
+                    allow_exceed_ceiling=allow_exceed,
+                )
 
         history.append({"role": "user", "content": message})
         reply = (result.get("reply") or "").strip()
@@ -190,7 +264,7 @@ def chat(dealer_id):
                 )
             else:
                 reply += "\n\n" + translate("chat_bundling_complete", lang, count=len(bundles))
-        elif validation_issues:
+        elif validation_issues and not use_tool_agent:
             issue_lines = "\n".join(f"• {issue}" for issue in validation_issues)
             reply += (
                 "\n\nPython verification found these issues with this bundle proposal:\n"
@@ -208,16 +282,18 @@ def chat(dealer_id):
             validation_issues,
             allow_exceed_ceiling=allow_exceed,
         )
-        return jsonify(
-            {
-                "reply": reply,
-                "bundles": bundles,
-                "validation_issues": validation_issues,
-                "valid": not validation_issues,
-                "bundling_complete": bundling_complete,
-                "demo_mode": Config.use_fake_ai(),
-            }
-        )
+        payload = {
+            "reply": reply,
+            "bundles": bundles,
+            "validation_issues": validation_issues,
+            "valid": not validation_issues,
+            "bundling_complete": bundling_complete,
+            "demo_mode": Config.use_fake_ai(),
+            "assistant": "bundling_tool_agent" if use_tool_agent else "legacy_json",
+        }
+        if tool_trace:
+            payload["tool_trace"] = tool_trace
+        return jsonify(payload)
     except Exception as e:
         return jsonify({"error": str(e), "reply": f"Server error: {str(e)[:200]}"}), 500
 

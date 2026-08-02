@@ -1,6 +1,11 @@
 # Zenith
 
-Local cheque & invoice management for Sri Lankan businesses. Python (Flask) backend with multi-provider AI: Gemini Flash for invoice vision (Agent 1), OpenAI gpt-3.5-turbo for bundling chat (Agent 2) and analytics (Agent 3).
+Local cheque & invoice management for Sri Lankan businesses. Python (Flask) backend with multi-provider AI:
+
+- **Gemini** — invoice vision (ingestion / agentic Agent 1)
+- **Bundling Assistant** — OpenAI + LangChain tool-calling over `core/bundling.py` (not the same as agentic Agents 2–3)
+- **Analyst** — OpenAI reports
+- **agentic/** pipeline — Agents 1–4 (Vision → Anomaly → Liquidity → Dealer liaison)
 
 ## Setup
 
@@ -11,8 +16,9 @@ copy .env.example .env    # or cp on Linux/Mac
 
 Edit `.env`:
 - `APP_PASSWORD` — your login password
-- `GEMINI_API_KEY` + `GEMINI_VISION_MODEL` — Agent 1 invoice upload (vision)
-- `OPENAI_API_KEY` + `OPENAI_CHAT_MODEL` / `OPENAI_ANALYST_MODEL` — Agent 2 chat + Agent 3 reports
+- `GEMINI_API_KEY` + `GEMINI_VISION_MODEL` — invoice vision
+- `OPENAI_API_KEY` + `OPENAI_CHAT_MODEL` / `OPENAI_ANALYST_MODEL` — Bundling Assistant + analyst
+- `USE_BUNDLING_TOOL_AGENT=true` — LangChain tools (set `false` for legacy JSON `proposed_actions`)
 - `USE_FAKE_AI=true` — demo chat mode (zero API quota while designing UI)
 
 Initialize the database:
@@ -40,11 +46,13 @@ Cashiers can snap invoice/cheque photos on WhatsApp instead of using the web upl
 2. Keep `USE_WHATSAPP_MOCK=true` for local testing; set a sample invoice at `MOCK_IMAGE_PATH=storage/invoices/your-sample.jpg`
 3. Run the mock pipeline: `python whatsapp_agent.py` (prints the reply text)
 4. Live webhook:
-   - Run `python app.py` and expose with [ngrok](https://ngrok.com/) (`ngrok http 5000`)
-   - In Meta → WhatsApp → Configuration, set callback URL to `https://YOUR-NGROK-HOST/webhook/whatsapp`
+   - Run `python app.py` and expose with [ngrok](https://ngrok.com/) (`ngrok http 5000`) or Cloudflare tunnel
+   - In Meta → WhatsApp → Configuration, set callback URL to `https://YOUR-HOST/webhook/whatsapp`
    - Use the same `META_VERIFY_TOKEN` for Verify Token
    - Subscribe to `messages`
 5. Set `USE_WHATSAPP_MOCK=false` and optionally restrict senders with `WHATSAPP_ALLOWED_NUMBERS=+9477...`
+
+Photos land in the **WhatsApp inbox** first; Gemini (Agent 1) runs when you tap **Send to AI**.
 
 Optional legacy Twilio: set `WHATSAPP_PROVIDER=twilio` and fill `TWILIO_*` vars.
 

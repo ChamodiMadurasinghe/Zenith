@@ -56,7 +56,12 @@ def _slim_bundle(b: dict) -> dict:
     }
 
 
-def build_bundling_chat_context(dealer_id: int, bundles: list, ceiling_lkr: float) -> dict:
+def build_bundling_chat_context(
+    dealer_id: int,
+    bundles: list,
+    ceiling_lkr: float,
+    agentic_hints: dict | None = None,
+) -> dict:
     dealer = repo.get_dealer(dealer_id) or {}
     bank = repo.get_dealer_preferred_bank(dealer_id)
     summary = repo.get_dealer_invoice_summary(dealer_id)
@@ -67,7 +72,13 @@ def build_bundling_chat_context(dealer_id: int, bundles: list, ceiling_lkr: floa
     merchant_acc = repo.get_bank_account(int(repo.get_setting("default_bank_acc_id", "1")))
     merchant_bank = merchant_acc["bank_name"] if merchant_acc else None
 
+    hints = agentic_hints or {}
     return {
+        "assistant_role": "Bundling Assistant",
+        "naming_note": (
+            "agentic Agent 2 = Anomaly; agentic Agent 3 = Liquidity Forecast; "
+            "this chat is Bundling Assistant (not those pipeline agents)."
+        ),
         "dealer": {
             "dealer_id": dealer.get("dealer_id"),
             "dealer_name": dealer.get("dealer_name"),
@@ -107,4 +118,8 @@ def build_bundling_chat_context(dealer_id: int, bundles: list, ceiling_lkr: floa
         "current_bundles": [_slim_bundle(b) for b in bundles],
         "bundling_algorithm": BUNDLING_ALGORITHM,
         "today": date.today().isoformat(),
+        # From agentic pipeline when session_id is provided (feeds Bundling Assistant).
+        "cheque_plan": hints.get("cheque_plan"),
+        "anomaly_flags": hints.get("anomaly_flags") or [],
+        "agentic_session_id": hints.get("session_id"),
     }
