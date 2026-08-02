@@ -13,6 +13,9 @@
 }
 
 * { box-sizing: border-box; }
+html {
+  scrollbar-gutter: stable;
+}
 body {
   margin: 0;
   font-family: "Nirmala UI", "Iskoola Pota", "Noto Sans Sinhala", "Noto Sans Tamil", "Segoe UI", system-ui, sans-serif;
@@ -95,13 +98,20 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 800; font-size: 1.45rem; color: var(--primary); text-decoration: none; }
-.nav-links { display: flex; flex-wrap: wrap; gap: 0.5rem 0.35rem; align-items: stretch; }
+.nav-links {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  align-items: stretch;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .nav-link {
   color: var(--text);
   text-decoration: none;
   font-size: 1rem;
   font-weight: 700;
-  padding: 0.5rem 0.85rem;
+  padding: 0.5rem 0.65rem;
   min-height: var(--touch-min);
   display: inline-flex;
   flex-direction: column;
@@ -115,7 +125,9 @@ body {
   cursor: pointer;
   line-height: 1.2;
   text-align: center;
-  min-width: 5.5rem;
+  flex: 0 0 7rem;
+  width: 7rem;
+  max-width: 7rem;
 }
 .nav-links a.nav-link:hover,
 .nav-link-logout:hover {
@@ -139,9 +151,21 @@ body {
 .nav-label {
   display: block;
   font-size: 0.95rem;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  width: 100%;
 }
-.nav-logout-form { margin: 0; display: inline-flex; }
+.nav-logout-form {
+  margin: 0;
+  display: inline-flex;
+  flex: 0 0 7rem;
+  width: 7rem;
+  max-width: 7rem;
+}
+.nav-logout-form .nav-link {
+  width: 100%;
+  max-width: 100%;
+}
 .nav-link-logout {
   color: var(--muted);
 }
@@ -877,14 +901,28 @@ body:has(#cheques-layout) .guide-widget {
 @media (max-width: 900px) {
   .wa-inbox-grid { grid-template-columns: repeat(3, 1fr); }
 }
+@media (max-width: 960px) {
+  .nav-links { flex-wrap: wrap; }
+}
 @media (max-width: 700px) {
   .wa-inbox-grid { grid-template-columns: repeat(2, 1fr); }
   .action-cards { grid-template-columns: 1fr; }
   h1 { font-size: 1.65rem; }
   .tab { flex: 1 1 calc(50% - 0.5rem); justify-content: center; text-align: center; }
-  .nav-links { justify-content: center; width: 100%; }
-  .nav-link { min-width: 4.75rem; padding: 0.45rem 0.5rem; }
-  .nav-label { font-size: 0.82rem; white-space: normal; max-width: 5.5rem; }
+  .nav-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    margin-left: 0;
+  }
+  .nav-link,
+  .nav-logout-form {
+    flex: 0 1 4.75rem;
+    width: 4.75rem;
+    max-width: 4.75rem;
+    padding: 0.45rem 0.5rem;
+  }
+  .nav-label { font-size: 0.82rem; }
   .nav-icon { width: 1.75rem; height: 1.75rem; }
 }
 @media (max-width: 420px) {

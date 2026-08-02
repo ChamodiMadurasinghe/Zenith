@@ -8,6 +8,7 @@
   let listening = false;
   let drag = null;
   let fabWasDragged = false;
+  let fabCollapsedPos = null;
   let abortController = null;
   let userStopped = false;
 
@@ -66,11 +67,25 @@
   function setCollapsed(collapsed) {
     const { root, fab } = els();
     if (!root) return;
+
+    let anchorBR = null;
+    if (!collapsed && fab && root.classList.contains("guide-collapsed")) {
+      const fabRect = fab.getBoundingClientRect();
+      anchorBR = { right: fabRect.right, bottom: fabRect.bottom };
+      fabCollapsedPos = { left: fabRect.left, top: fabRect.top };
+    }
+
     root.classList.toggle("guide-collapsed", collapsed);
     if (fab) fab.setAttribute("aria-expanded", collapsed ? "false" : "true");
     try {
       localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
     } catch (e) {}
+
+    if (collapsed) {
+      afterCollapseLayout();
+    } else {
+      afterExpandLayout(anchorBR);
+    }
   }
 
   function loadCollapsed() {
@@ -90,34 +105,70 @@
     root.style.bottom = "auto";
   }
 
+  const VIEWPORT_PAD = 12;
+
+  function clampPosition() {
+    const { root } = els();
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const maxLeft = Math.max(VIEWPORT_PAD, window.innerWidth - rect.width - VIEWPORT_PAD);
+    const maxTop = Math.max(VIEWPORT_PAD, window.innerHeight - rect.height - VIEWPORT_PAD);
+    applyPosition(
+      Math.min(Math.max(VIEWPORT_PAD, rect.left), maxLeft),
+      Math.min(Math.max(VIEWPORT_PAD, rect.top), maxTop)
+    );
+    if (root.classList.contains("guide-collapsed")) {
+      saveFabPosition();
+    }
+  }
+
+  function afterExpandLayout(anchorBR) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const { root } = els();
+        if (!root || root.classList.contains("guide-collapsed")) return;
+        if (anchorBR) {
+          const rect = root.getBoundingClientRect();
+          applyPosition(anchorBR.right - rect.width, anchorBR.bottom - rect.height);
+        }
+        clampPosition();
+      });
+    });
+  }
+
+  function afterCollapseLayout() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const { root } = els();
+        if (!root || !root.classList.contains("guide-collapsed")) return;
+        if (fabCollapsedPos) {
+          applyPosition(fabCollapsedPos.left, fabCollapsedPos.top);
+        }
+        clampPosition();
+      });
+    });
+  }
+
   function loadPosition() {
     try {
       const raw = localStorage.getItem(POS_KEY);
       if (!raw) return;
       const pos = JSON.parse(raw);
       if (typeof pos.left === "number" && typeof pos.top === "number") {
+        fabCollapsedPos = { left: pos.left, top: pos.top };
         applyPosition(pos.left, pos.top);
       }
     } catch (e) {}
   }
 
-  function savePosition() {
+  function saveFabPosition() {
     const { root } = els();
-    if (!root) return;
+    if (!root || !root.classList.contains("guide-collapsed")) return;
     const rect = root.getBoundingClientRect();
+    fabCollapsedPos = { left: rect.left, top: rect.top };
     try {
-      localStorage.setItem(POS_KEY, JSON.stringify({ left: rect.left, top: rect.top }));
+      localStorage.setItem(POS_KEY, JSON.stringify(fabCollapsedPos));
     } catch (e) {}
-  }
-
-  function clampPosition() {
-    const { root } = els();
-    if (!root) return;
-    const rect = root.getBoundingClientRect();
-    const maxLeft = Math.max(0, window.innerWidth - rect.width);
-    const maxTop = Math.max(0, window.innerHeight - rect.height);
-    applyPosition(Math.min(Math.max(0, rect.left), maxLeft), Math.min(Math.max(0, rect.top), maxTop));
-    savePosition();
   }
 
   const ACTION_DELAY_MS = 800;
@@ -351,6 +402,9 @@
     if (!root) return;
     setCollapsed(loadCollapsed());
     loadPosition();
+    if (!root.classList.contains("guide-collapsed")) {
+      afterExpandLayout(null);
+    }
     fab?.addEventListener("click", (e) => {
       if (fabWasDragged) {
         e.preventDefault();
