@@ -17,7 +17,7 @@ copy .env.example .env    # or cp on Linux/Mac
 Edit `.env`:
 - `APP_PASSWORD` — your login password
 - `GEMINI_API_KEY` + `GEMINI_VISION_MODEL` — invoice vision
-- `OPENAI_API_KEY` + `OPENAI_CHAT_MODEL` / `OPENAI_ANALYST_MODEL` — Bundling Assistant + analyst
+- `OPENAI_API_KEY` + `OPENAI_CHAT_MODEL` / `OPENAI_ANALYST_MODEL` — Bundling Assistant + analyst (`gpt-5.6-luna` or `gpt-5.6-sol` only)
 - `USE_BUNDLING_TOOL_AGENT=true` — LangChain tools (set `false` for legacy JSON `proposed_actions`)
 - `USE_FAKE_AI=true` — demo chat mode (zero API quota while designing UI)
 

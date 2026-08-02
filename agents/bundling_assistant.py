@@ -129,9 +129,12 @@ def run_bundling_assistant(
         ]
     )
     llm = ChatOpenAI(
-        model=Config.openai_chat_model(),
+        model=Config.resolve_openai_model(Config.openai_chat_model()),
         api_key=Config.openai_api_key(),
         temperature=0.2,
+        # gpt-5.6-* rejects function tools on /v1/chat/completions unless
+        # reasoning_effort is explicitly "none" (or callers use /v1/responses).
+        reasoning_effort="none",
     )
     agent = create_tool_calling_agent(llm, tools, prompt)
     executor = AgentExecutor(

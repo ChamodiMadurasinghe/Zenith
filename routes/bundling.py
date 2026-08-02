@@ -23,14 +23,25 @@ def _chat_error_hint(err: str) -> str:
         return "Vision agent unavailable. Set GEMINI_API_KEY in .env for invoice upload."
     if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
         return "Invalid OpenAI API key. Replace OPENAI_API_KEY in .env and restart."
-    # Match real API quota errors only — avoid false positives from other exception text.
     err_l = err.lower()
+    # Billing / prepaid balance (often confused with ChatGPT Plus credits).
+    if (
+        "insufficient_quota" in err_l
+        or "credit_balance_exhausted" in err_l
+        or "no credits remaining" in err_l
+    ):
+        return (
+            "OpenAI API billing for this key's organization has no credits left "
+            "(ChatGPT Plus ≠ API credits). Add funds at "
+            "https://platform.openai.com/settings/organization/billing/ "
+            "or set USE_FAKE_AI=true for UI testing."
+        )
+    # Match real API rate-limit errors — avoid false positives from other exception text.
     if (
         "429" in err
         or "rate_limit" in err_l
         or "rate limit" in err_l
         or "resourceexhausted" in err_l
-        or "insufficient_quota" in err_l
     ) and "chatprompttemplate" not in err_l:
         return (
             "Rate limit exceeded. Try USE_FAKE_AI=true for UI testing, rotate API keys, "
