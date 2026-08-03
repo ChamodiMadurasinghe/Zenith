@@ -209,6 +209,39 @@ def init_db(force_recreate: bool = True):
     finally:
         conn.close()
 
+    # Ensure seed/committed cheques have allocation + cash-flow timetable rows
+    try:
+        from db import repositories as repo
+        from db.connection import query, execute
+
+        missing = query(
+            """SELECT i.invoices_id, i.cheque_id, i.total_amount
+               FROM invoices i
+               WHERE i.cheque_id IS NOT NULL
+                 AND NOT EXISTS (
+                   SELECT 1 FROM cheque_invoice_allocation a
+                   WHERE a.cheque_id = i.cheque_id AND a.invoices_id = i.invoices_id
+                 )"""
+        )
+        for row in missing:
+            execute(
+                """INSERT INTO cheque_invoice_allocation
+                   (cheque_id, invoices_id, amount, part_index, part_count)
+                   VALUES (?, ?, ?, 1, 1)""",
+                (row["cheque_id"], row["invoices_id"], row["total_amount"]),
+            )
+        for row in query("SELECT cheque_id FROM cheque"):
+            inv = query(
+                "SELECT dealer_id FROM invoices WHERE cheque_id = ? LIMIT 1",
+                (row["cheque_id"],),
+            )
+            repo.sync_timetable_from_cheque(
+                row["cheque_id"], inv[0]["dealer_id"] if inv else None
+            )
+        print("Cheque allocations + deposit timetable synced")
+    except Exception as exc:
+        print(f"Warning: could not sync cheque timetable ({exc})")
+
 
 if __name__ == "__main__":
     import argparse

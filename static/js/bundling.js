@@ -16,7 +16,12 @@ function i18n(key, vars) {
 }
 
 function getSelectedInvoiceIds() {
-  return Array.from(document.querySelectorAll('input[name="invoice_ids"]:checked')).map((el) =>
+  const checked = Array.from(document.querySelectorAll('input[name="invoice_ids"]:checked')).map((el) =>
+    parseInt(el.value, 10)
+  );
+  if (checked.length) return checked;
+  // Fallback: all ready invoices (same as compute when nothing is ticked)
+  return Array.from(document.querySelectorAll('input[name="invoice_ids"]')).map((el) =>
     parseInt(el.value, 10)
   );
 }
@@ -629,6 +634,14 @@ function bindSelectAllInvoices() {
   });
 
   boxes.forEach((box) => box.addEventListener("change", syncSelectAllState));
+
+  // Default: select all so Compute / One-per-invoice work after AI grouping.
+  const anyChecked = document.querySelectorAll('input[name="invoice_ids"]:checked').length > 0;
+  if (!anyChecked) {
+    boxes.forEach((box) => {
+      box.checked = true;
+    });
+  }
   syncSelectAllState();
 }
 
@@ -649,6 +662,10 @@ function initBundling() {
       alert(i18n("js_select_invoice"));
       return;
     }
+    // Ensure UI checkboxes match what we will send
+    document.querySelectorAll('input[name="invoice_ids"]').forEach((box) => {
+      box.checked = ids.includes(parseInt(box.value, 10));
+    });
     const assignments = {};
     ids.forEach((id, i) => {
       assignments[id] = i + 1;

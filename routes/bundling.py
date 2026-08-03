@@ -104,6 +104,12 @@ def bundling_dealer(dealer_id):
 def compute(dealer_id):
     invoice_ids = [int(x) for x in request.form.getlist("invoice_ids")]
     ceiling = float(request.form.get("ceiling_lkr", 500000))
+    # If nothing ticked (common after AI already grouped), use all ready invoices.
+    if not invoice_ids:
+        invoice_ids = [
+            int(inv["invoices_id"])
+            for inv in repo.get_verified_unassigned_invoices(dealer_id)
+        ]
     if not invoice_ids:
         flash_t("flash_select_invoice", "error")
         return redirect(_dealer_cheques_url(dealer_id))
@@ -734,13 +740,13 @@ def commit():
 
     def run_analyst():
         try:
-            from agents.analyst import generate_report
+            from agents.analyst import build_report_markdown
 
             metrics = repo.get_analytics_metrics()
-            report = generate_report(metrics)
+            report = build_report_markdown(metrics)
             repo.save_analyst_report(report)
         except Exception:
-            pass
+            current_app.logger.exception("Background analyst report failed")
 
     threading.Thread(target=run_analyst, daemon=True).start()
     return redirect(url_for("analytics.analytics"))
