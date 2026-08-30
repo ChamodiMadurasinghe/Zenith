@@ -11,14 +11,45 @@ cash_flow_bp = Blueprint("cash_flow", __name__)
 
 
 def _account_from_form(form) -> dict:
+    bank_code = (form.get("bank_code") or "").strip()
+    bank_name = repo.bank_name_for_code(bank_code) or (form.get("bank_name") or "").strip()
     return {
         "account_name": (form.get("account_name") or "").strip(),
         "nickname": (form.get("nickname") or "").strip(),
-        "bank_name": (form.get("bank_name") or "").strip(),
+        "bank_code": bank_code,
+        "bank_name": bank_name,
         "branch_name": (form.get("branch_name") or "").strip(),
         "available_balance": form.get("available_balance") or 0,
         "overdraft_limit": form.get("overdraft_limit") or 0,
     }
+
+
+def _bank_form_context(bank_name: str | None = None) -> dict:
+    from core.cheque_utils import resolve_bank_code
+
+    return {
+        "bank_templates": repo.list_bank_cheque_templates(),
+        "selected_bank_code": resolve_bank_code(bank_name),
+    }
+
+
+def _cheque_setup_from_form(form) -> tuple[float, float]:
+    use_standard = form.get("use_standard_cheque_size") == "1"
+    if use_standard:
+        return repo.CITS_CHEQUE_LENGTH_MM, repo.CITS_CHEQUE_WIDTH_MM
+    try:
+        length_mm = float(form.get("cheque_length_mm") or repo.CITS_CHEQUE_LENGTH_MM)
+        width_mm = float(form.get("cheque_width_mm") or repo.CITS_CHEQUE_WIDTH_MM)
+    except (TypeError, ValueError):
+        return repo.CITS_CHEQUE_LENGTH_MM, repo.CITS_CHEQUE_WIDTH_MM
+    return length_mm, width_mm
+
+
+def _save_cheque_setup(account_id: int, bank_name: str, form, bank_code: str | None = None) -> str | None:
+    length_mm, width_mm = _cheque_setup_from_form(form)
+    return repo.save_account_cheque_setup(
+        account_id, bank_name, length_mm, width_mm, bank_code=bank_code
+    )
 
 
 def _default_account_id() -> int:
@@ -36,6 +67,10 @@ def _balance_tab_url(account_id: int):
 
 def _details_tab_url(account_id: int):
     return url_for("cash_flow.account_details", account_id=account_id)
+
+
+def _printer_tab_url(account_id: int):
+    return url_for("cash_flow.account_printer", account_id=account_id)
 
 
 def _render_hub(account, active_tab, **extra):
@@ -71,6 +106,8 @@ def cash_flow():
         "cash_flow.html",
         accounts=accounts,
         default_bank_acc_id=_default_account_id(),
+        cheque_setup=repo.get_account_cheque_setup(None, None),
+        **_bank_form_context(),
     )
 
 
@@ -85,7 +122,12 @@ def account_home(account_id):
 @cash_flow_bp.route("/cash-flow/accounts/new", methods=["GET"])
 @login_required
 def new_account():
-    return render_template("bank_account_new.html", accounts=repo.get_bank_accounts())
+    return render_template(
+        "bank_account_new.html",
+        accounts=repo.get_bank_accounts(),
+        cheque_setup=repo.get_account_cheque_setup(None, None),
+        **_bank_form_context(),
+    )
 
 
 @cash_flow_bp.route("/cash-flow/account/<int:account_id>/details", methods=["GET", "POST"])
@@ -100,12 +142,38 @@ def account_details(account_id):
         if err:
             flash_t(err, "error")
             return redirect(_details_tab_url(account_id))
+        dim_err = _save_cheque_setup(
+            account_id, data["bank_name"], request.form, bank_code=data.get("bank_code")
+        )
+        if dim_err:
+            flash_t(dim_err, "error")
+            return redirect(_details_tab_url(account_id))
         repo.update_bank_account(account_id, data)
         if request.form.get("set_as_default"):
             repo.set_setting("default_bank_acc_id", str(account_id))
         flash_t("flash_bank_account_updated", "success")
         return redirect(_details_tab_url(account_id))
-    return _render_hub(account, "details")
+    bank_name = account.get("bank_name")
+    return _render_hub(
+        account,
+        "details",
+        cheque_setup=repo.get_account_cheque_setup(account_id, bank_name),
+        **_bank_form_context(bank_name),
+    )
+
+
+@cash_flow_bp.route("/cash-flow/account/<int:account_id>/printer", methods=["GET"])
+@login_required
+def account_printer(account_id):
+    account = repo.get_bank_account(account_id)
+    if not account:
+        return _missing_account()
+    bank_name = account.get("bank_name")
+    return _render_hub(
+        account,
+        "printer",
+        printer_calibration=repo.get_account_printer_calibration(account_id, bank_name),
+    )
 
 
 @cash_flow_bp.route("/cash-flow/account/<int:account_id>/balance")
@@ -157,7 +225,22 @@ def create_account():
             return redirect(url_for("cash_flow.new_account"))
         return redirect(url_for("cash_flow.cash_flow"))
 
+    length_mm, width_mm = _cheque_setup_from_form(request.form)
+    dim_err = repo.validate_cheque_dimensions(length_mm, width_mm)
+    if dim_err:
+        flash_t(dim_err, "error")
+        if repo.get_bank_accounts():
+            return redirect(url_for("cash_flow.new_account"))
+        return redirect(url_for("cash_flow.cash_flow"))
+
     new_id = repo.create_bank_account(data)
+    repo.save_account_cheque_setup(
+        new_id,
+        data["bank_name"],
+        length_mm,
+        width_mm,
+        bank_code=data.get("bank_code"),
+    )
     accounts_after = repo.get_bank_accounts()
     if request.form.get("set_as_default") or len(accounts_after) == 1:
         repo.set_setting("default_bank_acc_id", str(new_id))
@@ -176,6 +259,13 @@ def edit_account(account_id):
     err = repo.validate_bank_account_input(data)
     if err:
         flash_t(err, "error")
+        return redirect(_details_tab_url(account_id))
+
+    dim_err = _save_cheque_setup(
+        account_id, data["bank_name"], request.form, bank_code=data.get("bank_code")
+    )
+    if dim_err:
+        flash_t(dim_err, "error")
         return redirect(_details_tab_url(account_id))
 
     repo.update_bank_account(account_id, data)

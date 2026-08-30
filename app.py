@@ -10,6 +10,7 @@ from routes.analytics import analytics_bp
 from routes.auth import auth_bp
 from routes.bundling import bundling_bp
 from routes.cash_flow import cash_flow_bp
+from routes.cheque_print import cheque_print_bp
 from routes.guide import guide_bp
 from routes.i18n import i18n_bp
 from routes.dealers import dealers_bp
@@ -28,6 +29,7 @@ def create_app():
     app.register_blueprint(ingestion_bp)
     app.register_blueprint(cash_flow_bp)
     app.register_blueprint(bundling_bp)
+    app.register_blueprint(cheque_print_bp)
     app.register_blueprint(dealers_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(guide_bp)

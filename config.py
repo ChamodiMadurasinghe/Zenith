@@ -148,6 +148,25 @@ class Config:
         return _env_bool("USE_BUNDLING_TOOL_AGENT", True)
 
     @staticmethod
+    def enable_vector_patterns() -> bool:
+        return _env_bool("ENABLE_VECTOR_PATTERNS", True)
+
+    @staticmethod
+    def chroma_persist_dir() -> str:
+        return _env("CHROMA_PERSIST_DIR", "database/chroma")
+
+    @staticmethod
+    def openai_embedding_model() -> str:
+        return _env("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+
+    @staticmethod
+    def pattern_large_bill_lkr() -> float:
+        try:
+            return float(_env("PATTERN_LARGE_BILL_LKR", "500000"))
+        except ValueError:
+            return 500_000.0
+
+    @staticmethod
     def mock_image_path() -> str:
         return _env("MOCK_IMAGE_PATH", "")
 

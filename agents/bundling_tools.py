@@ -123,6 +123,15 @@ class CheckRiskInput(BaseModel):
     )
 
 
+class DealerPatternsInput(BaseModel):
+    """Read-only historical payment pattern lookup for this dealer."""
+
+    invoice_total: float = Field(
+        ...,
+        description="Total LKR amount of current invoice(s) being discussed.",
+    )
+
+
 class ApplyBundleChangesInput(BaseModel):
     """Commit the last dry-run preview (or current working bundles) into draft state."""
 
@@ -422,6 +431,22 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
             default=str,
         )
 
+    def get_dealer_historical_payment_patterns(invoice_total: float) -> str:
+        """Read-only: past bundling, aging, account, and split patterns for this dealer."""
+        from core.vector_store import query_dealer_patterns
+
+        patterns_text = query_dealer_patterns(ctx.dealer_id, float(invoice_total))
+        return json.dumps(
+            {
+                "ok": True,
+                "patterns_text": patterns_text,
+                "dealer_id": ctx.dealer_id,
+                "invoice_total": float(invoice_total),
+                "source": "vector_store",
+            },
+            default=str,
+        )
+
     def apply_bundle_changes(confirm: bool) -> str:
         """Commit last dry-run preview into the working draft (UI session). Requires confirm=true."""
         if not confirm:
@@ -527,6 +552,15 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
             name="check_day_limit_risk",
             description="Read-only casual daily limit / settlement risk audit.",
             args_schema=CheckRiskInput,
+        ),
+        StructuredTool.from_function(
+            get_dealer_historical_payment_patterns,
+            name="get_dealer_historical_payment_patterns",
+            description=(
+                "Read-only: retrieve past bundling habits, invoice aging records, "
+                "preferred paying account, and split-payment patterns for this dealer."
+            ),
+            args_schema=DealerPatternsInput,
         ),
         StructuredTool.from_function(
             apply_bundle_changes,

@@ -1,30 +1,36 @@
-{% extends "base.html" %}
-{% block title %}{{ selected_account.nickname or selected_account.account_name }} — {{ t('app_name') }}{% endblock %}
-{% block content %}
-<p class="text-muted"><a href="{{ url_for('cash_flow.cash_flow') }}">&larr; {{ t('back_to_accounts') }}</a></p>
-<h1>{{ selected_account.nickname or selected_account.account_name }}</h1>
-
-<div class="tab-bar">
-  <a href="{{ url_for('cash_flow.account_details', account_id=selected_account_id) }}"
-     class="tab {{ 'active' if active_tab == 'details' }}">{{ t('tab_bank_details') }}</a>
-  <a href="{{ url_for('cash_flow.account_balance', account_id=selected_account_id) }}"
-     class="tab {{ 'active' if active_tab == 'balance' }}">{{ t('tab_bank_balance') }}</a>
-  <a href="{{ url_for('cash_flow.account_timetable', account_id=selected_account_id) }}"
-     class="tab {{ 'active' if active_tab == 'timetable' }}">{{ t('tab_bank_timetable') }}</a>
-</div>
-
-{% if active_tab == 'details' %}
-{% include '_bank_details.html' %}
-{% elif active_tab == 'balance' %}
-{% include '_bank_balance.html' %}
-{% else %}
-{% include '_bank_timetable.html' %}
-{% include '_cheque_detail_modal.html' %}
-{% endif %}
-{% endblock %}
-{% block scripts %}
-{% if active_tab == 'timetable' %}
-<script src="{{ url_for('static', filename='js/cash_flow.js') }}"></script>
-<script src="{{ url_for('static', filename='js/cheque_detail.js') }}?v=1"></script>
-{% endif %}
-{% endblock %}
+{% extends "base.html" %}
+{% block title %}{{ selected_account.nickname or selected_account.account_name }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<p class="text-muted"><a href="{{ url_for('cash_flow.cash_flow') }}">&larr; {{ t('back_to_accounts') }}</a></p>
+<h1>{{ selected_account.nickname or selected_account.account_name }}</h1>
+
+<div class="tab-bar">
+  <a href="{{ url_for('cash_flow.account_details', account_id=selected_account_id) }}"
+     class="tab {{ 'active' if active_tab == 'details' }}">{{ t('tab_bank_details') }}</a>
+  <a href="{{ url_for('cash_flow.account_printer', account_id=selected_account_id) }}"
+     class="tab {{ 'active' if active_tab == 'printer' }}">{{ t('tab_bank_printer') }}</a>
+  <a href="{{ url_for('cash_flow.account_balance', account_id=selected_account_id) }}"
+     class="tab {{ 'active' if active_tab == 'balance' }}">{{ t('tab_bank_balance') }}</a>
+  <a href="{{ url_for('cash_flow.account_timetable', account_id=selected_account_id) }}"
+     class="tab {{ 'active' if active_tab == 'timetable' }}">{{ t('tab_bank_timetable') }}</a>
+</div>
+
+{% if active_tab == 'details' %}
+{% include '_bank_details.html' %}
+{% elif active_tab == 'printer' %}
+{% include '_bank_printer.html' %}
+{% elif active_tab == 'balance' %}
+{% include '_bank_balance.html' %}
+{% else %}
+{% include '_bank_timetable.html' %}
+{% include '_cheque_detail_modal.html' %}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if active_tab == 'printer' %}
+<script src="{{ url_for('static', filename='js/printer_calibration.js') }}"></script>
+{% elif active_tab == 'timetable' %}
+<script src="{{ url_for('static', filename='js/cash_flow.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cheque_detail.js') }}?v=1"></script>
+{% endif %}
+{% endblock %}

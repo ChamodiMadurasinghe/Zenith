@@ -15,6 +15,7 @@ load_dotenv(ROOT / ".env")
 DB_PATH = ROOT / os.getenv("DATABASE_PATH", "database/invoice_cheque.db")
 SCHEMA = ROOT / "database" / "schema.sql"
 SEED = ROOT / "database" / "seed.sql"
+SEED_CHEQUES = ROOT / "database" / "seed_cheques.sql"
 
 
 MIGRATIONS = [
@@ -123,6 +124,36 @@ MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_invoice ON cheque_invoice_allocation(invoices_id)",
     "ALTER TABLE invoices ADD COLUMN delivery_date TEXT",
     "ALTER TABLE user_bank_account ADD COLUMN overdraft_limit REAL NOT NULL DEFAULT 0",
+    """CREATE TABLE IF NOT EXISTS bank_cheque_templates (
+        bank_code VARCHAR(20) PRIMARY KEY,
+        bank_name VARCHAR(100) NOT NULL,
+        cheque_width_mm REAL NOT NULL DEFAULT 177.8,
+        cheque_height_mm REAL NOT NULL DEFAULT 88.9,
+        date_x REAL NOT NULL,
+        date_y REAL NOT NULL,
+        date_letter_spacing REAL DEFAULT 3.5,
+        payee_x REAL NOT NULL,
+        payee_y REAL NOT NULL,
+        amount_words_x REAL NOT NULL,
+        amount_words_y REAL NOT NULL,
+        amount_words_max_width REAL DEFAULT 110.0,
+        amount_figures_x REAL NOT NULL,
+        amount_figures_y REAL NOT NULL,
+        crossing_x REAL DEFAULT 15.0,
+        crossing_y REAL DEFAULT 75.0
+    )""",
+    """CREATE TABLE IF NOT EXISTS shop_printer_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_bank_acc_id INTEGER REFERENCES user_bank_account(user_bank_acc_id),
+        bank_code VARCHAR(20) NOT NULL REFERENCES bank_cheque_templates(bank_code),
+        offset_x_mm REAL DEFAULT 0.0,
+        offset_y_mm REAL DEFAULT 0.0,
+        feed_orientation TEXT DEFAULT 'VERTICAL' CHECK (feed_orientation IN ('VERTICAL', 'HORIZONTAL')),
+        is_active INTEGER DEFAULT 1,
+        UNIQUE(user_bank_acc_id, bank_code)
+    )""",
+    "ALTER TABLE shop_printer_settings ADD COLUMN cheque_width_mm REAL",
+    "ALTER TABLE shop_printer_settings ADD COLUMN cheque_height_mm REAL",
 ]
 
 
@@ -180,7 +211,13 @@ def migrate_db(conn: sqlite3.Connection):
         )
     except sqlite3.OperationalError:
         pass
+    _seed_cheque_templates(conn)
     conn.commit()
+
+
+def _seed_cheque_templates(conn: sqlite3.Connection):
+    if SEED_CHEQUES.exists():
+        conn.executescript(SEED_CHEQUES.read_text(encoding="utf-8"))
 
 
 def init_db(force_recreate: bool = True):
@@ -192,6 +229,7 @@ def init_db(force_recreate: bool = True):
         if force_recreate or not DB_PATH.exists():
             conn.executescript(SCHEMA.read_text(encoding="utf-8"))
             conn.executescript(SEED.read_text(encoding="utf-8"))
+            _seed_cheque_templates(conn)
             password = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
             conn.execute(
                 "UPDATE user SET password_hash = ? WHERE user_id = 1",

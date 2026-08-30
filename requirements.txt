@@ -14,3 +14,6 @@ beautifulsoup4>=4.12
 twilio>=9.0
 apscheduler>=3.10
 python-docx>=1.1
+chromadb>=0.5
+reportlab>=4.0
+num2words>=0.5

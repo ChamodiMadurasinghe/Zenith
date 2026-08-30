@@ -1,0 +1,13 @@
+<label>{{ t('bank_name_label') }}
+  <select name="bank_code" id="bank-code-select" required>
+    <option value="">{{ t('select_bank') }}</option>
+    {% for tpl in bank_templates %}
+    <option value="{{ tpl.bank_code }}"
+            data-bank-name="{{ tpl.bank_name }}"
+            {% if selected_bank_code == tpl.bank_code %}selected{% endif %}>
+      {{ tpl.bank_name }}
+    </option>
+    {% endfor %}
+  </select>
+  <span class="muted help-tip">{{ t('bank_select_help') }}</span>
+</label>

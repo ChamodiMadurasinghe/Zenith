@@ -1,0 +1,52 @@
+<mxfile host="app.diagrams.net" agent="Zenith" version="22.1.0">
+  <diagram id="system-overview" name="System Overview">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Zenith Vector Pattern Engine — System Overview" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="600" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="sqlite" value="SQLite (source of truth)&#xa;invoices · cheque · allocations&#xa;deposit_timetable · user_bank_account" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="patterns" value="core/dealer_patterns.py&#xa;build_dealer_pattern_document()&#xa;Classify · aging · accounts · splits" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="360" y="100" width="240" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="vector" value="core/vector_store.py&#xa;OpenAI embeddings&#xa;upsert · query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="100" width="200" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="chroma" value="ChromaDB&#xa;database/chroma/&#xa;Collection: dealer_payment_patterns&#xa;One doc per dealer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="240" width="200" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="tool" value="Bundling Assistant tool&#xa;get_dealer_historical_payment_patterns&#xa;(read-only recommendations)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="360" y="280" width="240" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="commit" value="Cheque commit&#xa;routes/bundling.py&#xa;Background upsert on save" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="280" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="sqlite" target="patterns">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="patterns" target="vector">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="vector" target="chroma">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="chroma" target="tool">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="commit" target="sqlite">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="refresh" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;" edge="1" parent="1" source="commit" target="vector">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="SQLite = facts · ChromaDB = searchable pattern summaries for AI" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="200" y="420" width="560" height="30" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

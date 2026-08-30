@@ -184,6 +184,38 @@ CREATE TABLE alert_log (
     sent_at         TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE bank_cheque_templates (
+    bank_code               VARCHAR(20) PRIMARY KEY,
+    bank_name               VARCHAR(100) NOT NULL,
+    cheque_width_mm         REAL NOT NULL DEFAULT 177.8,
+    cheque_height_mm        REAL NOT NULL DEFAULT 88.9,
+    date_x                  REAL NOT NULL,
+    date_y                  REAL NOT NULL,
+    date_letter_spacing     REAL DEFAULT 3.5,
+    payee_x                 REAL NOT NULL,
+    payee_y                 REAL NOT NULL,
+    amount_words_x          REAL NOT NULL,
+    amount_words_y          REAL NOT NULL,
+    amount_words_max_width  REAL DEFAULT 110.0,
+    amount_figures_x        REAL NOT NULL,
+    amount_figures_y        REAL NOT NULL,
+    crossing_x              REAL DEFAULT 15.0,
+    crossing_y              REAL DEFAULT 75.0
+);
+
+CREATE TABLE shop_printer_settings (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id    INTEGER REFERENCES user_bank_account(user_bank_acc_id),
+    bank_code           VARCHAR(20) NOT NULL REFERENCES bank_cheque_templates(bank_code),
+    offset_x_mm         REAL DEFAULT 0.0,
+    offset_y_mm         REAL DEFAULT 0.0,
+    feed_orientation    TEXT DEFAULT 'VERTICAL' CHECK (feed_orientation IN ('VERTICAL', 'HORIZONTAL')),
+    cheque_width_mm     REAL,
+    cheque_height_mm    REAL,
+    is_active           INTEGER DEFAULT 1,
+    UNIQUE(user_bank_acc_id, bank_code)
+);
+
 CREATE INDEX idx_user_bank_account_user_id ON user_bank_account(user_id);
 CREATE INDEX idx_cheque_user_bank_acc_id ON cheque(user_bank_acc_id);
 CREATE INDEX idx_cheque_predicted_clearance ON cheque(predicted_clearance_date);

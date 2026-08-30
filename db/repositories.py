@@ -112,7 +112,10 @@ def paying_account_id_for_dealer(dealer_id: int | None = None) -> int:
 def validate_bank_account_input(data: dict) -> str | None:
     if not (data.get("account_name") or "").strip():
         return "flash_bank_account_name_required"
-    if not (data.get("bank_name") or "").strip():
+    if not (data.get("bank_name") or "").strip() and not (data.get("bank_code") or "").strip():
+        return "flash_bank_name_required"
+    bank_code = (data.get("bank_code") or "").strip()
+    if bank_code and not bank_name_for_code(bank_code):
         return "flash_bank_name_required"
     try:
         overdraft = float(data.get("overdraft_limit") or 0)
@@ -570,6 +573,39 @@ def _invoices_for_cheque(cheque_id: int) -> list:
            ORDER BY i.invoice_no, a.part_index""",
         (cheque_id, Config.USER_ID, cheque_id, cheque_id),
     )
+
+
+def get_dealer_committed_payment_history(dealer_id: int) -> list[dict]:
+    """Committed cheques for pattern analysis (all history, verified only)."""
+    bundles = get_committed_cheque_bundles(dealer_id, include_archived=True)
+    history: list[dict] = []
+    for ch in bundles:
+        if int(ch.get("verification_status") or 0) != 1:
+            continue
+        acc_id = int(ch.get("user_bank_acc_id") or 0)
+        acc = get_bank_account(acc_id) if acc_id else None
+        clearance = ch.get("expected_clearance_date") or cheque_clearance_date(ch)
+        invoices = []
+        for inv in ch.get("invoices") or []:
+            invoices.append(
+                {
+                    **inv,
+                    "part_index": int(inv.get("part_index") or 1),
+                    "part_count": int(inv.get("part_count") or 1),
+                    "clearance_date": clearance,
+                }
+            )
+        history.append(
+            {
+                **ch,
+                "user_bank_acc_id": acc_id,
+                "bank_name": acc.get("bank_name") if acc else None,
+                "account_nickname": acc.get("nickname") if acc else None,
+                "clearance_date": clearance,
+                "invoices": invoices,
+            }
+        )
+    return history
 
 
 def get_committed_cheque_bundles(
@@ -1587,3 +1623,235 @@ def load_bundle_draft(dealer_id: int):
 def clear_bundle_draft(dealer_id: int):
     ensure_bundle_drafts_table()
     execute("DELETE FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))
+
+
+def list_bank_cheque_templates():
+    return query("SELECT * FROM bank_cheque_templates ORDER BY bank_name")
+
+
+def get_bank_cheque_template(bank_code: str):
+    return query_one("SELECT * FROM bank_cheque_templates WHERE bank_code = ?", (bank_code,))
+
+
+def get_printer_settings(user_bank_acc_id: int | None, bank_code: str) -> dict:
+    if user_bank_acc_id:
+        row = query_one(
+            """SELECT * FROM shop_printer_settings
+               WHERE bank_code = ? AND is_active = 1 AND user_bank_acc_id = ?""",
+            (bank_code, user_bank_acc_id),
+        )
+        if row:
+            return dict(row)
+    row = query_one(
+        """SELECT * FROM shop_printer_settings
+           WHERE bank_code = ? AND is_active = 1 AND user_bank_acc_id IS NULL""",
+        (bank_code,),
+    )
+    if row:
+        return dict(row)
+    return {
+        "offset_x_mm": 0.0,
+        "offset_y_mm": 0.0,
+        "feed_orientation": "VERTICAL",
+    }
+
+
+CITS_CHEQUE_LENGTH_MM = 177.8
+CITS_CHEQUE_WIDTH_MM = 88.9
+
+
+def validate_cheque_dimensions(length_mm: float, width_mm: float) -> str | None:
+    """Validate user-facing length (long edge) and width (short edge) in mm."""
+    try:
+        length = float(length_mm)
+        width = float(width_mm)
+    except (TypeError, ValueError):
+        return "flash_cheque_dimensions_invalid"
+    if length <= 0 or width <= 0:
+        return "flash_cheque_dimensions_invalid"
+    if not (150.0 <= length <= 220.0):
+        return "flash_cheque_length_out_of_range"
+    if not (60.0 <= width <= 120.0):
+        return "flash_cheque_width_out_of_range"
+    return None
+
+
+def get_account_cheque_setup(user_bank_acc_id: int | None, bank_name: str | None) -> dict:
+    """Return form-friendly cheque dimensions (length = long edge, width = short edge)."""
+    from core.cheque_utils import resolve_bank_code
+
+    length_mm = CITS_CHEQUE_LENGTH_MM
+    width_mm = CITS_CHEQUE_WIDTH_MM
+    use_standard = True
+
+    bank_code = resolve_bank_code(bank_name)
+    if bank_code:
+        template = get_bank_cheque_template(bank_code)
+        if template:
+            length_mm = float(template.get("cheque_width_mm") or CITS_CHEQUE_LENGTH_MM)
+            width_mm = float(template.get("cheque_height_mm") or CITS_CHEQUE_WIDTH_MM)
+
+    if user_bank_acc_id and bank_code:
+        settings = get_printer_settings(user_bank_acc_id, bank_code)
+        if settings.get("cheque_width_mm") is not None:
+            length_mm = float(settings["cheque_width_mm"])
+        if settings.get("cheque_height_mm") is not None:
+            width_mm = float(settings["cheque_height_mm"])
+
+    use_standard = (
+        abs(length_mm - CITS_CHEQUE_LENGTH_MM) < 0.05
+        and abs(width_mm - CITS_CHEQUE_WIDTH_MM) < 0.05
+    )
+    return {
+        "length_mm": length_mm,
+        "width_mm": width_mm,
+        "use_standard_cheque_size": use_standard,
+    }
+
+
+def validate_printer_offsets(offset_x_mm: float, offset_y_mm: float) -> str | None:
+    try:
+        x = float(offset_x_mm)
+        y = float(offset_y_mm)
+    except (TypeError, ValueError):
+        return "flash_printer_offsets_invalid"
+    if not (-20.0 <= x <= 20.0) or not (-20.0 <= y <= 20.0):
+        return "flash_printer_offsets_out_of_range"
+    return None
+
+
+def get_account_printer_calibration(user_bank_acc_id: int | None, bank_name: str | None) -> dict:
+    from core.cheque_utils import resolve_bank_code
+
+    calibration = {
+        "offset_x_mm": 0.0,
+        "offset_y_mm": 0.0,
+        "feed_orientation": "VERTICAL",
+        "bank_code": resolve_bank_code(bank_name),
+    }
+    bank_code = calibration["bank_code"]
+    if user_bank_acc_id and bank_code:
+        settings = get_printer_settings(user_bank_acc_id, bank_code)
+        calibration["offset_x_mm"] = float(settings.get("offset_x_mm") or 0.0)
+        calibration["offset_y_mm"] = float(settings.get("offset_y_mm") or 0.0)
+        calibration["feed_orientation"] = settings.get("feed_orientation") or "VERTICAL"
+    return calibration
+
+
+def save_account_printer_calibration(
+    user_bank_acc_id: int,
+    bank_code: str,
+    offset_x_mm: float,
+    offset_y_mm: float,
+    feed_orientation: str = "VERTICAL",
+) -> str | None:
+    err = validate_printer_offsets(offset_x_mm, offset_y_mm)
+    if err:
+        return err
+    if not get_bank_cheque_template(bank_code):
+        return "flash_bank_name_required"
+    existing = get_printer_settings(user_bank_acc_id, bank_code)
+    upsert_printer_settings(
+        bank_code,
+        user_bank_acc_id=user_bank_acc_id,
+        offset_x_mm=float(offset_x_mm),
+        offset_y_mm=float(offset_y_mm),
+        feed_orientation=feed_orientation,
+        cheque_width_mm=existing.get("cheque_width_mm"),
+        cheque_height_mm=existing.get("cheque_height_mm"),
+    )
+    return None
+
+
+def bank_name_for_code(bank_code: str | None) -> str | None:
+    if not bank_code:
+        return None
+    template = get_bank_cheque_template(bank_code.strip())
+    return template["bank_name"] if template else None
+
+
+def save_account_cheque_setup(
+    user_bank_acc_id: int,
+    bank_name: str,
+    length_mm: float,
+    width_mm: float,
+    bank_code: str | None = None,
+) -> str | None:
+    """Persist per-account cheque leaf dimensions. Returns flash key on validation error."""
+    from core.cheque_utils import resolve_bank_code
+
+    err = validate_cheque_dimensions(length_mm, width_mm)
+    if err:
+        return err
+
+    if not bank_code:
+        bank_code = resolve_bank_code(bank_name)
+    if not bank_code:
+        return None
+
+    existing = get_printer_settings(user_bank_acc_id, bank_code)
+    upsert_printer_settings(
+        bank_code,
+        user_bank_acc_id=user_bank_acc_id,
+        offset_x_mm=float(existing.get("offset_x_mm") or 0.0),
+        offset_y_mm=float(existing.get("offset_y_mm") or 0.0),
+        feed_orientation=existing.get("feed_orientation") or "VERTICAL",
+        cheque_width_mm=float(length_mm),
+        cheque_height_mm=float(width_mm),
+    )
+    return None
+
+
+def upsert_printer_settings(
+    bank_code: str,
+    *,
+    user_bank_acc_id: int | None = None,
+    offset_x_mm: float = 0.0,
+    offset_y_mm: float = 0.0,
+    feed_orientation: str = "VERTICAL",
+    cheque_width_mm: float | None = None,
+    cheque_height_mm: float | None = None,
+    is_active: bool = True,
+):
+    existing = query_one(
+        """SELECT id FROM shop_printer_settings
+           WHERE bank_code = ? AND user_bank_acc_id IS ?""",
+        (bank_code, user_bank_acc_id),
+    )
+    orientation = feed_orientation.upper()
+    if orientation not in ("VERTICAL", "HORIZONTAL"):
+        orientation = "VERTICAL"
+    if existing:
+        execute(
+            """UPDATE shop_printer_settings
+               SET offset_x_mm = ?, offset_y_mm = ?, feed_orientation = ?, is_active = ?,
+                   cheque_width_mm = COALESCE(?, cheque_width_mm),
+                   cheque_height_mm = COALESCE(?, cheque_height_mm)
+               WHERE id = ?""",
+            (
+                offset_x_mm,
+                offset_y_mm,
+                orientation,
+                1 if is_active else 0,
+                cheque_width_mm,
+                cheque_height_mm,
+                existing["id"],
+            ),
+        )
+        return existing["id"]
+    return execute(
+        """INSERT INTO shop_printer_settings
+           (user_bank_acc_id, bank_code, offset_x_mm, offset_y_mm, feed_orientation,
+            cheque_width_mm, cheque_height_mm, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            user_bank_acc_id,
+            bank_code,
+            offset_x_mm,
+            offset_y_mm,
+            orientation,
+            cheque_width_mm,
+            cheque_height_mm,
+            1 if is_active else 0,
+        ),
+    )

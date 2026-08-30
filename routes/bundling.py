@@ -805,6 +805,16 @@ def commit():
     session.modified = True
     flash_t("flash_cheques_committed", "success")
 
+    def refresh_patterns():
+        try:
+            from core.vector_store import upsert_dealer_pattern
+
+            upsert_dealer_pattern(dealer_id)
+        except Exception:
+            current_app.logger.exception("Dealer pattern vector refresh failed")
+
+    threading.Thread(target=refresh_patterns, daemon=True).start()
+
     def run_analyst():
         try:
             from agents.analyst import build_report_markdown

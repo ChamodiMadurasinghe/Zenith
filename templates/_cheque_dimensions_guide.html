@@ -1,0 +1,68 @@
+{% set setup = cheque_setup | default({'length_mm': 177.8, 'width_mm': 88.9, 'use_standard_cheque_size': true}) %}
+<fieldset class="cheque-dimensions-section card card-nested">
+  <legend><strong>{{ t('cheque_dimensions_title') }}</strong></legend>
+  <p class="muted">{{ t('cheque_dimensions_intro') }}</p>
+
+  <div class="cheque-dimensions-diagram" aria-hidden="true">
+    <div class="cheque-dim-length-label">{{ t('cheque_dim_length_label') }}</div>
+    <div class="cheque-dim-diagram-row">
+      <div class="cheque-dim-width-label">
+        <span>{{ t('cheque_dim_width_label') }}</span>
+      </div>
+      <div class="cheque-dim-leaf">
+        <div class="cheque-dim-field cheque-dim-date">{{ t('cheque_dim_date') }}</div>
+        <div class="cheque-dim-field cheque-dim-amount">{{ t('cheque_dim_amount') }}</div>
+        <div class="cheque-dim-field cheque-dim-payee">{{ t('cheque_dim_payee') }}</div>
+        <div class="cheque-dim-field cheque-dim-words">{{ t('cheque_dim_words') }}</div>
+      </div>
+    </div>
+    <p class="cheque-dim-standard muted">{{ t('cheque_dim_cits_standard') }}</p>
+  </div>
+
+  <p class="help-tip">{{ t('cheque_dim_tool_tip') }}</p>
+  <p class="muted help-tip">{{ t('cheque_dim_measure_tip') }}</p>
+
+  <label class="confirm-label">
+    <input type="checkbox" name="use_standard_cheque_size" value="1" id="use-standard-cheque-size"
+           {% if setup.use_standard_cheque_size %}checked{% endif %}>
+    {{ t('cheque_use_standard_size') }}
+  </label>
+
+  <div class="grid-2 cheque-dim-inputs">
+    <label>{{ t('cheque_length_mm') }}
+      <input type="number" step="0.1" min="150" max="220" name="cheque_length_mm" id="cheque-length-mm"
+             value="{{ setup.length_mm }}" required>
+      <span class="muted help-tip">{{ t('cheque_length_help') }}</span>
+    </label>
+    <label>{{ t('cheque_width_mm') }}
+      <input type="number" step="0.1" min="60" max="120" name="cheque_width_mm" id="cheque-width-mm"
+             value="{{ setup.width_mm }}" required>
+      <span class="muted help-tip">{{ t('cheque_width_help') }}</span>
+    </label>
+  </div>
+</fieldset>
+
+<script>
+(function () {
+  var stdBox = document.getElementById("use-standard-cheque-size");
+  var lenInput = document.getElementById("cheque-length-mm");
+  var widInput = document.getElementById("cheque-width-mm");
+  if (!stdBox || !lenInput || !widInput) return;
+
+  var STD_LEN = 177.8;
+  var STD_WID = 88.9;
+
+  function syncStandard() {
+    var useStd = stdBox.checked;
+    lenInput.disabled = useStd;
+    widInput.disabled = useStd;
+    if (useStd) {
+      lenInput.value = STD_LEN;
+      widInput.value = STD_WID;
+    }
+  }
+
+  stdBox.addEventListener("change", syncStandard);
+  syncStandard();
+})();
+</script>

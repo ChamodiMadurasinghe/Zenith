@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import unittest
 from unittest.mock import patch
@@ -100,6 +101,23 @@ class BundlingToolsDryRunTests(unittest.TestCase):
         self.assertTrue(payload.get("ok"))
         self.assertTrue(payload.get("has_limit_breach"))
         self.assertFalse(self.ctx.pending_commit)
+
+    def test_dealer_patterns_tool_registered_and_read_only(self):
+        self.assertIn("get_dealer_historical_payment_patterns", self.tools)
+        before = copy.deepcopy(self.ctx.bundles)
+        with patch(
+            "core.vector_store.query_dealer_patterns",
+            return_value="Inv #101 (21 days aging)",
+        ):
+            raw = self.tools["get_dealer_historical_payment_patterns"].invoke(
+                {"invoice_total": 150_000}
+            )
+        payload = json.loads(raw)
+        self.assertTrue(payload.get("ok"))
+        self.assertIn("Inv #101", payload.get("patterns_text", ""))
+        self.assertEqual(payload.get("dealer_id"), 1)
+        self.assertFalse(self.ctx.pending_commit)
+        self.assertEqual(self.ctx.bundles, before)
 
     def test_guardrail_error_is_structured(self):
         raw = self.tools["move_invoice"].invoke(
