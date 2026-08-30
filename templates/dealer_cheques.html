@@ -6,9 +6,15 @@
       {{ t('chat_show') }}
     </button>
 
-    {% if committed_cheques %}
     <h3>{{ t('committed_cheques') }}</h3>
     <p class="text-muted">{{ t('cheque_click_hint') }}</p>
+    {% set filter_action = url_for('dealers.cheques', dealer_id=dealer.dealer_id) %}
+    {% set reset_url = filter_action %}
+    {% include '_cheque_filter_bar.html' %}
+    {% set summary_title = t('cheque_list_summary_title') %}
+    {% set summary_noun = t('list_summary_cheques') %}
+    {% include '_list_summary_bar.html' %}
+    {% if committed_cheques %}
     <div class="table-scroll">
     <table class="data-table" id="written-cheques-table">
       <thead>
@@ -35,6 +41,8 @@
       </tbody>
     </table>
     </div>
+    {% else %}
+    <p class="muted">{{ t('cheque_filter_empty') }}</p>
     {% endif %}
 
     {% if pending_invoices %}

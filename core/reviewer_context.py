@@ -116,7 +116,7 @@ def build_reviewer_context(
     summary = repo.get_dealer_invoice_summary(dealer_id)
     ready = repo.get_verified_unassigned_invoices(dealer_id)
     pending = repo.get_pending_verification_invoices(dealer_id)
-    committed = repo.get_committed_cheque_bundles(dealer_id)
+    committed = repo.get_committed_cheque_bundles(dealer_id, include_archived=True)
 
     merchant_acc_id = repo.paying_account_id_for_dealer(dealer_id)
     merchant_acc = repo.get_bank_account(merchant_acc_id)

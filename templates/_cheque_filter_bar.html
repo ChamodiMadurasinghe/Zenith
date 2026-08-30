@@ -1,0 +1,37 @@
+{% set cheque_filter = cheque_filter|default({}) %}
+{% set period = cheque_filter.period or 'custom' %}
+<form class="cheque-filter-bar list-filter-bar" method="get" action="{{ filter_action }}">
+  <label>{{ t('cheque_filter_no') }}
+    <input name="cheque_no" value="{{ cheque_filter.cheque_no or '' }}" autocomplete="off">
+  </label>
+  <label>{{ t('filter_min_amount') }}
+    <input type="number" step="0.01" name="min_amount" value="{{ cheque_filter.min_amount if cheque_filter.min_amount is not none else '' }}">
+  </label>
+  <label>{{ t('filter_max_amount') }}
+    <input type="number" step="0.01" name="max_amount" value="{{ cheque_filter.max_amount if cheque_filter.max_amount is not none else '' }}">
+  </label>
+  <label>{{ t('filter_period') }}
+    <select name="period">
+      <option value="custom" {{ 'selected' if period == 'custom' }}>{{ t('period_custom') }}</option>
+      <option value="this_week" {{ 'selected' if period == 'this_week' }}>{{ t('period_this_week') }}</option>
+      <option value="last_week" {{ 'selected' if period == 'last_week' }}>{{ t('period_last_week') }}</option>
+      <option value="this_month" {{ 'selected' if period == 'this_month' }}>{{ t('period_this_month') }}</option>
+      <option value="last_month" {{ 'selected' if period == 'last_month' }}>{{ t('period_last_month') }}</option>
+      <option value="all" {{ 'selected' if period == 'all' }}>{{ t('period_all_time') }}</option>
+    </select>
+  </label>
+  <label>{{ t('cheque_filter_from') }}
+    <input type="date" name="start_date" value="{{ cheque_filter.start_date or '' }}">
+  </label>
+  <label>{{ t('cheque_filter_to') }}
+    <input type="date" name="end_date" value="{{ cheque_filter.end_date or '' }}">
+  </label>
+  <label class="confirm-label cheque-filter-show-all">
+    <input type="checkbox" name="show_all" value="1" {% if cheque_filter.show_all %}checked{% endif %}>
+    {{ t('cheque_filter_show_all') }}
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn btn-secondary">{{ t('cheque_filter_apply') }}</button>
+    <a href="{{ reset_url }}" class="btn btn-secondary">{{ t('cheque_filter_reset') }}</a>
+  </div>
+</form>

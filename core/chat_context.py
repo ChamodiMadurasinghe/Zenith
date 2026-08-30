@@ -68,7 +68,7 @@ def build_bundling_chat_context(
     summary = repo.get_dealer_invoice_summary(dealer_id)
     ready = repo.get_verified_unassigned_invoices(dealer_id)
     pending = repo.get_pending_verification_invoices(dealer_id)
-    committed = repo.get_committed_cheque_bundles(dealer_id)
+    committed = repo.get_committed_cheque_bundles(dealer_id, include_archived=True)
 
     merchant_acc = repo.get_bank_account(int(repo.get_setting("default_bank_acc_id", "1")))
     merchant_bank = merchant_acc["bank_name"] if merchant_acc else None

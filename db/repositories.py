@@ -2,6 +2,12 @@ import json
 from datetime import date, datetime, timedelta
 
 from config import Config
+from core.date_presets import (
+    PRESET_ALL,
+    PRESET_CUSTOM,
+    WEEK_MONTH_PRESETS,
+    preset_date_strings,
+)
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME
 from db.connection import execute, query, query_one, transaction
 
@@ -349,6 +355,9 @@ def invoice_due_date_value(invoice: dict) -> date | None:
     return inv_date + timedelta(days=days)
 
 
+CHEQUE_VISIBLE_AFTER_CLEARANCE_DAYS = 7
+
+
 def cheque_clearance_date(ch: dict) -> str | None:
     """Predicted clearance, else deposit_timetable fund-by, else stated cheque date."""
     if ch.get("predicted_clearance_date"):
@@ -361,6 +370,175 @@ def cheque_clearance_date(ch: dict) -> str | None:
     if row and row.get("target_funding_date"):
         return row["target_funding_date"]
     return ch.get("cheque_date")
+
+
+def _parse_optional_float(raw) -> float | None:
+    text = (str(raw) if raw is not None else "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def list_amount_summary(rows: list, amount_key: str = "total_amount") -> dict:
+    """Aggregate count / sum / average for the currently visible list rows."""
+    total = 0.0
+    count = 0
+    for row in rows or []:
+        try:
+            total += float(row.get(amount_key) or 0)
+            count += 1
+        except (TypeError, ValueError):
+            continue
+    return {
+        "count": count,
+        "total": total,
+        "average": (total / count) if count else 0.0,
+    }
+
+
+def written_cheque_filters_from_args(args) -> dict:
+    """Parse list-page query params. Searching or show_all overrides the 7-day cutoff."""
+    cheque_no = (args.get("cheque_no") or "").strip() or None
+    period = (args.get("period") or "").strip().lower() or PRESET_CUSTOM
+    start_date = (args.get("start_date") or "").strip() or None
+    end_date = (args.get("end_date") or "").strip() or None
+    if period in WEEK_MONTH_PRESETS:
+        start_date, end_date = preset_date_strings(period)
+    elif period == PRESET_ALL:
+        start_date, end_date = None, None
+    min_amount = _parse_optional_float(args.get("min_amount"))
+    max_amount = _parse_optional_float(args.get("max_amount"))
+    show_all = str(args.get("show_all") or "").strip().lower() in ("1", "true", "on", "yes")
+    if period == PRESET_ALL:
+        show_all = True
+    searching = bool(
+        cheque_no
+        or start_date
+        or end_date
+        or show_all
+        or min_amount is not None
+        or max_amount is not None
+        or period in WEEK_MONTH_PRESETS
+        or period == PRESET_ALL
+    )
+    return {
+        "include_archived": searching,
+        "cheque_no": cheque_no,
+        "start_date": start_date,
+        "end_date": end_date,
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+        "period": period,
+        "show_all": show_all,
+    }
+
+
+def written_cheque_repo_kwargs(filters: dict) -> dict:
+    return {
+        "include_archived": bool(filters.get("include_archived")),
+        "cheque_no": filters.get("cheque_no"),
+        "start_date": filters.get("start_date"),
+        "end_date": filters.get("end_date"),
+        "min_amount": filters.get("min_amount"),
+        "max_amount": filters.get("max_amount"),
+    }
+
+
+def filter_written_cheques(
+    rows: list,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+) -> list:
+    """Hide cheques older than 7 days past clearance unless searching/show-all."""
+    needle = (cheque_no or "").strip().lower()
+    start = _parse_iso_date(start_date)
+    end = _parse_iso_date(end_date)
+    apply_cutoff = not (
+        include_archived or needle or start or end or min_amount is not None or max_amount is not None
+    )
+    cutoff = date.today() - timedelta(days=CHEQUE_VISIBLE_AFTER_CLEARANCE_DAYS)
+    out = []
+    for ch in rows:
+        if needle and needle not in str(ch.get("cheque_no") or "").lower():
+            continue
+        stated = _parse_iso_date(ch.get("cheque_date"))
+        if start and (stated is None or stated < start):
+            continue
+        if end and (stated is None or stated > end):
+            continue
+        try:
+            amount = float(ch.get("amount_in_numerals") if ch.get("amount_in_numerals") is not None else ch.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        if min_amount is not None and amount < min_amount:
+            continue
+        if max_amount is not None and amount > max_amount:
+            continue
+        if apply_cutoff:
+            clearance = _parse_iso_date(
+                ch.get("expected_clearance_date")
+                or ch.get("predicted_clearance_date")
+                or ch.get("cheque_date")
+            )
+            if clearance is not None and clearance < cutoff:
+                continue
+        out.append(ch)
+    return out
+
+
+INVOICE_PAYMENT_WITHOUT_CHEQUE = "without_cheque"
+INVOICE_PAYMENT_WITH_CHEQUE = "with_cheque"
+INVOICE_PAYMENT_ALL = "all"
+INVOICE_PAYMENT_STATUSES = frozenset(
+    {INVOICE_PAYMENT_WITHOUT_CHEQUE, INVOICE_PAYMENT_WITH_CHEQUE, INVOICE_PAYMENT_ALL}
+)
+
+
+def invoice_filters_from_args(args) -> dict:
+    """Parse dealer-invoice list query params. Default shows unpaid (no cheque) only."""
+    invoice_no = (args.get("invoice_no") or "").strip() or None
+    period = (args.get("period") or "").strip().lower() or PRESET_CUSTOM
+    start_date = (args.get("start_date") or "").strip() or None
+    end_date = (args.get("end_date") or "").strip() or None
+    if period in WEEK_MONTH_PRESETS:
+        start_date, end_date = preset_date_strings(period)
+    elif period == PRESET_ALL:
+        start_date, end_date = None, None
+    payment_status = (args.get("payment_status") or "").strip().lower()
+    if payment_status not in INVOICE_PAYMENT_STATUSES:
+        # Legacy checkbox: include_committed=1 meant show all invoices
+        if str(args.get("include_committed") or "").strip().lower() in ("1", "true", "on", "yes"):
+            payment_status = INVOICE_PAYMENT_ALL
+        else:
+            payment_status = INVOICE_PAYMENT_WITHOUT_CHEQUE
+    return {
+        "invoice_no": invoice_no,
+        "start_date": start_date,
+        "end_date": end_date,
+        "min_amount": _parse_optional_float(args.get("min_amount")),
+        "max_amount": _parse_optional_float(args.get("max_amount")),
+        "period": period,
+        "payment_status": payment_status,
+    }
+
+
+def invoice_repo_kwargs(filters: dict) -> dict:
+    return {
+        "payment_status": filters.get("payment_status") or INVOICE_PAYMENT_WITHOUT_CHEQUE,
+        "invoice_no": filters.get("invoice_no"),
+        "date_from": filters.get("start_date"),
+        "date_to": filters.get("end_date"),
+        "min_amount": filters.get("min_amount"),
+        "max_amount": filters.get("max_amount"),
+    }
 
 
 def days_gained_vs_due(invoices: list, clearance_str: str | None) -> int | None:
@@ -394,7 +572,16 @@ def _invoices_for_cheque(cheque_id: int) -> list:
     )
 
 
-def get_committed_cheque_bundles(dealer_id: int):
+def get_committed_cheque_bundles(
+    dealer_id: int,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+):
     # Prefer invoice.cheque_id; also include allocation links (split parts / partial updates).
     cheques = query(
         """SELECT DISTINCT c.* FROM cheque c
@@ -424,7 +611,47 @@ def get_committed_cheque_bundles(dealer_id: int):
                 "days_gained": days_gained_vs_due(invoices, clearance),
             }
         )
-    return result
+    return filter_written_cheques(
+        result,
+        include_archived=include_archived,
+        cheque_no=cheque_no,
+        start_date=start_date,
+        end_date=end_date,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
+
+
+def list_account_written_cheques(
+    account_id: int,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+) -> list:
+    """Committed cheques on an account for history lists (not cash-flow projection)."""
+    rows = []
+    for ch in get_upcoming_cheques(account_id):
+        clearance = cheque_clearance_date(ch)
+        rows.append(
+            {
+                **ch,
+                "expected_clearance_date": clearance,
+                "amount": float(ch.get("amount_in_numerals") or 0),
+            }
+        )
+    return filter_written_cheques(
+        rows,
+        include_archived=include_archived,
+        cheque_no=cheque_no,
+        start_date=start_date,
+        end_date=end_date,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
 
 
 def get_cheque_detail(cheque_id: int) -> dict | None:
@@ -514,17 +741,52 @@ def ensure_invoice_delivery_date_column():
         pass
 
 
-def get_dealer_invoices(dealer_id: int):
-    """All invoices for a dealer, oldest delivery/invoice date first."""
+def get_dealer_invoices(
+    dealer_id: int,
+    *,
+    payment_status: str = INVOICE_PAYMENT_WITHOUT_CHEQUE,
+    invoice_no: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+):
+    """Invoices for a dealer with optional archival/search filters.
+
+    payment_status: without_cheque (default), with_cheque, or all.
+    Date range uses COALESCE(delivery_date, invoiced_date).
+    """
     ensure_invoice_delivery_date_column()
-    return query(
+    status = payment_status if payment_status in INVOICE_PAYMENT_STATUSES else INVOICE_PAYMENT_WITHOUT_CHEQUE
+    sql = [
         """SELECT invoices_id, invoice_no, total_amount, invoiced_date, delivery_date,
                   credit_period_days, location_path, is_invoice_verified, cheque_id
            FROM invoices
-           WHERE dealer_id = ? AND user_id = ?
-           ORDER BY COALESCE(delivery_date, invoiced_date) ASC, invoice_no ASC""",
-        (dealer_id, Config.USER_ID),
-    )
+           WHERE dealer_id = ? AND user_id = ?"""
+    ]
+    params: list = [dealer_id, Config.USER_ID]
+    if status == INVOICE_PAYMENT_WITHOUT_CHEQUE:
+        sql.append("AND cheque_id IS NULL")
+    elif status == INVOICE_PAYMENT_WITH_CHEQUE:
+        sql.append("AND cheque_id IS NOT NULL")
+    needle = (invoice_no or "").strip()
+    if needle:
+        sql.append("AND LOWER(invoice_no) LIKE ?")
+        params.append(f"%{needle.lower()}%")
+    if date_from:
+        sql.append("AND COALESCE(delivery_date, invoiced_date) >= ?")
+        params.append(date_from)
+    if date_to:
+        sql.append("AND COALESCE(delivery_date, invoiced_date) <= ?")
+        params.append(date_to)
+    if min_amount is not None:
+        sql.append("AND total_amount >= ?")
+        params.append(float(min_amount))
+    if max_amount is not None:
+        sql.append("AND total_amount <= ?")
+        params.append(float(max_amount))
+    sql.append("ORDER BY COALESCE(delivery_date, invoiced_date) ASC, invoice_no ASC")
+    return query("\n".join(sql), tuple(params))
 
 
 def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id: int):

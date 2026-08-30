@@ -268,6 +268,34 @@ input, select, textarea {
 .data-table tr.clickable-row:hover td { background: #f3f6fa; }
 .data-table-lg th, .data-table-lg td { padding: 1rem; font-size: 1.08rem; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
+.cheque-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: end;
+  margin: 0.75rem 0 1rem;
+}
+.cheque-filter-bar .cheque-filter-show-all { align-self: center; }
+.cheque-filter-bar .actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.list-summary-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  background: #eef3f9;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 1.02rem;
+}
+.list-summary-bar .list-summary-sep { color: #8a96a8; }
+.list-filter-bar select { min-width: 10rem; }
+.status-paid { color: #1a7f37; font-weight: 700; font-size: 1.15rem; }
+.status-unpaid { color: #c0392b; font-weight: 700; font-size: 1.15rem; }
 .inline-form { display: inline-block; margin: 0 0.35rem 0 0; }
 .whatsapp-inbox-table td { vertical-align: middle; }
 .row-danger { background: #fdecea; }

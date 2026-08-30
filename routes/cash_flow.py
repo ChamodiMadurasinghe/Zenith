@@ -48,6 +48,8 @@ def _render_hub(account, active_tab, **extra):
         "report": extra.pop("report", None),
         "planned_deposits": extra.pop("planned_deposits", []),
         "bank_deposits": extra.pop("bank_deposits", []),
+        "written_cheques": extra.pop("written_cheques", []),
+        "cheque_filter": extra.pop("cheque_filter", {}),
     }
     ctx.update(extra)
     return render_template("bank_hub.html", **ctx)
@@ -121,7 +123,18 @@ def account_timetable(account_id):
     account = repo.get_bank_account(account_id)
     if not account:
         return _missing_account()
-    return _render_hub(account, "timetable", report=build_cash_flow_projection(account_id))
+    cheque_filter = repo.written_cheque_filters_from_args(request.args)
+    written = repo.list_account_written_cheques(
+        account_id, **repo.written_cheque_repo_kwargs(cheque_filter)
+    )
+    return _render_hub(
+        account,
+        "timetable",
+        report=build_cash_flow_projection(account_id),
+        written_cheques=written,
+        cheque_filter=cheque_filter,
+        list_summary=repo.list_amount_summary(written, "amount_in_numerals"),
+    )
 
 
 @cash_flow_bp.route("/api/cash-flow/<int:account_id>/liquidity-schedule")
