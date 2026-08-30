@@ -122,6 +122,7 @@ MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_cheque ON cheque_invoice_allocation(cheque_id)",
     "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_invoice ON cheque_invoice_allocation(invoices_id)",
     "ALTER TABLE invoices ADD COLUMN delivery_date TEXT",
+    "ALTER TABLE user_bank_account ADD COLUMN overdraft_limit REAL NOT NULL DEFAULT 0",
 ]
 
 

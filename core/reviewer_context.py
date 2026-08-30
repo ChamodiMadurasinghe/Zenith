@@ -157,6 +157,13 @@ def build_reviewer_context(
         "merchant_bank": {
             "bank_name": merchant_acc.get("bank_name") if merchant_acc else None,
             "available_balance_lkr": float(merchant_acc.get("available_balance") or 0) if merchant_acc else None,
+            "overdraft_limit_lkr": float(merchant_acc.get("overdraft_limit") or 0) if merchant_acc else None,
+            "usable_funds_lkr": (
+                float(merchant_acc.get("available_balance") or 0)
+                + float(merchant_acc.get("overdraft_limit") or 0)
+            )
+            if merchant_acc
+            else None,
         },
         "ceiling_lkr": ceiling_lkr,
         "invoice_summary": summary,

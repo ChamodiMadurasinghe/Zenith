@@ -12,17 +12,25 @@
 
 <form method="post" action="{{ url_for('bundling.commit') }}" data-zenith-validate>
   <label>{{ t('bank_account') }}
-    <select name="user_bank_acc_id" required>
+    <select name="user_bank_acc_id" id="paying-account" required>
       <option value="">{{ t('select_paying_account') }}</option>
       {% for acc in accounts %}
-      <option value="{{ acc.user_bank_acc_id }}" {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
+      {% set od = acc.overdraft_limit or 0 %}
+      {% set bal = acc.available_balance or 0 %}
+      {% set proj = account_projections.get(acc.user_bank_acc_id) if account_projections else none %}
+      <option value="{{ acc.user_bank_acc_id }}"
+              data-exceeds="{{ '1' if proj and proj.exceeds_overdraft else '0' }}"
+              {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
         {{ acc.nickname or acc.account_name }} — {{ acc.bank_name }}
-        (Rs. {{ "{:,.2f}".format(acc.available_balance or 0) }})
+        (Rs. {{ "{:,.2f}".format(bal) }}{% if od > 0 %} · {{ t('overdraft_limit') }} Rs. {{ "{:,.2f}".format(od) }} · {{ t('usable_funds') }} Rs. {{ "{:,.2f}".format(bal + od) }}{% endif %})
       </option>
       {% endfor %}
     </select>
   </label>
   <p class="muted help-tip">{{ t('cheque_bank_select_help') }}</p>
+  <div id="overdraft-warning" class="alert-card alert-card-danger" hidden>
+    <strong>{{ t('cheque_overdraft_warning') }}</strong>
+  </div>
 
   {% for b in bundles %}
   <div class="cheque-print card">
@@ -42,4 +50,19 @@
     <button type="submit" class="btn btn-primary btn-lg">{{ t('commit_db') }}</button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var sel = document.getElementById("paying-account");
+  var box = document.getElementById("overdraft-warning");
+  if (!sel || !box) return;
+  function update() {
+    var opt = sel.options[sel.selectedIndex];
+    box.hidden = !(opt && opt.getAttribute("data-exceeds") === "1");
+  }
+  sel.addEventListener("change", update);
+  update();
+})();
+</script>
 {% endblock %}

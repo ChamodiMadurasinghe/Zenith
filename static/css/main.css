@@ -271,7 +271,20 @@ input, select, textarea {
 .inline-form { display: inline-block; margin: 0 0.35rem 0 0; }
 .whatsapp-inbox-table td { vertical-align: middle; }
 .row-danger { background: #fdecea; }
+.row-warning { background: #fff8e6; }
 .row-gain { background: #e8f5e9; }
+.alert-card-danger { background: #fdecea; border-color: #f5c2c0; }
+.pill {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.pill-danger { background: #f5c2c0; color: #7a1f1a; }
+.pill-warning { background: #f0d78c; color: #6a4a00; }
 .text-muted { color: #666; font-size: 0.9rem; }
 #chat-mic.listening { background: #c62828; color: #fff; }
 .chat-controls {
@@ -665,7 +678,7 @@ body:has(#cheques-layout) .guide-widget {
 }
 .chat-input-actions .btn { margin: 0; }
 
-.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 @media (max-width: 700px) { .summary-grid { grid-template-columns: 1fr; } }
 .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
 .stat-label { display: block; font-size: 0.85rem; color: var(--muted); }
@@ -959,7 +972,50 @@ body:has(#cheques-layout) .guide-widget {
 .cheque-print { margin: 1rem 0; border: 2px dashed var(--border); }
 .cheque-header { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.2em; margin-bottom: 1rem; }
 .cheque-row { margin: 0.4rem 0; }
-.cheque-row span { font-weight: 600; display: inline-block; width: 80px; }
+.cheque-row span { font-weight: 600; display: inline-block; min-width: 80px; width: auto; margin-right: 0.5rem; }
+
+body.modal-open { overflow: hidden; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  overflow-y: auto;
+}
+.modal-overlay[hidden] { display: none !important; }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 32, 0.55);
+}
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.4rem 1.5rem;
+  margin: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.modal-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  border: none;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+  min-width: 2rem;
+  min-height: 2rem;
+}
+.modal-panel .cheque-print { margin-top: 0.5rem; }
 .actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; }
 
 .report-content h1, .report-content h2 { margin-top: 1rem; }
@@ -1174,6 +1230,13 @@ body:has(#cheques-layout) .guide-widget {
 [data-theme="dark"] .invoice-preview { background: #141820; }
 [data-theme="dark"] .stat-card { background: var(--card); }
 [data-theme="dark"] .alert-card { background: #3a3020; border-color: #6a5020; }
+[data-theme="dark"] .modal-panel { background: var(--card); border-color: #3a4354; }
+[data-theme="dark"] .modal-backdrop { background: rgba(0, 0, 0, 0.65); }
+[data-theme="dark"] .alert-card-danger { background: #3a2020; border-color: #6a3030; }
+[data-theme="dark"] .row-danger { background: #3a2020; }
+[data-theme="dark"] .row-warning { background: #3a3020; }
+[data-theme="dark"] .pill-danger { background: #5a3030; color: #f5c2c0; }
+[data-theme="dark"] .pill-warning { background: #5a4820; color: #f0d78c; }
 [data-theme="dark"] .confirm-box { background: #3a3020; border-color: #6a5020; }
 [data-theme="dark"] .section-title { border-bottom-color: #3a4354; }
 
@@ -1233,6 +1296,7 @@ body:has(#cheques-layout) .guide-widget {
 .account-card-name { font-weight: 650; }
 .account-card-bank { font-size: 0.85rem; }
 .account-card-balance { font-size: 1.05rem; font-weight: 600; margin-top: 0.35rem; }
+.account-card-usable { font-size: 0.8rem; color: var(--muted, #666); }
 .account-card-badge {
   position: absolute;
   top: 0.5rem;

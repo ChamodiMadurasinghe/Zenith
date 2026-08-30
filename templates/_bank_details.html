@@ -1,0 +1,29 @@
+<form class="card" method="post" action="{{ url_for('cash_flow.account_details', account_id=selected_account_id) }}" data-zenith-validate>
+  <h3>{{ t('account_details') }}</h3>
+  <div class="grid-2">
+    <label>{{ t('bank_nickname') }}
+      <input name="nickname" value="{{ selected_account.nickname or '' }}">
+    </label>
+    <label>{{ t('bank_account_name') }}
+      <input name="account_name" value="{{ selected_account.account_name }}" required>
+    </label>
+    <label>{{ t('bank_name_label') }}
+      <input name="bank_name" value="{{ selected_account.bank_name }}" required>
+    </label>
+    <label>{{ t('bank_branch') }}
+      <input name="branch_name" value="{{ selected_account.branch_name or '' }}">
+    </label>
+    <label>{{ t('overdraft_limit') }}
+      <input type="number" step="0.01" min="0" name="overdraft_limit" value="{{ selected_account.overdraft_limit or 0 }}">
+      <span class="muted help-tip">{{ t('overdraft_limit_help') }}</span>
+    </label>
+  </div>
+  <label class="confirm-label">
+    <input type="checkbox" name="set_as_default" value="1"
+           {% if default_bank_acc_id == selected_account_id %}checked{% endif %}>
+    {{ t('set_as_default_account') }}
+  </label>
+  <div class="actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_account_details') }}</button>
+  </div>
+</form>

@@ -24,7 +24,8 @@ Your bank accounts.
 | user_id | INTEGER FK → user | |
 | account_name | TEXT | Legal account name |
 | nickname | TEXT | Short label for UI |
-| available_balance | REAL | Current balance (updated via Cash Flow UI) |
+| available_balance | REAL | Current ledger balance (updated via Cash Flow UI) |
+| overdraft_limit | REAL | Cheque overdraft facility (0 = none). Usable funds = balance + overdraft |
 | branch_name | TEXT | |
 | bank_name | TEXT | |
 

@@ -5,6 +5,7 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 from config import Config
 from core.amounts import amount_to_words
 from core.auth import login_required
+from core.cash_flow import simulate_extra_cheques
 from core.i18n import flash_t, get_lang, translate
 from core.bundle_session import hydrate_bundles, load_bundle_state, save_bundle_state, slim_bundles
 from core.bundling import build_bundles_from_assignments, compute_bundles
@@ -127,6 +128,15 @@ def compute(dealer_id):
     )
     flash_t("flash_bundling_complete", "success", count=len(bundles))
     return redirect(_dealer_cheques_url(dealer_id))
+
+
+@bundling_bp.route("/api/cheques/<int:cheque_id>/detail", methods=["GET"])
+@login_required
+def cheque_detail(cheque_id):
+    detail = repo.get_cheque_detail(cheque_id)
+    if not detail:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(detail)
 
 
 @bundling_bp.route("/api/chat/bundling/<int:dealer_id>/health", methods=["GET"])
@@ -680,11 +690,30 @@ def preview(dealer_id):
     }
     session.modified = True
     dealer = repo.get_dealer(dealer_id)
+    extra_cheques = [
+        {
+            "amount": b["total_lkr"],
+            "clearance_date": (
+                b.get("predicted_clearance_date")
+                or b.get("target_funding_date")
+                or b.get("true_settlement_date")
+                or b.get("cheque_date")
+            ),
+            "cheque_date": b.get("cheque_date"),
+            "label": f"New cheque ({b.get('cheque_date')})",
+        }
+        for b in previews
+    ]
+    account_projections = {
+        int(acc["user_bank_acc_id"]): simulate_extra_cheques(int(acc["user_bank_acc_id"]), extra_cheques)
+        for acc in accounts
+    }
     return render_template(
         "cheque_preview.html",
         bundles=previews,
         dealer=dealer,
         accounts=accounts,
+        account_projections=account_projections,
         default_user_bank_acc_id=dealer.get("default_user_bank_acc_id") if dealer else None,
         validation_issues=validation_issues,
         warnings_acknowledged=bool(validation_issues and acknowledge),

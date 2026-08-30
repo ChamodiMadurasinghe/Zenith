@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from config import Config
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME
@@ -24,29 +24,44 @@ def set_setting(key: str, value: str):
 
 
 def get_bank_accounts():
-    return query(
+    rows = query(
         "SELECT * FROM user_bank_account WHERE user_id = ? ORDER BY user_bank_acc_id",
         (Config.USER_ID,),
     )
+    for row in rows:
+        row.setdefault("overdraft_limit", 0)
+    return rows
 
 
 def get_bank_account(acc_id: int):
-    return query_one(
+    row = query_one(
         "SELECT * FROM user_bank_account WHERE user_bank_acc_id = ? AND user_id = ?",
         (acc_id, Config.USER_ID),
     )
+    if row is not None:
+        row.setdefault("overdraft_limit", 0)
+    return row
+
+
+def _overdraft_limit_from(data: dict) -> float:
+    try:
+        value = float(data.get("overdraft_limit") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, value)
 
 
 def create_bank_account(data: dict) -> int:
     return execute(
         """INSERT INTO user_bank_account
-           (user_id, account_name, nickname, available_balance, branch_name, bank_name)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+           (user_id, account_name, nickname, available_balance, overdraft_limit, branch_name, bank_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
             Config.USER_ID,
             (data.get("account_name") or "").strip(),
             (data.get("nickname") or data.get("account_name") or "").strip() or None,
             float(data.get("available_balance") or 0),
+            _overdraft_limit_from(data),
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
         ),
@@ -56,13 +71,14 @@ def create_bank_account(data: dict) -> int:
 def update_bank_account(acc_id: int, data: dict):
     execute(
         """UPDATE user_bank_account
-           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?
+           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?, overdraft_limit = ?
            WHERE user_bank_acc_id = ? AND user_id = ?""",
         (
             (data.get("account_name") or "").strip(),
             (data.get("nickname") or data.get("account_name") or "").strip() or None,
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
+            _overdraft_limit_from(data),
             acc_id,
             Config.USER_ID,
         ),
@@ -92,6 +108,12 @@ def validate_bank_account_input(data: dict) -> str | None:
         return "flash_bank_account_name_required"
     if not (data.get("bank_name") or "").strip():
         return "flash_bank_name_required"
+    try:
+        overdraft = float(data.get("overdraft_limit") or 0)
+    except (TypeError, ValueError):
+        return "flash_overdraft_invalid"
+    if overdraft < 0:
+        return "flash_overdraft_invalid"
     return None
 
 
@@ -307,6 +329,71 @@ def get_all_dealer_summaries() -> dict:
     return {d["dealer_id"]: get_dealer_invoice_summary(d["dealer_id"]) for d in dealers}
 
 
+def _parse_iso_date(value) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def invoice_due_date_value(invoice: dict) -> date | None:
+    inv_date = _parse_iso_date(invoice.get("invoiced_date"))
+    if not inv_date:
+        return None
+    try:
+        days = int(invoice.get("credit_period_days") or 0)
+    except (TypeError, ValueError):
+        days = 0
+    return inv_date + timedelta(days=days)
+
+
+def cheque_clearance_date(ch: dict) -> str | None:
+    """Predicted clearance, else deposit_timetable fund-by, else stated cheque date."""
+    if ch.get("predicted_clearance_date"):
+        return ch["predicted_clearance_date"]
+    row = query_one(
+        """SELECT target_funding_date FROM deposit_timetable
+           WHERE cheque_id = ? ORDER BY timetable_id DESC LIMIT 1""",
+        (ch.get("cheque_id"),),
+    )
+    if row and row.get("target_funding_date"):
+        return row["target_funding_date"]
+    return ch.get("cheque_date")
+
+
+def days_gained_vs_due(invoices: list, clearance_str: str | None) -> int | None:
+    """(expected_clearance_date - earliest_invoice_due_date).days"""
+    clearance = _parse_iso_date(clearance_str)
+    if not clearance or not invoices:
+        return None
+    dues = [d for d in (invoice_due_date_value(inv) for inv in invoices) if d]
+    if not dues:
+        return None
+    return (clearance - min(dues)).days
+
+
+def _invoices_for_cheque(cheque_id: int) -> list:
+    return query(
+        """SELECT i.invoices_id, i.invoice_no, i.invoiced_date, i.delivery_date,
+                  i.credit_period_days, i.total_amount, i.dealer_id,
+                  a.amount AS allocated_amount, a.part_index, a.part_count
+           FROM invoices i
+           LEFT JOIN cheque_invoice_allocation a
+             ON a.invoices_id = i.invoices_id AND a.cheque_id = ?
+           WHERE i.user_id = ?
+             AND (
+               i.cheque_id = ?
+               OR i.invoices_id IN (
+                 SELECT invoices_id FROM cheque_invoice_allocation WHERE cheque_id = ?
+               )
+             )
+           ORDER BY i.invoice_no, a.part_index""",
+        (cheque_id, Config.USER_ID, cheque_id, cheque_id),
+    )
+
+
 def get_committed_cheque_bundles(dealer_id: int):
     # Prefer invoice.cheque_id; also include allocation links (split parts / partial updates).
     cheques = query(
@@ -322,18 +409,101 @@ def get_committed_cheque_bundles(dealer_id: int):
            ORDER BY c.cheque_date DESC""",
         (dealer_id, Config.USER_ID, dealer_id, Config.USER_ID),
     )
+    dealer = get_dealer(dealer_id)
+    dealer_name = dealer["dealer_name"] if dealer else None
     result = []
     for ch in cheques:
-        invoices = query(
-            """SELECT DISTINCT i.invoice_no, i.total_amount, i.invoiced_date, i.credit_period_days
-               FROM invoices i
-               LEFT JOIN cheque_invoice_allocation a ON a.invoices_id = i.invoices_id
-               WHERE i.cheque_id = ? OR a.cheque_id = ?
-               ORDER BY i.invoice_no""",
-            (ch["cheque_id"], ch["cheque_id"]),
+        invoices = _invoices_for_cheque(ch["cheque_id"])
+        clearance = cheque_clearance_date(ch)
+        result.append(
+            {
+                **ch,
+                "invoices": invoices,
+                "dealer_name": dealer_name,
+                "expected_clearance_date": clearance,
+                "days_gained": days_gained_vs_due(invoices, clearance),
+            }
         )
-        result.append({**ch, "invoices": invoices})
     return result
+
+
+def get_cheque_detail(cheque_id: int) -> dict | None:
+    """Read-only cheque + payee + linked invoices (and line items). None if missing/unauthorized."""
+    from core.amounts import amount_to_words
+
+    ch = query_one(
+        """SELECT c.*,
+                  uba.nickname AS bank_nickname,
+                  uba.account_name AS bank_account_name,
+                  uba.bank_name AS paying_bank_name,
+                  uba.branch_name AS paying_branch
+           FROM cheque c
+           JOIN user_bank_account uba ON uba.user_bank_acc_id = c.user_bank_acc_id
+           WHERE c.cheque_id = ? AND uba.user_id = ?""",
+        (cheque_id, Config.USER_ID),
+    )
+    if not ch:
+        return None
+
+    invoice_rows = _invoices_for_cheque(cheque_id)
+    invoices_out = []
+    dealer_id = None
+    for inv in invoice_rows:
+        dealer_id = dealer_id or inv.get("dealer_id")
+        items = get_invoice_items(inv["invoices_id"])
+        due = invoice_due_date_value(inv)
+        allocated = inv.get("allocated_amount")
+        invoices_out.append(
+            {
+                "invoices_id": inv["invoices_id"],
+                "invoice_no": inv["invoice_no"],
+                "invoiced_date": inv.get("invoiced_date"),
+                "due_date": due.isoformat() if due else None,
+                "credit_period_days": inv.get("credit_period_days"),
+                "total_amount": float(inv.get("total_amount") or 0),
+                "allocated_amount": float(allocated if allocated is not None else inv.get("total_amount") or 0),
+                "part_index": inv.get("part_index"),
+                "part_count": inv.get("part_count"),
+                "line_items": [
+                    {
+                        "item_code": it.get("item_code"),
+                        "item_name": it.get("item_name"),
+                        "item_qty": it.get("item_qty"),
+                        "item_price": it.get("item_price"),
+                    }
+                    for it in items
+                ],
+            }
+        )
+
+    dealer = get_dealer(dealer_id) if dealer_id else None
+    clearance = cheque_clearance_date(ch)
+    amount = float(ch.get("amount_in_numerals") or 0)
+    return {
+        "cheque_id": ch["cheque_id"],
+        "cheque_no": ch.get("cheque_no"),
+        "cheque_date": ch.get("cheque_date"),
+        "expected_clearance_date": clearance,
+        "amount": amount,
+        "amount_in_words": ch.get("amount_in_words") or amount_to_words(amount),
+        "days_gained": days_gained_vs_due(invoice_rows, clearance),
+        "bank": {
+            "nickname": ch.get("bank_nickname"),
+            "account_name": ch.get("bank_account_name"),
+            "bank_name": ch.get("paying_bank_name"),
+            "branch_name": ch.get("paying_branch"),
+        },
+        "dealer": {
+            "dealer_id": dealer["dealer_id"] if dealer else None,
+            "dealer_name": dealer["dealer_name"] if dealer else None,
+            "dealer_email": dealer.get("dealer_email") if dealer else None,
+            "dealer_telno": dealer.get("dealer_telno") if dealer else None,
+            "dealer_address": dealer.get("dealer_address") if dealer else None,
+            "casual_days": dealer.get("casual_days") if dealer else None,
+            "dealer_strictness": dealer.get("dealer_strictness") if dealer else None,
+        },
+        "invoices": invoices_out,
+    }
 
 
 def ensure_invoice_delivery_date_column():
@@ -920,11 +1090,36 @@ def get_planned_deposits(account_id: int):
     )
 
 
-def get_bank_deposits(account_id: int):
-    return query(
-        "SELECT * FROM bank_deposits WHERE user_bank_acc_id = ? ORDER BY deposit_date",
-        (account_id,),
-    )
+def get_bank_deposits(account_id: int, limit: int | None = None):
+    sql = """SELECT * FROM bank_deposits
+             WHERE user_bank_acc_id = ?
+             ORDER BY deposit_date DESC, deposit_id DESC"""
+    params: tuple = (account_id,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (account_id, int(limit))
+    return query(sql, params)
+
+
+def record_deposit(account_id: int, deposit_date: str, amount: float, reference: str = ""):
+    """Credit available_balance and append a bank_deposits row."""
+    if amount <= 0:
+        return None
+    acc = get_bank_account(account_id)
+    if not acc:
+        return None
+    with transaction() as conn:
+        conn.execute(
+            """INSERT INTO bank_deposits (user_bank_acc_id, deposit_date, amount, reference)
+               VALUES (?, ?, ?, ?)""",
+            (account_id, deposit_date, amount, reference or ""),
+        )
+        conn.execute(
+            """UPDATE user_bank_account SET available_balance = available_balance + ?
+               WHERE user_bank_acc_id = ? AND user_id = ?""",
+            (amount, account_id, Config.USER_ID),
+        )
+    return True
 
 
 def add_planned_deposit(account_id: int, planned_date: str, amount: float, notes: str = ""):
