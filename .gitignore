@@ -14,3 +14,11 @@ debug-*.log
 
 storage/webhook_meta.jsonl
 
+# Local tooling / binaries / pitch assets (not part of the app)
+cloudflared.exe
+*.exe
+idealize/
+
+# Generated Word docs (regenerate via scripts/generate_*_docx.py)
+docs/*.docx
+

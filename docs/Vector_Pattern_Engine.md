@@ -202,7 +202,7 @@ The tool is **read-only** — it does not mutate bundles, session state, or SQLi
 
 ## 9. Guardrails boundary
 
-See diagram: [03-guardrails-boundary.drawio](diagrams/vector/03-guardrails-boundary.drawio)
+See diagram: [03-guardrails-boundary.jpg](diagrams/vector/03-guardrails-boundary.jpg)
 
 ```
 Vector patterns ──(suggestions only)──► Bundling Assistant
@@ -241,7 +241,7 @@ Vector patterns ──(suggestions only)──► Bundling Assistant
 | Patterns outdated | Commit happened before backfill | Run `python scripts/backfill_dealer_patterns.py` |
 | Feature seems off | Disabled via env | Set `ENABLE_VECTOR_PATTERNS=true` |
 | Mock text only | Demo mode | `USE_FAKE_AI=true` skips Chroma |
-| draw.io link 404 | Diagrams not on GitHub yet | Open local `.drawio` in app.diagrams.net |
+| Diagram image missing | File not pushed yet | Regenerate JPGs with `python scripts/generate_vector_docs_docx.py` or use mermaid.ink links in section 2 |
 
 ---
 
@@ -258,14 +258,14 @@ Vector patterns ──(suggestions only)──► Bundling Assistant
 | `scripts/backfill_dealer_patterns.py` | Initial / manual re-index |
 | `core/tests/test_dealer_patterns.py` | Pattern builder tests |
 | `core/tests/test_vector_store.py` | Vector store tests |
-| `docs/diagrams/vector/*.drawio` | Architecture diagrams |
+| `docs/diagrams/vector/*.jpg` | Architecture diagrams |
 
 ---
 
 ## 12. Related documentation
 
 - [DATABASE.md](../database/DATABASE.md) — SQLite schema and derived vector index note
-- [Zenith-Vector-Pattern-Engine-Reference.docx](Zenith-Vector-Pattern-Engine-Reference.docx) — Shareable Word version of this guide
+- Run `python scripts/generate_vector_docs_docx.py` for a shareable Word copy of this guide (local output, not committed)
 
 Regenerate Word doc:
 
