@@ -96,7 +96,7 @@ def bundling_home():
 @bundling_bp.route("/bundling/<int:dealer_id>")
 @login_required
 def bundling_dealer(dealer_id):
-    return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+    return redirect(url_for("dealers.invoices", dealer_id=dealer_id))
 
 
 @bundling_bp.route("/bundling/<int:dealer_id>/compute", methods=["POST"])
@@ -699,19 +699,47 @@ def commit():
         flash_t("flash_no_cheques", "error")
         return redirect(url_for("bundling.bundling_home"))
 
-    bundles = hydrate_bundles(pending["bundles"])
+    dealer_id = int(pending.get("dealer_id") or 0)
+    bundles = hydrate_bundles(pending.get("bundles") or [])
+    bundles = [b for b in bundles if b.get("invoices")]
+    if not bundles:
+        flash_t("flash_no_cheques", "error")
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
+
     bank_raw = (request.form.get("user_bank_acc_id") or "").strip()
     if not bank_raw:
         flash_t("flash_select_paying_account", "error")
-        return redirect(url_for("bundling.bundling_home"))
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
     bank_acc_id = int(bank_raw)
     if not repo.get_bank_account(bank_acc_id):
         flash_t("flash_bank_account_missing", "error")
-        return redirect(url_for("bundling.bundling_home"))
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
+
     cheques = []
     invoice_map = {}
     for i, b in enumerate(bundles):
-        cheque_no = request.form.get(f"cheque_no_{i}", f"DRAFT-{i+1}")
+        clearance = (
+            b.get("predicted_clearance_date")
+            or b.get("target_funding_date")
+            or b.get("true_settlement_date")
+            or b.get("cheque_date")
+        )
+        if not b.get("cheque_date") or not clearance:
+            flash_t("flash_no_cheques", "error")
+            return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+        cheque_no = (request.form.get(f"cheque_no_{i}") or "").strip() or f"DRAFT-{i+1}"
         cheques.append(
             {
                 "user_bank_acc_id": bank_acc_id,
@@ -719,7 +747,7 @@ def commit():
                 "cheque_date": b["cheque_date"],
                 "amount_in_words": amount_to_words(b["total_lkr"]),
                 "amount_in_numerals": b["total_lkr"],
-                "predicted_clearance_date": b["predicted_clearance_date"],
+                "predicted_clearance_date": clearance,
             }
         )
         invoice_map[i] = [
@@ -732,9 +760,19 @@ def commit():
             for inv in b["invoices"]
         ]
 
-    repo.save_cheques(cheques, invoice_map)
+    try:
+        repo.save_cheques(cheques, invoice_map)
+    except Exception:
+        current_app.logger.exception("Cheque commit failed")
+        flash_t("flash_cheques_commit_failed", "error")
+        return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+
     session.pop("pending_cheques", None)
-    _bundle_session().pop(str(pending["dealer_id"]), None)
+    _bundle_session().pop(str(dealer_id), None)
+    try:
+        repo.clear_bundle_draft(dealer_id)
+    except Exception:
+        current_app.logger.exception("Failed to clear bundle draft after commit")
     session.modified = True
     flash_t("flash_cheques_committed", "success")
 
@@ -749,4 +787,4 @@ def commit():
             current_app.logger.exception("Background analyst report failed")
 
     threading.Thread(target=run_analyst, daemon=True).start()
-    return redirect(url_for("analytics.analytics"))
+    return redirect(url_for("dealers.cheques", dealer_id=dealer_id))

@@ -166,12 +166,33 @@ def run_bundling_assistant(
             "Ask me to group invoices, move an invoice, or check day-limit risk."
         )
 
+    # Surface dry_run previews into the UI/session draft so Preview → Save works
+    # without requiring a second "apply" turn. pending_commit still reflects explicit apply.
+    out_bundles = (
+        ctx.last_preview if ctx.last_preview is not None else ctx.bundles
+    )
+    out_issues = list(ctx.validation_issues)
+    if (
+        ctx.last_preview is not None
+        and not ctx.pending_commit
+        and not out_issues
+    ):
+        # Issues from the last dry_run live only in the tool payload; recompute lightly.
+        from core.guardrails import collect_bundle_issues
+
+        out_issues = collect_bundle_issues(
+            {"bundles": out_bundles},
+            ctx.dealer_id,
+            ctx.ceiling_lkr,
+            allow_exceed_ceiling=ctx.allow_exceed_ceiling,
+        )
+
     return {
         "reply": reply,
-        "bundles": ctx.bundles,
-        "validation_issues": list(ctx.validation_issues),
+        "bundles": out_bundles,
+        "validation_issues": out_issues,
         "allow_exceed_ceiling": ctx.allow_exceed_ceiling,
-        "pending_commit": ctx.pending_commit,
+        "pending_commit": ctx.pending_commit or bool(ctx.last_preview),
         "tool_trace": _tool_trace(result.get("intermediate_steps") or []),
         "proposed_actions": [],  # tools already applied into ctx when dry_run=False / apply
     }

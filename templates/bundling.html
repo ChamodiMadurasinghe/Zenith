@@ -11,7 +11,7 @@
 <div class="dealer-grid">
   {% for d in dealers %}
   {% set s = dealer_summaries.get(d.dealer_id, {}) %}
-  <a href="{{ url_for('dealers.cheques', dealer_id=d.dealer_id) }}" class="dealer-card">
+  <a href="{{ url_for('dealers.invoices', dealer_id=d.dealer_id) }}" class="dealer-card">
     <span class="dealer-icon">{{ d.dealer_name[0] }}</span>
     <span>{{ d.dealer_name }}</span>
     <span class="dealer-badges">

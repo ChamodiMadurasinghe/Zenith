@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
@@ -8,6 +9,7 @@ from werkzeug.utils import secure_filename
 
 from config import Config
 from core.auth import login_required
+from core.dates import format_date
 from core.i18n import flash_t
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup
 from db import repositories as repo
@@ -49,9 +51,11 @@ def _parse_items_from_form():
 
 
 def _parse_invoice_data_from_form(location_path=None):
+    delivery_raw = (request.form.get("delivery_date") or "").strip()
     return {
         "invoice_no": (request.form.get("invoice_no") or "").strip(),
         "invoiced_date": request.form["invoiced_date"],
+        "delivery_date": delivery_raw or None,
         "credit_period_days": request.form["credit_period_days"],
         "total_amount": request.form["total_amount"],
         "location_path": location_path,
@@ -198,7 +202,10 @@ def upload():
             dealer_setup = invoice_setup
 
     _drafts()[draft_id] = {
-        "extracted": extracted,
+        "extracted": {
+            **extracted,
+            "delivery_date": extracted.get("delivery_date") or format_date(date.today()),
+        },
         "location_path": f"storage/invoices/{filename}",
         "dealer_id": dealer["dealer_id"] if dealer else None,
         "dealer_setup": dealer_setup,
@@ -270,6 +277,7 @@ def review(draft_id):
         location_path=draft["location_path"],
         image_url=_image_url(draft["location_path"]),
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+        today=format_date(date.today()),
         is_upload_review=True,
         user_bank_accounts=accounts,
         dealer_bank_data={"default_user_bank_acc_id": default_acc},
@@ -320,12 +328,15 @@ def extract_whatsapp_inbox(inbox_id):
         return redirect(url_for("ingestion.dashboard"))
 
     location_path = item.get("location_path") or ""
+    received_at = (item.get("received_at") or "").strip()
+    delivery_date = received_at[:10] if len(received_at) >= 10 else None
     try:
         from core.whatsapp_intake import extract_image_to_pending_invoice
 
         invoice_id = extract_image_to_pending_invoice(
             location_path,
             sender_phone=item.get("sender_phone"),
+            delivery_date=delivery_date,
         )
         repo.mark_whatsapp_inbox_extracted(inbox_id, invoice_id)
         flash_t("flash_whatsapp_extracted", "success")
@@ -375,6 +386,7 @@ def verify_invoice(invoice_id):
         "invoice_no": invoice["invoice_no"],
         "supplier_name": (dealer_setup or {}).get("dealer_name") or invoice.get("dealer_name") or "",
         "invoiced_date": invoice["invoiced_date"],
+        "delivery_date": invoice.get("delivery_date") or "",
         "total_amount": invoice["total_amount"],
         "credit_period_days": invoice["credit_period_days"],
         "line_items": line_items,
@@ -478,6 +490,7 @@ def manual_invoice():
         "manual_invoice.html",
         dealers=dealers,
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+        today=format_date(date.today()),
     )
 
 

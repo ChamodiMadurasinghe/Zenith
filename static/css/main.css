@@ -264,6 +264,8 @@ input, select, textarea {
 .data-table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: var(--radius); overflow: hidden; border: 2px solid var(--border); }
 .data-table th, .data-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); text-align: left; font-size: 1.05rem; }
 .data-table th { background: #e8edf4; font-size: 0.95rem; font-weight: 700; text-transform: none; }
+.data-table tr.clickable-row { cursor: pointer; }
+.data-table tr.clickable-row:hover td { background: #f3f6fa; }
 .data-table-lg th, .data-table-lg td { padding: 1rem; font-size: 1.08rem; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
 .inline-form { display: inline-block; margin: 0 0.35rem 0 0; }

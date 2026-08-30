@@ -35,6 +35,7 @@
       <div class="grid-2">
         <label>{{ t('col_invoice_no') }} <input name="invoice_no" value="{{ extracted.invoice_no or '' }}" required></label>
         <label>{{ t('col_date') }} <input type="date" name="invoiced_date" value="{{ extracted.invoiced_date or '' }}" required></label>
+        <label>{{ t('delivery_date') }} <input type="date" name="delivery_date" value="{{ extracted.delivery_date or '' }}"></label>
         <label>{{ t('credit_period') }} <input type="number" name="credit_period_days" value="{{ extracted.credit_period_days or default_credit }}"></label>
         <label>{{ t('total_amount') }} <input type="number" step="0.01" name="total_amount" value="{{ extracted.total_amount or 0 }}" required></label>
         <label>{{ t('dealer') }}

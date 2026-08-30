@@ -44,6 +44,7 @@ def extract_image_to_pending_invoice(
     *,
     local_path: str | None = None,
     sender_phone: str | None = None,
+    delivery_date: str | None = None,
 ) -> int:
     """Run Agent 1 (Gemini) on a stored image and save as pending verification."""
     from agents.anomaly import check_invoice_anomalies
@@ -80,10 +81,12 @@ def extract_image_to_pending_invoice(
         "whatsapp_sender": sender_phone,
         "source": "whatsapp",
     }
+    delivery = (delivery_date or "").strip() or format_date(date.today())
     return repo.save_pending_invoice(
         {
             "invoice_no": extracted["invoice_no"],
             "invoiced_date": extracted["invoiced_date"],
+            "delivery_date": delivery,
             "credit_period_days": extracted["credit_period_days"],
             "total_amount": extracted["total_amount"],
             "location_path": location_path,

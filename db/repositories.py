@@ -308,35 +308,103 @@ def get_all_dealer_summaries() -> dict:
 
 
 def get_committed_cheque_bundles(dealer_id: int):
+    # Prefer invoice.cheque_id; also include allocation links (split parts / partial updates).
     cheques = query(
         """SELECT DISTINCT c.* FROM cheque c
-           JOIN invoices i ON i.cheque_id = c.cheque_id
-           WHERE i.dealer_id = ? AND i.user_id = ?
+           WHERE c.cheque_id IN (
+               SELECT i.cheque_id FROM invoices i
+               WHERE i.dealer_id = ? AND i.user_id = ? AND i.cheque_id IS NOT NULL
+               UNION
+               SELECT a.cheque_id FROM cheque_invoice_allocation a
+               JOIN invoices i ON i.invoices_id = a.invoices_id
+               WHERE i.dealer_id = ? AND i.user_id = ?
+           )
            ORDER BY c.cheque_date DESC""",
-        (dealer_id, Config.USER_ID),
+        (dealer_id, Config.USER_ID, dealer_id, Config.USER_ID),
     )
     result = []
     for ch in cheques:
         invoices = query(
-            """SELECT invoice_no, total_amount, invoiced_date, credit_period_days
-               FROM invoices WHERE cheque_id = ? ORDER BY invoice_no""",
-            (ch["cheque_id"],),
+            """SELECT DISTINCT i.invoice_no, i.total_amount, i.invoiced_date, i.credit_period_days
+               FROM invoices i
+               LEFT JOIN cheque_invoice_allocation a ON a.invoices_id = i.invoices_id
+               WHERE i.cheque_id = ? OR a.cheque_id = ?
+               ORDER BY i.invoice_no""",
+            (ch["cheque_id"], ch["cheque_id"]),
         )
         result.append({**ch, "invoices": invoices})
     return result
 
 
+def ensure_invoice_delivery_date_column():
+    """Add delivery_date on existing DBs without a full migrate."""
+    try:
+        execute("ALTER TABLE invoices ADD COLUMN delivery_date TEXT")
+    except Exception:
+        pass
+
+
+def get_dealer_invoices(dealer_id: int):
+    """All invoices for a dealer, oldest delivery/invoice date first."""
+    ensure_invoice_delivery_date_column()
+    return query(
+        """SELECT invoices_id, invoice_no, total_amount, invoiced_date, delivery_date,
+                  credit_period_days, location_path, is_invoice_verified, cheque_id
+           FROM invoices
+           WHERE dealer_id = ? AND user_id = ?
+           ORDER BY COALESCE(delivery_date, invoiced_date) ASC, invoice_no ASC""",
+        (dealer_id, Config.USER_ID),
+    )
+
+
 def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id: int):
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         conn.execute(
             """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
-               credit_period_days = ?, total_amount = ?, is_invoice_verified = 1,
-               pending_dealer_json = NULL
+               delivery_date = ?, credit_period_days = ?, total_amount = ?,
+               is_invoice_verified = 1, pending_dealer_json = NULL
                WHERE invoices_id = ? AND user_id = ?""",
             (
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
+                int(data["credit_period_days"]),
+                float(data["total_amount"]),
+                invoice_id,
+                Config.USER_ID,
+            ),
+        )
+        conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
+        for item in items:
+            conn.execute(
+                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    invoice_id,
+                    item["item_code"],
+                    item["item_name"],
+                    int(item["item_qty"]),
+                    float(item["item_price"]),
+                    float(item.get("item_discount", 0)),
+                ),
+            )
+
+
+def update_invoice_record(invoice_id: int, data: dict, items: list, dealer_id: int):
+    """Update invoice header + line items without changing verification status."""
+    ensure_invoice_delivery_date_column()
+    with transaction() as conn:
+        conn.execute(
+            """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
+               delivery_date = ?, credit_period_days = ?, total_amount = ?
+               WHERE invoices_id = ? AND user_id = ?""",
+            (
+                dealer_id,
+                data["invoice_no"],
+                data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 invoice_id,
@@ -360,6 +428,7 @@ def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id:
 
 
 def get_invoice(invoice_id: int):
+    ensure_invoice_delivery_date_column()
     return query_one(
         "SELECT i.*, d.dealer_name FROM invoices i JOIN dealers d ON d.dealer_id = i.dealer_id WHERE i.invoices_id = ?",
         (invoice_id,),
@@ -411,16 +480,19 @@ def get_dealer_invoice_stats(dealer_id: int) -> dict:
 
 
 def save_verified_invoice(data: dict, items: list, dealer_id: int) -> int:
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
-               credit_period_days, total_amount, location_path, is_invoice_verified)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
+               delivery_date, credit_period_days, total_amount, location_path,
+               is_invoice_verified)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
             (
                 Config.USER_ID,
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 data.get("location_path"),
@@ -449,17 +521,19 @@ def save_pending_invoice(
     dealer_id: int,
     pending_dealer_json: str | None = None,
 ) -> int:
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
-               credit_period_days, total_amount, location_path, pending_dealer_json,
-               is_invoice_verified)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+               delivery_date, credit_period_days, total_amount, location_path,
+               pending_dealer_json, is_invoice_verified)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
             (
                 Config.USER_ID,
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 data.get("location_path"),
@@ -951,14 +1025,8 @@ def save_cheques(cheques: list, invoice_map: dict):
                 if inv_id not in first_cheque_for_invoice:
                     first_cheque_for_invoice[inv_id] = cheque_id
                     conn.execute(
-                        "UPDATE invoices SET cheque_id = ? WHERE invoices_id = ? AND cheque_id IS NULL",
+                        "UPDATE invoices SET cheque_id = ? WHERE invoices_id = ?",
                         (cheque_id, inv_id),
-                    )
-                    # Also set when previously unset on this commit path
-                    conn.execute(
-                        """UPDATE invoices SET cheque_id = ?
-                           WHERE invoices_id = ? AND (cheque_id IS NULL OR cheque_id = ?)""",
-                        (first_cheque_for_invoice[inv_id], inv_id, first_cheque_for_invoice[inv_id]),
                     )
 
     for idx, ch in enumerate(cheques):
@@ -1057,3 +1125,8 @@ def save_bundle_draft(
 def load_bundle_draft(dealer_id: int):
     ensure_bundle_drafts_table()
     return query_one("SELECT * FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))
+
+
+def clear_bundle_draft(dealer_id: int):
+    ensure_bundle_drafts_table()
+    execute("DELETE FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))

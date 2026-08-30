@@ -1,0 +1,30 @@
+{% if dealer_invoices %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>{{ t('col_invoice_no') }}</th>
+      <th>{{ t('total_amount') }}</th>
+      <th>{{ t('col_date') }}</th>
+      <th>{{ t('delivery_date') }}</th>
+      <th>{{ t('col_aging') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for inv in dealer_invoices %}
+    <tr class="clickable-row" onclick="window.location='{{ url_for('dealers.invoice_detail', dealer_id=dealer.dealer_id, invoice_id=inv.invoices_id) }}'">
+      <td>
+        <a href="{{ url_for('dealers.invoice_detail', dealer_id=dealer.dealer_id, invoice_id=inv.invoices_id) }}">
+          {{ inv.invoice_no }}
+        </a>
+      </td>
+      <td>{{ '%.2f'|format(inv.total_amount) }}</td>
+      <td>{{ inv.invoiced_date }}</td>
+      <td>{{ inv.delivery_date or '—' }}</td>
+      <td>{{ inv.aging_days }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">{{ t('no_dealer_invoices') }}</p>
+{% endif %}

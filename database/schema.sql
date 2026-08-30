@@ -60,6 +60,7 @@ CREATE TABLE invoices (
     cheque_id               INTEGER,
     invoice_no              TEXT    NOT NULL,
     invoiced_date           TEXT    NOT NULL,
+    delivery_date           TEXT,
     credit_period_days      INTEGER NOT NULL,
     total_amount            REAL    NOT NULL,
     location_path           TEXT,

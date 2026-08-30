@@ -8,6 +8,7 @@
   <div class="grid-2">
     <label>{{ t('col_invoice_no') }} <input name="invoice_no" required placeholder="INV-001"></label>
     <label>{{ t('col_date') }} <input type="date" name="invoiced_date" required></label>
+    <label>{{ t('delivery_date') }} <input type="date" name="delivery_date" value="{{ today }}"></label>
     <label>{{ t('credit_period') }} <input type="number" name="credit_period_days" value="{{ default_credit }}"></label>
     <label>{{ t('total_amount') }} <input type="number" step="0.01" name="total_amount" required></label>
     <label>{{ t('dealer') }}
