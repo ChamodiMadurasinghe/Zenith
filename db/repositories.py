@@ -29,6 +29,40 @@ def set_setting(key: str, value: str):
     )
 
 
+MERCHANT_WHATSAPP_PHONE_KEY = "merchant_whatsapp_phone"
+
+
+def get_merchant_whatsapp_phone() -> str:
+    """Shop owner WhatsApp for alerts; app_settings overrides .env."""
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    stored = get_setting(MERCHANT_WHATSAPP_PHONE_KEY, "").strip()
+    if stored:
+        return normalize_whatsapp_phone(stored)
+    env_phone = _env_merchant_whatsapp_phone()
+    return normalize_whatsapp_phone(env_phone) if env_phone else ""
+
+
+def _env_merchant_whatsapp_phone() -> str:
+    import os
+
+    return os.getenv("MERCHANT_WHATSAPP_PHONE", "").strip()
+
+
+def save_merchant_whatsapp_phone(phone: str) -> str:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    normalized = normalize_whatsapp_phone(phone)
+    if not normalized or not normalized.startswith("+"):
+        raise ValueError("invalid phone")
+    set_setting(MERCHANT_WHATSAPP_PHONE_KEY, normalized)
+    return normalized
+
+
+def clear_merchant_whatsapp_phone():
+    execute("DELETE FROM app_settings WHERE setting_key = ?", (MERCHANT_WHATSAPP_PHONE_KEY,))
+
+
 def get_bank_accounts():
     rows = query(
         "SELECT * FROM user_bank_account WHERE user_id = ? ORDER BY user_bank_acc_id",
@@ -308,7 +342,8 @@ def get_pending_verification_invoices(dealer_id: int = None):
         )
     return query(
         f"""SELECT i.*, d.dealer_name,
-                   {display_name} AS display_dealer_name
+                   {display_name} AS display_dealer_name,
+                   json_extract(i.pending_dealer_json, '$.source') AS source
            FROM invoices i
            JOIN dealers d ON d.dealer_id = i.dealer_id
            WHERE i.user_id = ? AND i.is_invoice_verified = 0
@@ -1855,3 +1890,250 @@ def upsert_printer_settings(
             1 if is_active else 0,
         ),
     )
+
+
+# --- WhatsApp local bridge: whitelist, inbound idempotency, unprocessed media ---
+
+
+def ensure_whatsapp_allowed_senders_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS whatsapp_allowed_senders (
+            sender_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phone_e164 TEXT NOT NULL,
+            display_name TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, phone_e164),
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )"""
+    )
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_allowed_senders_user ON whatsapp_allowed_senders(user_id)"
+    )
+
+
+def ensure_inbound_messages_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS inbound_messages (
+            inbound_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wa_msg_id TEXT NOT NULL UNIQUE,
+            sender_phone TEXT,
+            received_at TEXT,
+            location_path TEXT,
+            pipeline_status TEXT NOT NULL DEFAULT 'processing',
+            invoice_id INTEGER,
+            error_message TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+        )"""
+    )
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_inbound_messages_status ON inbound_messages(pipeline_status)"
+    )
+
+
+def ensure_unprocessed_media_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS unprocessed_media_log (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            wa_msg_id TEXT,
+            sender_phone TEXT,
+            location_path TEXT NOT NULL,
+            received_at TEXT,
+            reject_reason TEXT NOT NULL DEFAULT 'not_invoice',
+            classifier_json TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )"""
+    )
+    execute("CREATE INDEX IF NOT EXISTS idx_unprocessed_media_user ON unprocessed_media_log(user_id)")
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_status ON unprocessed_media_log(status)"
+    )
+
+
+def _ensure_whatsapp_bridge_schemas():
+    ensure_whatsapp_allowed_senders_schema()
+    ensure_inbound_messages_schema()
+    ensure_unprocessed_media_schema()
+
+
+def list_allowed_senders():
+    _ensure_whatsapp_bridge_schemas()
+    return query(
+        """SELECT * FROM whatsapp_allowed_senders
+           WHERE user_id = ?
+           ORDER BY display_name, phone_e164""",
+        (Config.USER_ID,),
+    )
+
+
+def get_allowed_sender(sender_id: int):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one(
+        "SELECT * FROM whatsapp_allowed_senders WHERE sender_id = ? AND user_id = ?",
+        (sender_id, Config.USER_ID),
+    )
+
+
+def add_allowed_sender(phone_e164: str, display_name: str | None = None) -> int:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    _ensure_whatsapp_bridge_schemas()
+    phone = normalize_whatsapp_phone(phone_e164)
+    with transaction() as conn:
+        cursor = conn.execute(
+            """INSERT INTO whatsapp_allowed_senders (user_id, phone_e164, display_name)
+               VALUES (?, ?, ?)""",
+            (Config.USER_ID, phone, (display_name or "").strip() or None),
+        )
+        return cursor.lastrowid
+
+
+def update_allowed_sender(
+    sender_id: int,
+    *,
+    display_name: str | None = None,
+    is_active: bool | None = None,
+):
+    _ensure_whatsapp_bridge_schemas()
+    row = get_allowed_sender(sender_id)
+    if not row:
+        return
+    name = row.get("display_name") if display_name is None else display_name
+    active = row.get("is_active") if is_active is None else (1 if is_active else 0)
+    execute(
+        """UPDATE whatsapp_allowed_senders
+           SET display_name = ?, is_active = ?, updated_at = datetime('now')
+           WHERE sender_id = ? AND user_id = ?""",
+        (name, active, sender_id, Config.USER_ID),
+    )
+
+
+def remove_allowed_sender(sender_id: int):
+    execute(
+        "DELETE FROM whatsapp_allowed_senders WHERE sender_id = ? AND user_id = ?",
+        (sender_id, Config.USER_ID),
+    )
+
+
+def is_sender_allowed(phone: str) -> bool:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    _ensure_whatsapp_bridge_schemas()
+    active = query(
+        """SELECT phone_e164 FROM whatsapp_allowed_senders
+           WHERE user_id = ? AND is_active = 1""",
+        (Config.USER_ID,),
+    )
+    if not active:
+        return False
+    normalized = normalize_whatsapp_phone(phone)
+    allowed = {normalize_whatsapp_phone(r["phone_e164"]) for r in active}
+    return normalized in allowed
+
+
+def get_inbound_message(wa_msg_id: str):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one("SELECT * FROM inbound_messages WHERE wa_msg_id = ?", (wa_msg_id,))
+
+
+def begin_inbound_processing(
+    wa_msg_id: str,
+    *,
+    sender_phone: str | None,
+    received_at: str | None,
+    location_path: str | None,
+) -> tuple[str, dict | None]:
+    """Returns ('new', None) or ('duplicate', existing_row)."""
+    _ensure_whatsapp_bridge_schemas()
+    existing = get_inbound_message(wa_msg_id)
+    if existing:
+        return "duplicate", existing
+    with transaction() as conn:
+        conn.execute(
+            """INSERT INTO inbound_messages
+               (wa_msg_id, sender_phone, received_at, location_path, pipeline_status)
+               VALUES (?, ?, ?, ?, 'processing')""",
+            (wa_msg_id, sender_phone, received_at, location_path),
+        )
+    return "new", None
+
+
+def finalize_inbound(
+    wa_msg_id: str,
+    *,
+    status: str,
+    invoice_id: int | None = None,
+    location_path: str | None = None,
+    error_message: str | None = None,
+):
+    _ensure_whatsapp_bridge_schemas()
+    execute(
+        """UPDATE inbound_messages
+           SET pipeline_status = ?, invoice_id = COALESCE(?, invoice_id),
+               location_path = COALESCE(?, location_path),
+               error_message = ?
+           WHERE wa_msg_id = ?""",
+        (status, invoice_id, location_path, error_message, wa_msg_id),
+    )
+
+
+def save_unprocessed_media_log(
+    *,
+    wa_msg_id: str | None,
+    sender_phone: str | None,
+    location_path: str,
+    received_at: str | None,
+    reject_reason: str,
+    classifier_json: str | None = None,
+) -> int:
+    _ensure_whatsapp_bridge_schemas()
+    with transaction() as conn:
+        cursor = conn.execute(
+            """INSERT INTO unprocessed_media_log
+               (user_id, wa_msg_id, sender_phone, location_path, received_at,
+                reject_reason, classifier_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                Config.USER_ID,
+                wa_msg_id,
+                sender_phone,
+                location_path,
+                received_at,
+                reject_reason,
+                classifier_json,
+            ),
+        )
+        return cursor.lastrowid
+
+
+def get_unprocessed_media_pending():
+    _ensure_whatsapp_bridge_schemas()
+    return query(
+        """SELECT * FROM unprocessed_media_log
+           WHERE user_id = ? AND status = 'pending'
+           ORDER BY created_at DESC""",
+        (Config.USER_ID,),
+    )
+
+
+def get_unprocessed_media_item(log_id: int):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one(
+        "SELECT * FROM unprocessed_media_log WHERE log_id = ? AND user_id = ?",
+        (log_id, Config.USER_ID),
+    )
+
+
+def dismiss_unprocessed_media(log_id: int):
+    execute(
+        """UPDATE unprocessed_media_log SET status = 'dismissed'
+           WHERE log_id = ? AND user_id = ?""",
+        (log_id, Config.USER_ID),
+    )
+

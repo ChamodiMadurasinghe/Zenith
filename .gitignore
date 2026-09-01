@@ -8,13 +8,17 @@ database/chroma/
 venv/
 storage/invoices/*
 !storage/invoices/.gitkeep
+data/inbound_queue/*
+!data/inbound_queue/.gitkeep
+whatsapp-bridge/node_modules/
+whatsapp-bridge/.wwebjs_auth/
+whatsapp-bridge/.wwebjs_cache/
 *.egg-info/
 .pytest_cache/
 debug-*.log
 
 storage/webhook_meta.jsonl
 
-# Local tooling / binaries / pitch assets (not part of the app)
 cloudflared.exe
 *.exe
 idealize/

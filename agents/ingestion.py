@@ -1,4 +1,5 @@
 from agents.base import generate_with_image
+from config import Config
 
 SYSTEM = """You are a document extraction agent for a Sri Lankan business.
 The image may be a supplier invoice OR a handwritten/printed cheque.
@@ -16,6 +17,29 @@ total_amount (number), credit_period_days (integer, default 30), line_items (arr
 
 
 def extract_invoice(image_path: str) -> dict:
+    if Config.use_fake_ai():
+        return {
+            "invoice_no": "WA-MOCK-001",
+            "supplier_name": "Mock Supplier Ltd",
+            "supplier_email": "",
+            "supplier_phone": "",
+            "supplier_address": "",
+            "supplier_bank_name": "",
+            "supplier_account_name": "",
+            "supplier_branch": "",
+            "invoiced_date": "2026-08-30",
+            "total_amount": 125000.0,
+            "credit_period_days": 30,
+            "line_items": [
+                {
+                    "item_code": "",
+                    "item_name": "Mock goods",
+                    "item_qty": 1,
+                    "item_price": 125000.0,
+                    "item_discount": 0,
+                }
+            ],
+        }
     return generate_with_image(
         "Extract all invoice fields from this image.",
         image_path,

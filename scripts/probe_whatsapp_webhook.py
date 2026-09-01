@@ -1,16 +1,15 @@
-"""Probe Meta WhatsApp webhook path locally and via public tunnel."""
+﻿"""Probe Meta WhatsApp webhook path locally and via public tunnel."""
 
 import requests
 
 from config import Config
 from db.connection import query
 
-TUNNEL = "https://ears-harold-wanted-edit.trycloudflare.com"
-
 
 def main():
+    base = Config.webhook_public_url()
     r = requests.get(
-        f"{TUNNEL}/webhook/whatsapp",
+        f"{base}/webhook/whatsapp",
         params={
             "hub.mode": "subscribe",
             "hub.verify_token": Config.meta_verify_token(),
@@ -18,7 +17,10 @@ def main():
         },
         timeout=20,
     )
-    print("TUNNEL", r.status_code, r.text)
+    print("WEBHOOK_VERIFY", base, r.status_code, r.text)
+
+    health = requests.get(f"{base}/webhook/whatsapp/health", timeout=20)
+    print("HEALTH", health.status_code, health.text[:200])
 
     rows = query(
         "SELECT invoices_id, invoice_no, total_amount, location_path "
@@ -58,7 +60,7 @@ def main():
             }
         ],
     }
-    r2 = requests.post(f"{TUNNEL}/webhook/whatsapp", json=payload, timeout=60)
+    r2 = requests.post(f"{base}/webhook/whatsapp", json=payload, timeout=60)
     print("PUBLIC_POST", r2.status_code, repr(r2.text[:120]))
 
 

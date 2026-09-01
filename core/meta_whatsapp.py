@@ -1,4 +1,4 @@
-"""Meta WhatsApp Cloud API client (Graph API)."""
+﻿"""Meta WhatsApp Cloud API client (Graph API)."""
 
 from __future__ import annotations
 

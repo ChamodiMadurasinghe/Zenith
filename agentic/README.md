@@ -1,6 +1,6 @@
 # Agentic AI Integration (Sithil)
 
-Multi-agent orchestration layer for ChequeMate. **Sits alongside** existing Zenith code — does not replace `whatsapp_agent.py`, `routes/ingestion.py`, or `agents/*`.
+Multi-agent orchestration layer for ChequeMate. **Sits alongside** existing Zenith code — does not replace `routes/ingestion.py`, the local WhatsApp bridge, or `agents/*`.
 
 ## Entry points
 
@@ -33,31 +33,13 @@ actions = handle_event(event)
 | `adapters/zenith_repository.py` | `db.repositories.get_holidays()` for CBSL dates |
 | `orchestrator/pipeline.py` | PER loop + FSM across 4 agents |
 
-Existing upload/WhatsApp flows continue unchanged unless `USE_AGENTIC_ORCHESTRATOR=true` in `.env`.
+Existing upload flows continue unchanged unless `USE_AGENTIC_ORCHESTRATOR=true` in `.env`.
 
-## WhatsApp Business integration
+## WhatsApp integration (Meta Cloud API)
 
-Set in `.env`:
+WhatsApp intake uses **Meta webhooks** → `/webhook/whatsapp` → `whatsapp_inbox` (see root `README.md`). User taps **Send to AI** on the web app to run Gemini OCR.
 
-```env
-USE_AGENTIC_ORCHESTRATOR=true
-USE_TWILIO_MOCK=false          # live Twilio Business number
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=whatsapp:+94XXXXXXXXX
-MOCK_IMAGE_PATH=storage/invoices/sample.jpg   # local mock only
-```
-
-- Webhook `POST /webhook/whatsapp` routes to `handle_event()` when flag is on
-- Session ID = sender WhatsApp number
-- Text replies: dealer confirm → `DEALER_REPLY`; APPROVE/REJECT → `APPROVAL_DECISION`
-- Trace: `GET /api/sessions/<phone>/trace`
-
-Local mock test:
-
-```bash
-python whatsapp_agent.py
-```
+Optional: Node.js bridge → `POST /api/invoices/ingest` for dev. Optional Twilio when `WHATSAPP_PROVIDER=twilio`.
 
 ## Tests
 

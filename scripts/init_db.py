@@ -154,6 +154,46 @@ MIGRATIONS = [
     )""",
     "ALTER TABLE shop_printer_settings ADD COLUMN cheque_width_mm REAL",
     "ALTER TABLE shop_printer_settings ADD COLUMN cheque_height_mm REAL",
+    """CREATE TABLE IF NOT EXISTS whatsapp_allowed_senders (
+        sender_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        phone_e164 TEXT NOT NULL,
+        display_name TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, phone_e164),
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_whatsapp_allowed_senders_user ON whatsapp_allowed_senders(user_id)",
+    """CREATE TABLE IF NOT EXISTS inbound_messages (
+        inbound_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wa_msg_id TEXT NOT NULL UNIQUE,
+        sender_phone TEXT,
+        received_at TEXT,
+        location_path TEXT,
+        pipeline_status TEXT NOT NULL DEFAULT 'processing',
+        invoice_id INTEGER,
+        error_message TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_inbound_messages_status ON inbound_messages(pipeline_status)",
+    """CREATE TABLE IF NOT EXISTS unprocessed_media_log (
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        wa_msg_id TEXT,
+        sender_phone TEXT,
+        location_path TEXT NOT NULL,
+        received_at TEXT,
+        reject_reason TEXT NOT NULL DEFAULT 'not_invoice',
+        classifier_json TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_user ON unprocessed_media_log(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_status ON unprocessed_media_log(status)",
 ]
 
 

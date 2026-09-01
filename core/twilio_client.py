@@ -1,4 +1,4 @@
-"""Optional Twilio WhatsApp sender (legacy provider)."""
+﻿"""Optional Twilio WhatsApp sender (legacy provider)."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def send_twilio_whatsapp(to_phone: str, body: str):
 
 
 def send_whatsapp_message(to_phone: str, body: str):
-    """Backward-compatible import path — routes through unified sender."""
+    """Backward-compatible import path ÔÇö routes through unified sender."""
     from core.whatsapp_sender import send_whatsapp_message as send
 
     return send(to_phone, body)
