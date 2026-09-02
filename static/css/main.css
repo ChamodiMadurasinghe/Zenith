@@ -298,11 +298,12 @@ input:focus, select:focus, textarea:focus {
   padding: 0.75rem 1rem;
   margin: 0 0 1rem;
   background: #eef3f9;
+  color: var(--text);
   border: 2px solid var(--border);
   border-radius: var(--radius);
   font-size: 1.02rem;
 }
-.list-summary-bar .list-summary-sep { color: #8a96a8; }
+.list-summary-bar .list-summary-sep { color: var(--muted); }
 .list-filter-bar select { min-width: 10rem; }
 .status-paid { color: #1a7f37; font-weight: 700; font-size: 1.15rem; }
 .status-unpaid { color: #c0392b; font-weight: 700; font-size: 1.15rem; }
@@ -1544,6 +1545,7 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .wa-inbox-icon { background: #222833; }
 [data-theme="dark"] .wa-inbox-icon-thumb { background: #141820; }
 [data-theme="dark"] .empty-state { background: #222833; }
+[data-theme="dark"] .list-summary-bar { background: #222833; }
 [data-theme="dark"] .dealer-card:hover,
 [data-theme="dark"] .dealer-card.active { background: #222b3a; }
 [data-theme="dark"] .badge-ready { background: #2d9d5c; color: #fff; border-color: #5ecf8a; }
