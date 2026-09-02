@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ dealer.dealer_name }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<p class="text-muted"><a href="{{ url_for('bundling.bundling_home') }}">&larr; {{ t('back_to_cheques') }}</a></p>
+<div class="hub-page">
+<p class="page-back"><a href="{{ url_for('bundling.bundling_home') }}">&larr; {{ t('back_to_cheques') }}</a></p>
 <h1>{{ dealer.dealer_name }}</h1>
 
-<div class="tab-bar">
+<div class="tab-bar hub-tabs hub-tabs--dealer">
   <a href="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
      class="tab {{ 'active' if active_tab == 'details' }}">{{ t('tab_dealer_details') }}</a>
   <a href="{{ url_for('dealers.invoices', dealer_id=dealer.dealer_id) }}"
@@ -14,7 +15,7 @@
 </div>
 
 {% if active_tab == 'details' %}
-<form class="card" method="post" action="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
+<form class="card hub-tab-card" method="post" action="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
       data-zenith-validate data-check-dealer-exclude="{{ dealer.dealer_id }}">
   <div class="grid-2">
     <label>{{ t('dealer_name') }} <input name="dealer_name" value="{{ dealer_data.dealer_name }}" required></label>
@@ -35,12 +36,13 @@
   <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
 </form>
 {% elif active_tab == 'invoices' %}
-<div class="card">
+<div class="card hub-tab-card">
   {% include 'dealer_invoices.html' %}
 </div>
 {% else %}
 {% include 'dealer_cheques.html' %}
 {% endif %}
+</div>
 {% include '_cheque_detail_modal.html' %}
 {% endblock %}
 {% block scripts %}

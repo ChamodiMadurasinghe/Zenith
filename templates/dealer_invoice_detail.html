@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ invoice.invoice_no }} — {{ dealer.dealer_name }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<p class="text-muted">
+<p class="page-back">
   <a href="{{ url_for('dealers.invoices', dealer_id=dealer.dealer_id) }}">&larr; {{ t('back_to_dealer_invoices') }}</a>
 </p>
 <h1>{{ t('invoice_detail_title') }}: {{ invoice.invoice_no }}</h1>

@@ -10,6 +10,8 @@
   --border: #c8d0dc;
   --radius: 14px;
   --touch-min: 52px;
+  --content-max: 1120px;
+  --hub-max: 1320px;
   --surface-hover: #f3f6fa;
   --surface-hover-accent: #eef3ff;
   --surface-hover-border: #c5d4ff;
@@ -35,7 +37,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem max(1rem, calc((100vw - var(--hub-max)) / 2 + 1rem));
   background: #eef3ff;
   border-bottom: 1px solid var(--border);
 }
@@ -99,7 +101,7 @@ body {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
-  padding: 0.85rem 1.5rem;
+  padding: 0.85rem max(1rem, calc((100vw - var(--hub-max)) / 2 + 1rem));
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -196,7 +198,43 @@ body {
 }
 .link-btn:hover { color: var(--danger); }
 
-.container { max-width: 960px; margin: 0 auto; padding: 1.5rem 1.25rem 2.5rem; }
+.container {
+  width: 100%;
+  max-width: min(var(--content-max), calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 2.5rem;
+}
+.container:has(.hub-page) {
+  max-width: min(var(--hub-max), calc(100vw - 2rem));
+}
+.page-back { margin: 0 0 0.65rem; font-size: 1rem; line-height: 1.4; }
+.page-back a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.page-back a:hover { color: var(--primary-hover); text-decoration: underline; }
+.hub-page h1 { margin-bottom: 1rem; }
+.tab-bar.hub-tabs {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+.tab-bar.hub-tabs--dealer { grid-template-columns: repeat(3, 1fr); }
+.tab-bar.hub-tabs--bank { grid-template-columns: repeat(4, 1fr); }
+.tab-bar.hub-tabs .tab {
+  text-align: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: 0.75rem 0.65rem;
+  font-size: 1.05rem;
+}
+@media (max-width: 700px) {
+  .tab-bar.hub-tabs--dealer,
+  .tab-bar.hub-tabs--bank { grid-template-columns: 1fr; }
+}
+.hub-tab-card.card { margin-bottom: 0; }
+.hub-tab-card .stat-card { border: 2px solid var(--border); }
 .page-header { margin-bottom: 1.5rem; }
 .page-header-row {
   display: flex;
@@ -220,6 +258,7 @@ h3 { font-size: 1.2rem; font-weight: 700; }
   font-size: 1.05rem;
   line-height: 1.55;
 }
+.help-tip-inset { margin-top: 0; margin-bottom: 1rem; }
 
 .card {
   background: var(--card);
@@ -286,9 +325,8 @@ input:focus, select:focus, textarea:focus {
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
 .list-filter-stack {
   margin: 0.5rem 0 1rem;
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
   background: #f4f6f9;
   box-shadow: none;
@@ -496,7 +534,8 @@ input:focus, select:focus, textarea:focus {
 }
 .pill-danger { background: #f5c2c0; color: #7a1f1a; }
 .pill-warning { background: #f0d78c; color: #6a4a00; }
-.text-muted { color: #666; font-size: 0.9rem; }
+.text-muted { color: var(--muted); font-size: 0.9rem; }
+[data-theme="dark"] .text-muted { color: var(--muted); }
 #chat-mic.listening { background: #b71c1c; color: #fff; border-color: #8b0000; }
 .chat-expand-fab {
   float: right;
@@ -832,11 +871,9 @@ body:has(#cheques-layout) #zenith-guide {
 .layout-split.chat-collapsed { grid-template-columns: 1fr; }
 .layout-split.chat-collapsed .chat-panel { display: none; }
 
-/* Cheques page needs more width so invoices + chat are not cramped */
-.container:has(#cheques-layout) {
-  max-width: 1280px;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+/* Cheques page — same hub width as other dealer tabs; split layout inside */
+#cheques-layout {
+  min-width: 0;
 }
 
 #cheques-layout #bundle-workspace {
@@ -867,7 +904,6 @@ body:has(#cheques-layout) #zenith-guide {
   .layout-split { grid-template-columns: 1fr; gap: 1.25rem; }
   .layout-split .chat-panel { order: -1; max-width: none; position: static; justify-self: stretch; }
   .layout-split.chat-collapsed .chat-panel { display: none; }
-  .container:has(#cheques-layout) { max-width: 960px; }
 }
 
 .bundle-editor-toolbar {
@@ -1731,8 +1767,9 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .list-filter-stack {
   background: #141820;
   border-color: #3a4354;
-  border-left-color: var(--primary);
 }
+[data-theme="dark"] .page-back a { color: var(--primary); }
+[data-theme="dark"] .page-back a:hover { color: var(--primary-hover); }
 [data-theme="dark"] .list-filter-top {
   background: rgba(255, 255, 255, 0.03);
   border-color: #3a4354;
