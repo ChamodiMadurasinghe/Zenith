@@ -5,6 +5,7 @@
 <div class="login-card">
   <h1>{{ t('app_name') }}</h1>
   <p class="subtitle">{{ t('app_subtitle') }}</p>
+  <p class="login-demo-hint">{{ t('login_demo_password') }}</p>
   <form method="post" action="{{ url_for('auth.login') }}" data-zenith-validate>
     <label for="password">{{ t('password') }}</label>
     <div class="password-field">

@@ -968,6 +968,13 @@ body:has(#cheques-layout) #zenith-guide {
 .login-card h1 { color: var(--primary); margin-bottom: 0.25rem; font-size: 2rem; }
 .login-card label { text-align: left; margin-bottom: 0.35rem; }
 .login-card .btn-primary { width: 100%; margin-top: 0.5rem; }
+.login-demo-hint {
+  margin: 0 0 1.25rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
 .password-field {
   position: relative;
   margin-bottom: 0.85rem;
