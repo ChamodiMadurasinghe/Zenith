@@ -60,7 +60,12 @@ body {
   align-items: stretch;
   gap: 0.6rem;
   width: 100%;
+  max-width: min(var(--content-max), 100%);
+  margin: 0 auto;
   min-width: 0;
+}
+body:has(.hub-page) .main-nav {
+  max-width: min(var(--hub-max), 100%);
 }
 .main-nav-link {
   display: inline-flex;
