@@ -1,0 +1,38 @@
+---
+description: Zenith core architecture, lifecycle, and preservation rules
+alwaysApply: true
+---
+
+# Zenith / ChequeMate — Core
+
+Flask + SQLite app for Sri Lankan SMBs: invoice intake → human verify → cheque bundling → cash flow → print.
+
+## Lifecycle
+
+1. **Intake** — web upload or WhatsApp inbox → **Send to AI**
+2. **Agent 1** — Gemini OCR (`agents/ingestion.py`)
+3. **Agent 2** — anomaly rules before verify (`agents/anomaly.py`)
+4. **Human verify** — `routes/ingestion.py` → `is_invoice_verified = 1`
+5. **Agent 3** — Gemini strategist (`agents/strategist.py`) → `proposed_cheques`
+6. **Guardrails** — CBSL holidays, ceiling (`core/guardrails.py`)
+7. **Agent 4** — Gemini reviewer, plain language (`agents/reviewer.py`)
+8. **Commit** — `cheque`, allocations, `deposit_timetable`
+
+## AI stack
+
+| Provider | Use |
+|----------|-----|
+| Gemini | OCR (Agent 1), strategist (Agent 3), reviewer (Agent 4) |
+| OpenAI | Bundling chat assistant, analyst, guide |
+| Python only | Guardrails, liquidity dates, fallback `compute_bundles` |
+
+## Preservation (do not break)
+
+- Cheque printing, dealer/invoice filters, bundling drag-and-drop, cash flow
+- WhatsApp inbox tab + manual **Send to AI** (Meta inbox-v2)
+- **Extend** routes; do not wholesale-replace `routes/ingestion.py` or `whatsapp_agent.py`
+
+## Docs
+
+- Workflow: `docs/WORKFLOW.md`
+- Schema: `database/DATABASE.md`

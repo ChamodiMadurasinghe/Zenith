@@ -2,9 +2,9 @@
 INSERT INTO user (user_name, email, password_hash) VALUES
     ('yohan_merchant', 'yohan@hardware.lk', 'pending');
 
-INSERT INTO user_bank_account (user_id, account_name, nickname, available_balance, branch_name, bank_name) VALUES
-    (1, 'Yohan Hardware Pvt Ltd', 'Main Hardware Checking', 2500000.00, 'Pettah Branch',       'Commercial Bank of Ceylon'),
-    (1, 'Yohan Hardware Pvt Ltd', 'Reserve Account',        850000.00,  'Colombo Fort Branch', 'Hatton National Bank');
+INSERT INTO user_bank_account (user_id, account_name, nickname, available_balance, overdraft_limit, branch_name, bank_name) VALUES
+    (1, 'Yohan Hardware Pvt Ltd', 'Main Hardware Checking', 2500000.00, 500000.00, 'Pettah Branch',       'Commercial Bank of Ceylon'),
+    (1, 'Yohan Hardware Pvt Ltd', 'Reserve Account',        850000.00,  0.00,      'Colombo Fort Branch', 'Hatton National Bank');
 
 INSERT INTO dealers (dealer_name, dealer_email, dealer_telno, dealer_address, dealer_strictness, casual_days, impossible_days) VALUES
     ('ABD Traders',   'abd@traders.lk',    '0771234567', 'Colombo',  'High',   3, 'Sunday'),

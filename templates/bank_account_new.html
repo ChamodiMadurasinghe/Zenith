@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ t('add_bank_account') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<p class="text-muted"><a href="{{ url_for('cash_flow.cash_flow') }}">&larr; {{ t('back_to_accounts') }}</a></p>
+<h1>{{ t('add_bank_account') }}</h1>
+{% include '_bank_account_form.html' %}
+{% endblock %}

@@ -1,4 +1,4 @@
-"""Full context payload for the SME liquidity reviewer (Agent 2)."""
+"""Full context payload for Agent 4 (AI strategy reviewer)."""
 
 from datetime import date, timedelta
 
@@ -110,13 +110,14 @@ def build_reviewer_context(
     ceiling_lkr: float,
     validation_issues: list | None = None,
     trigger: str = "compute",
+    strategist_context: dict | None = None,
 ) -> dict:
     dealer = repo.get_dealer(dealer_id) or {}
     bank = repo.get_dealer_preferred_bank(dealer_id)
     summary = repo.get_dealer_invoice_summary(dealer_id)
     ready = repo.get_verified_unassigned_invoices(dealer_id)
     pending = repo.get_pending_verification_invoices(dealer_id)
-    committed = repo.get_committed_cheque_bundles(dealer_id)
+    committed = repo.get_committed_cheque_bundles(dealer_id, include_archived=True)
 
     merchant_acc_id = repo.paying_account_id_for_dealer(dealer_id)
     merchant_acc = repo.get_bank_account(merchant_acc_id)
@@ -139,6 +140,7 @@ def build_reviewer_context(
     return {
         "trigger": trigger,
         "today": today.isoformat(),
+        "agent3_strategy": strategist_context or {},
         "dealer": {
             "dealer_id": dealer.get("dealer_id"),
             "dealer_name": dealer.get("dealer_name"),
@@ -157,6 +159,13 @@ def build_reviewer_context(
         "merchant_bank": {
             "bank_name": merchant_acc.get("bank_name") if merchant_acc else None,
             "available_balance_lkr": float(merchant_acc.get("available_balance") or 0) if merchant_acc else None,
+            "overdraft_limit_lkr": float(merchant_acc.get("overdraft_limit") or 0) if merchant_acc else None,
+            "usable_funds_lkr": (
+                float(merchant_acc.get("available_balance") or 0)
+                + float(merchant_acc.get("overdraft_limit") or 0)
+            )
+            if merchant_acc
+            else None,
         },
         "ceiling_lkr": ceiling_lkr,
         "invoice_summary": summary,

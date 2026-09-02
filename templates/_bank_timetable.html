@@ -1,0 +1,134 @@
+<h2>{{ t('cheque_timetable_title') }}</h2>
+<p class="text-muted">{{ t('cheque_timetable_help') }} {{ t('cheque_click_hint') }}</p>
+{% if report.cheque_timetable %}
+<div class="table-scroll">
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>{{ t('cheque_number') }}</th>
+      <th>{{ t('dealer') }}</th>
+      <th>{{ t('cheque_date') }}</th>
+      <th>{{ t('col_fund_by') }}</th>
+      <th>{{ t('col_amount') }}</th>
+      <th>{{ t('balance_after_clearance') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ch in report.cheque_timetable %}
+    <tr class="clickable-row {% if ch.exceeds_overdraft %}row-danger{% elif ch.in_overdraft or ch.below_buffer %}row-warning{% endif %}"
+        {% if ch.cheque_id %}data-cheque-id="{{ ch.cheque_id }}" tabindex="0"{% endif %}>
+      <td>{{ ch.cheque_no }}</td>
+      <td>{{ ch.dealer_name or '—' }}</td>
+      <td>{{ ch.cheque_date }}</td>
+      <td><strong>{{ ch.clearance_date or '—' }}</strong></td>
+      <td>Rs. {{ "{:,.2f}".format(ch.amount or 0) }}</td>
+      <td>
+        Rs. {{ "{:,.2f}".format(ch.running_balance) }}
+        {% if ch.exceeds_overdraft %}
+        <span class="pill pill-danger">{{ t('exceeds_overdraft') }}</span>
+        {% elif ch.in_overdraft %}
+        <span class="pill pill-warning">{{ t('in_overdraft') }}</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p>{{ t('no_cheques_this_account') }}</p>
+{% endif %}
+
+<h2>{{ t('timetable_title') }}</h2>
+<p class="text-muted">{{ t('timetable_help') }}</p>
+{% if report.liquidity_schedule %}
+<table class="data-table" id="liquidity-timetable">
+  <thead>
+    <tr>
+      <th>{{ t('col_stated_date') }}</th>
+      <th>{{ t('col_true_settlement') }}</th>
+      <th>{{ t('col_fund_by') }}</th>
+      <th>{{ t('col_amount') }}</th>
+      <th>{{ t('col_days_gained') }}</th>
+      <th>{{ t('col_interbank') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in report.liquidity_schedule %}
+    <tr>
+      <td>{{ row.Stated_Date }}</td>
+      <td>{{ row.True_Settlement_Date }}</td>
+      <td><strong>{{ row.Target_Funding_Date }}</strong></td>
+      <td>{{ "{:,.2f}".format(row.Total_Amount) }}</td>
+      <td>{{ row.Days_Gained_Total }}</td>
+      <td>{{ t('yes') if row.Is_Interbank else t('no') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>{{ t('no_pending_cheques') }}</p>
+{% endif %}
+
+<h2>{{ t('timeline_60') }}</h2>
+{% if report.timeline %}
+<table class="data-table">
+  <thead><tr><th>{{ t('col_date') }}</th><th>{{ t('col_event') }}</th><th>{{ t('col_change') }}</th><th>{{ t('col_balance') }}</th></tr></thead>
+  <tbody>
+    {% for ev in report.timeline %}
+    <tr class="{% if ev.exceeds_overdraft %}row-danger{% elif ev.in_overdraft or ev.below_buffer %}row-warning{% endif %}">
+      <td>{{ ev.event_date }}</td>
+      <td>{{ ev.label }}</td>
+      <td>{{ "{:+,.2f}".format(ev.amount_delta) }}</td>
+      <td>
+        Rs. {{ "{:,.2f}".format(ev.running_balance) }}
+        {% if ev.exceeds_overdraft %}
+        <span class="pill pill-danger">{{ t('exceeds_overdraft') }}</span>
+        {% elif ev.in_overdraft %}
+        <span class="pill pill-warning">{{ t('in_overdraft') }}</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>{{ t('no_timeline') }}</p>
+{% endif %}
+
+<h2>{{ t('cheque_history_title') }}</h2>
+<p class="text-muted">{{ t('cheque_click_hint') }}</p>
+{% set filter_action = url_for('cash_flow.account_timetable', account_id=selected_account_id) %}
+{% set reset_url = filter_action %}
+{% include '_cheque_filter_bar.html' %}
+{% set summary_title = t('cheque_list_summary_title') %}
+{% set summary_noun = t('list_summary_cheques') %}
+{% include '_list_summary_bar.html' %}
+{% if written_cheques %}
+<div class="table-scroll">
+<table class="data-table" id="written-cheques-table">
+  <thead>
+    <tr>
+      <th>{{ t('col_cheque_no') }}</th>
+      <th>{{ t('col_stated_date') }}</th>
+      <th>{{ t('col_clearance') }}</th>
+      <th>{{ t('col_amount') }}</th>
+      <th>{{ t('dealer') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ch in written_cheques %}
+    <tr class="clickable-row" data-cheque-id="{{ ch.cheque_id }}" tabindex="0">
+      <td>{{ ch.cheque_no }}</td>
+      <td>{{ ch.cheque_date }}</td>
+      <td><strong>{{ ch.expected_clearance_date or ch.predicted_clearance_date or '—' }}</strong></td>
+      <td>Rs. {{ "{:,.2f}".format(ch.amount or ch.amount_in_numerals or 0) }}</td>
+      <td>{{ ch.dealer_name or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">{{ t('cheque_filter_empty') }}</p>
+{% endif %}

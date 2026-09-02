@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
@@ -8,8 +9,10 @@ from werkzeug.utils import secure_filename
 
 from config import Config
 from core.auth import login_required
+from core.dates import format_date
 from core.i18n import flash_t
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup
+from core.whatsapp_intake import extract_image_to_pending_invoice
 from db import repositories as repo
 
 ingestion_bp = Blueprint("ingestion", __name__)
@@ -49,9 +52,11 @@ def _parse_items_from_form():
 
 
 def _parse_invoice_data_from_form(location_path=None):
+    delivery_raw = (request.form.get("delivery_date") or "").strip()
     return {
         "invoice_no": (request.form.get("invoice_no") or "").strip(),
         "invoiced_date": request.form["invoiced_date"],
+        "delivery_date": delivery_raw or None,
         "credit_period_days": request.form["credit_period_days"],
         "total_amount": request.form["total_amount"],
         "location_path": location_path,
@@ -119,6 +124,49 @@ def _anomalies_from_invoice(invoice: dict) -> list[dict]:
     return parsed.get("anomalies") or []
 
 
+def _audit_from_invoice(invoice: dict) -> dict | None:
+    raw = invoice.get("pending_dealer_json")
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return parsed.get("audit")
+
+
+def _run_agent2_audit(
+    extracted: dict,
+    dealer_id: int | None,
+    *,
+    exclude_invoice_id: int | None = None,
+) -> tuple[list[dict], dict]:
+    from agents.anomaly import audit_invoice, check_invoice_anomalies
+
+    try:
+        audit = audit_invoice(
+            extracted, dealer_id, exclude_invoice_id=exclude_invoice_id
+        )
+        anomalies = check_invoice_anomalies(
+            extracted, dealer_id, exclude_invoice_id=exclude_invoice_id
+        )
+    except Exception:
+        audit = {
+            "status": "GOOD_TO_GO",
+            "risk_level": "LOW",
+            "remark": "Automatic checks could not run — please review manually.",
+            "findings": [],
+            "chat_messages": [
+                {
+                    "role": "agent2",
+                    "content": "I could not run automatic checks — please review this invoice manually.",
+                }
+            ],
+        }
+        anomalies = []
+    return anomalies, audit
+
+
 @ingestion_bp.route("/uploads/<path:filename>")
 @login_required
 def serve_upload(filename):
@@ -179,13 +227,9 @@ def upload():
 
     supplier = (extracted.get("supplier_name") or "").strip()
     dealer = repo.find_dealer_by_name(supplier) if supplier else None
-    anomalies = []
-    try:
-        from agents.anomaly import check_invoice_anomalies
-
-        anomalies = check_invoice_anomalies(extracted, dealer["dealer_id"] if dealer else None)
-    except Exception:
-        anomalies = []
+    anomalies, audit = _run_agent2_audit(
+        extracted, dealer["dealer_id"] if dealer else None
+    )
     invoice_setup = dealer_setup_from_extraction(extracted)
     dealer_setup = None
 
@@ -198,12 +242,16 @@ def upload():
             dealer_setup = invoice_setup
 
     _drafts()[draft_id] = {
-        "extracted": extracted,
+        "extracted": {
+            **extracted,
+            "delivery_date": extracted.get("delivery_date") or format_date(date.today()),
+        },
         "location_path": f"storage/invoices/{filename}",
         "dealer_id": dealer["dealer_id"] if dealer else None,
         "dealer_setup": dealer_setup,
         "new_dealer": dealer is None and bool(supplier),
         "anomalies": anomalies,
+        "audit": audit,
     }
     session.modified = True
 
@@ -270,10 +318,12 @@ def review(draft_id):
         location_path=draft["location_path"],
         image_url=_image_url(draft["location_path"]),
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+        today=format_date(date.today()),
         is_upload_review=True,
         user_bank_accounts=accounts,
         dealer_bank_data={"default_user_bank_acc_id": default_acc},
         anomalies=draft.get("anomalies") or [],
+        audit=draft.get("audit"),
     )
 
 
@@ -311,40 +361,6 @@ def verify(draft_id):
     return redirect(url_for("ingestion.dashboard"))
 
 
-@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/extract", methods=["POST"])
-@login_required
-def extract_whatsapp_inbox(inbox_id):
-    item = repo.get_whatsapp_inbox_item(inbox_id)
-    if not item or item.get("status") != "pending":
-        flash_t("flash_whatsapp_inbox_missing", "error")
-        return redirect(url_for("ingestion.dashboard"))
-
-    location_path = item.get("location_path") or ""
-    try:
-        from core.whatsapp_intake import extract_image_to_pending_invoice
-
-        invoice_id = extract_image_to_pending_invoice(
-            location_path,
-            sender_phone=item.get("sender_phone"),
-        )
-        repo.mark_whatsapp_inbox_extracted(inbox_id, invoice_id)
-        flash_t("flash_whatsapp_extracted", "success")
-        return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
-    except Exception as exc:
-        flash_t("flash_vision_unavailable", "error", error=str(exc))
-        return redirect(url_for("ingestion.dashboard"))
-
-
-@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/dismiss", methods=["POST"])
-@login_required
-def dismiss_whatsapp_inbox(inbox_id):
-    item = repo.get_whatsapp_inbox_item(inbox_id)
-    if item and item.get("status") == "pending":
-        repo.dismiss_whatsapp_inbox(inbox_id)
-        flash_t("flash_whatsapp_dismissed", "success")
-    return redirect(url_for("ingestion.dashboard"))
-
-
 @ingestion_bp.route("/invoice/<int:invoice_id>/verify", methods=["GET", "POST"])
 @login_required
 def verify_invoice(invoice_id):
@@ -357,7 +373,6 @@ def verify_invoice(invoice_id):
 
     pending_supplier_id = repo.get_pending_supplier_dealer_id()
     dealer_setup = _dealer_setup_from_invoice(invoice)
-    anomalies = _anomalies_from_invoice(invoice)
     new_dealer = invoice["dealer_id"] == pending_supplier_id
 
     items = repo.get_invoice_items(invoice_id)
@@ -375,10 +390,20 @@ def verify_invoice(invoice_id):
         "invoice_no": invoice["invoice_no"],
         "supplier_name": (dealer_setup or {}).get("dealer_name") or invoice.get("dealer_name") or "",
         "invoiced_date": invoice["invoiced_date"],
+        "delivery_date": invoice.get("delivery_date") or "",
         "total_amount": invoice["total_amount"],
         "credit_period_days": invoice["credit_period_days"],
         "line_items": line_items,
     }
+
+    dealer_for_audit = invoice["dealer_id"] if not new_dealer else None
+    if dealer_for_audit == pending_supplier_id:
+        dealer_for_audit = None
+    anomalies, audit = _run_agent2_audit(
+        extracted,
+        int(dealer_for_audit) if dealer_for_audit else None,
+        exclude_invoice_id=invoice_id,
+    )
 
     if request.method == "POST" and request.form.get("action") == "create_dealer":
         if not request.form.get("confirm_dealer"):
@@ -450,6 +475,7 @@ def verify_invoice(invoice_id):
         user_bank_accounts=repo.get_bank_accounts(),
         dealer_bank_data={"default_user_bank_acc_id": _default_user_bank_acc_id()},
         anomalies=anomalies,
+        audit=audit,
     )
 
 
@@ -478,7 +504,43 @@ def manual_invoice():
         "manual_invoice.html",
         dealers=dealers,
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+        today=format_date(date.today()),
     )
+
+
+@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/extract", methods=["POST"])
+@login_required
+def extract_whatsapp_inbox(inbox_id):
+    item = repo.get_whatsapp_inbox_item(inbox_id)
+    if not item or item.get("status") != "pending":
+        flash_t("flash_whatsapp_inbox_missing", "error")
+        return redirect(url_for("ingestion.dashboard"))
+
+    location_path = item.get("location_path") or ""
+    received_at = (item.get("received_at") or "").strip()
+    delivery_date = received_at[:10] if len(received_at) >= 10 else None
+    try:
+        invoice_id = extract_image_to_pending_invoice(
+            location_path,
+            sender_phone=item.get("sender_phone"),
+            delivery_date=delivery_date,
+        )
+        repo.mark_whatsapp_inbox_extracted(inbox_id, invoice_id)
+        flash_t("flash_whatsapp_extracted", "success")
+        return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
+    except Exception as exc:
+        flash_t("flash_vision_unavailable", "error", error=str(exc))
+        return redirect(url_for("ingestion.dashboard"))
+
+
+@ingestion_bp.route("/whatsapp-inbox/<int:inbox_id>/dismiss", methods=["POST"])
+@login_required
+def dismiss_whatsapp_inbox(inbox_id):
+    item = repo.get_whatsapp_inbox_item(inbox_id)
+    if item and item.get("status") == "pending":
+        repo.dismiss_whatsapp_inbox(inbox_id)
+        flash_t("flash_whatsapp_dismissed", "success")
+    return redirect(url_for("ingestion.dashboard"))
 
 
 @ingestion_bp.route("/api/check-dealer-name")

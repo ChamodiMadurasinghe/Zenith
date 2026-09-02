@@ -44,9 +44,10 @@ def extract_image_to_pending_invoice(
     *,
     local_path: str | None = None,
     sender_phone: str | None = None,
+    delivery_date: str | None = None,
 ) -> int:
     """Run Agent 1 (Gemini) on a stored image and save as pending verification."""
-    from agents.anomaly import check_invoice_anomalies
+    from agents.anomaly import audit_invoice, check_invoice_anomalies
     from agents.ingestion import extract_invoice
 
     image_path = local_path or str(Config.UPLOAD_FOLDER / location_path.split("/")[-1])
@@ -61,8 +62,14 @@ def extract_image_to_pending_invoice(
     dealer_id = dealer["dealer_id"] if dealer else repo.get_pending_supplier_dealer_id()
 
     try:
+        audit = audit_invoice(extracted, dealer["dealer_id"] if dealer else None)
         anomalies = check_invoice_anomalies(extracted, dealer["dealer_id"] if dealer else None)
     except Exception:
+        audit = {
+            "status": "GOOD_TO_GO",
+            "risk_level": "LOW",
+            "remark": "Automatic checks could not run — please review manually.",
+        }
         anomalies = []
 
     items = extracted["line_items"] or [
@@ -77,13 +84,16 @@ def extract_image_to_pending_invoice(
     pending_payload = {
         **dealer_setup,
         "anomalies": anomalies,
+        "audit": audit,
         "whatsapp_sender": sender_phone,
         "source": "whatsapp",
     }
+    delivery = (delivery_date or "").strip() or format_date(date.today())
     return repo.save_pending_invoice(
         {
             "invoice_no": extracted["invoice_no"],
             "invoiced_date": extracted["invoiced_date"],
+            "delivery_date": delivery,
             "credit_period_days": extracted["credit_period_days"],
             "total_amount": extracted["total_amount"],
             "location_path": location_path,

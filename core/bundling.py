@@ -20,12 +20,22 @@ def _merchant_bank_name(dealer_id: int | None = None) -> str:
 
 def enrich_bundle_liquidity(bundle: dict, dealer_id: int, holidays: set) -> dict:
     dealer_bank = repo.get_dealer_preferred_bank(dealer_id)
+    acc_id = bundle.get("paying_account_id") or repo.paying_account_id_for_dealer(dealer_id)
+    acc = repo.get_bank_account(int(acc_id)) if acc_id else None
+    merchant_bank = (acc or {}).get("bank_name") or ""
     interbank = is_interbank(
-        _merchant_bank_name(dealer_id),
+        merchant_bank,
         dealer_bank["bank_name"] if dealer_bank else "",
     )
+    if bundle.get("clearing_type") == "INTERBANK":
+        interbank = True
+    elif bundle.get("clearing_type") == "INTRABANK":
+        interbank = False
     dates = apply_liquidity_dates(bundle["cheque_date"], holidays, is_interbank=interbank)
     bundle.update(dates)
+    bundle["is_interbank"] = interbank
+    if acc_id:
+        bundle["paying_account_id"] = int(acc_id)
     return bundle
 
 

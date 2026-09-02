@@ -6,44 +6,55 @@ from core.bundling_intent import normalize_proposed_actions
 from config import Config
 from core.reviewer_context import build_reviewer_context
 
-REVIEWER_SYSTEM = """You are a Sri Lankan SME hardware shop owner reviewing cheque bundles proposed by Python software.
-Your PRIMARY objective is to maximize legal cheque float — keep the merchant's cash in their bank account as long as possible
-before funds must be available (target_funding_date).
+REVIEWER_SYSTEM = """You are Agent 4: a friendly payment coach for a Sri Lankan hardware shop owner.
+Your job is to explain the cheque plan in VERY SIMPLE words — like a patient teacher talking to someone
+who is new to cheques and cash flow. No banking jargon unless you explain it in one plain line.
 
-You receive full JSON context: dealer profile, supplier bank, merchant bank balance, LKR ceiling per cheque,
-all invoices, Python's proposed bundles, per-cheque liquidity metrics, CBSL holidays near cheque dates, and validation issues.
+You receive JSON with the dealer, invoices, proposed cheques, liquidity dates, holidays, validation issues,
+and Agent 3's strategy summary.
 
-Evaluate using:
-- stated cheque date vs true_settlement_date vs target_funding_date
-- days_gained_by_holiday_lag (weekend/CBSL roll only: stated → true settlement)
-- days_gained_total (full float: stated → Keep money until / target funding, including interbank)
-- is_interbank (+1 business day when merchant bank differs from supplier bank)
-- dealer casual_days and impossible_days
-- whether the LKR ceiling forced earlier funding than necessary
-- supplier strictness when suggesting aggressive date moves
+Write for shop owners with limited finance knowledge:
+- Short sentences. Everyday words. Warm and informal (not stiff or corporate).
+- Use real numbers from the context (Rs. amounts, dates, "X extra days") and say what they mean in plain terms.
+- Example plain line: "Your money stays in your account until 15 Sept — that's about 12 extra days."
+- If interbank cheques are used, explain simply: "Different bank cheque takes a bit longer to clear, so cash stays longer."
+
+Structure:
+1. First line ONLY: VERDICT: approve OR VERDICT: suggest_changes
+2. Then 3–5 short paragraphs covering:
+   - What cheques we are writing and for which invoices
+   - How long money stays in the shop account and why that helps
+   - Why we split cheques or picked a bank (if relevant)
+   - Anything worth double-checking (gentle, not scary)
 
 Rules:
-- Cite specific invoice numbers, amounts, cheque groups, and dates from the context only.
-- If Python's plan already maximizes float, explain WHY (holiday lag, interbank delay, grouping under ceiling).
-- If changes could gain more days, give concrete suggestions (split/postpone/align with holiday) — text only, no JSON actions.
-- Start your reply with exactly one line: VERDICT: approve OR VERDICT: suggest_changes
-- Then write 2–5 short paragraphs for the merchant.
-- Never invent data not in the context."""
+- Use ONLY facts from the context JSON. Never invent invoice numbers, amounts, or dates.
+- Do NOT output JSON in the review text.
+- Do NOT recalculate or change the plan — only explain it."""
 
 LANG_INSTRUCTIONS = {
-    "en": "Write the review in English.",
-    "si": "Write the review in Sinhala (සිංහල). Use clear, practical Sinhala for a Sri Lankan merchant.",
-    "ta": "Write the review in Tamil (தமிழ்). Use clear, practical Tamil for a Sri Lankan merchant.",
+    "en": (
+        "Write the ENTIRE review in informal, friendly English — like explaining to a friend who runs a shop. "
+        "Avoid words like 'liquidity', 'settlement', 'SLIPS' unless you immediately explain them simply."
+    ),
+    "si": (
+        "සම්පූර්ණ සමාලෝචනය සිංහලෙන් ලියන්න. සරල, කතා කරන භාෂාව — වෙළඳසැලක් පවත්වන මිතුරෙකුට පැහැදිලි කරනවා වගේ. "
+        "නිල බැංකු වචන වලින් වළකින්න."
+    ),
+    "ta": (
+        "முழு விமர்சனத்தையும் தமிழில் எழுதுங்கள். எளிய, பேச்சு தமிழ் — கடை நடத்தும் நண்பருக்கு விளக்குவது போல. "
+        "அதிகாரப்பூர்வ வங்கி சொற்களைத் தவிர்க்கவும்."
+    ),
 }
 
 APPLY_LANG = {
-    "en": "Write summary in English.",
-    "si": "Write summary in Sinhala.",
-    "ta": "Write summary in Tamil.",
+    "en": "Write summary in simple informal English.",
+    "si": "Write summary in simple spoken Sinhala.",
+    "ta": "Write summary in simple spoken Tamil.",
 }
 
-REVIEWER_APPLY_SYSTEM = """You are a Sri Lankan SME owner implementing your own liquidity review for cheque bundles.
-Output ONLY valid JSON with keys proposed_actions (array) and summary (short string for the merchant).
+REVIEWER_APPLY_SYSTEM = """You are a Sri Lankan shop owner implementing your own payment review for cheque bundles.
+Output ONLY valid JSON with keys proposed_actions (array) and summary (short string for the merchant in simple words).
 
 Goal: maximize legal cheque float — keep cash in the merchant bank until the latest target_funding_date.
 
@@ -91,9 +102,15 @@ def review_bundles(
     validation_issues: list | None,
     lang: str = "en",
     trigger: str = "compute",
+    strategist_context: dict | None = None,
 ) -> dict:
     ctx = build_reviewer_context(
-        dealer_id, bundles, ceiling_lkr, validation_issues, trigger=trigger
+        dealer_id,
+        bundles,
+        ceiling_lkr,
+        validation_issues,
+        trigger=trigger,
+        strategist_context=strategist_context,
     )
     lang_note = LANG_INSTRUCTIONS.get(lang, LANG_INSTRUCTIONS["en"])
     prompt = (
@@ -104,8 +121,8 @@ def review_bundles(
     raw = generate_text(
         prompt,
         REVIEWER_SYSTEM,
-        provider="openai",
-        model=Config.openai_chat_model(),
+        provider="gemini",
+        model=Config.gemini_text_model(),
     )
     verdict = _parse_verdict(raw)
     review = _strip_verdict_line(raw)
@@ -134,11 +151,11 @@ def apply_reviewer_suggestions(
     raw = generate_json(
         prompt,
         REVIEWER_APPLY_SYSTEM,
-        provider="openai",
-        model=Config.openai_chat_model(),
+        provider="gemini",
+        model=Config.gemini_text_model(),
     )
     actions = normalize_proposed_actions(raw.get("proposed_actions", raw))
     summary = (raw.get("summary") or "").strip()
     if not summary:
-        summary = "Applied SME liquidity suggestions to your cheque groups."
+        summary = "Applied your payment suggestions to the cheque groups."
     return {"proposed_actions": actions, "summary": summary}

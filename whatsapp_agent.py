@@ -1,4 +1,4 @@
-"""Headless WhatsApp webhook for invoice/cheque intake (Meta Cloud API default)."""
+﻿"""Headless WhatsApp webhook for invoice/cheque intake (Meta Cloud API default)."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from core.dates import format_date
 from core.meta_whatsapp import (
     download_media as download_meta_media,
     extract_inbound_messages,
-    normalize_whatsapp_phone,
     validate_meta_signature,
     verify_webhook_challenge,
 )
+from core.whatsapp_utils import normalize_whatsapp_phone
 from core.whatsapp_conversation import handle_text_reply
 from core.whatsapp_sender import send_whatsapp_message
 from db import repositories as repo
@@ -165,7 +165,7 @@ def build_liquidity_reply(
             f"You safely gain {days_gained} extra {day_word} of free cash holding."
         ),
         "",
-        "Saved as pending verification — open web app to confirm details.",
+        "Saved as pending verification ÔÇö open web app to confirm details.",
     ]
     if anomalies:
         lines.append("")
@@ -255,6 +255,11 @@ def process_whatsapp_document(
 
 
 def _sender_allowed(sender: str) -> bool:
+    active_db = [
+        row for row in repo.list_allowed_senders() if int(row.get("is_active") or 0)
+    ]
+    if active_db:
+        return repo.is_sender_allowed(sender)
     allowed = Config.whatsapp_allowed_numbers()
     if not allowed:
         return True

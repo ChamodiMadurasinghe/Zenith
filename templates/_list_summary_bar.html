@@ -1,0 +1,10 @@
+{% set list_summary = list_summary|default({'count': 0, 'total': 0, 'average': 0}) %}
+{% set summary_noun = summary_noun|default(t('list_summary_items')) %}
+<div class="list-summary-bar" role="status">
+  <strong>{{ summary_title|default(t('list_summary_title')) }}</strong>
+  <span>{{ t('list_summary_total') }}: Rs. {{ "{:,.2f}".format(list_summary.total or 0) }}</span>
+  <span class="list-summary-sep">|</span>
+  <span>{{ t('list_summary_count') }}: {{ list_summary.count or 0 }} {{ summary_noun }}</span>
+  <span class="list-summary-sep">|</span>
+  <span>{{ t('list_summary_avg') }}: Rs. {{ "{:,.2f}".format(list_summary.average or 0) }}</span>
+</div>

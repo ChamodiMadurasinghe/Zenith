@@ -57,6 +57,21 @@ def hydrate_bundle(slim: dict) -> dict:
     bundle = {k: slim[k] for k in _BUNDLE_KEYS if k in slim}
     bundle["invoices"] = invoices
     bundle["total_lkr"] = slim.get("total_lkr") or sum(float(i["total_amount"]) for i in invoices)
+    # Re-enrich clearance dates if slim lost them (cookie trim / older drafts).
+    if bundle.get("cheque_date") and not bundle.get("predicted_clearance_date"):
+        dealer_id = None
+        if invoices:
+            dealer_id = invoices[0].get("dealer_id")
+        if dealer_id:
+            from core.bundling import enrich_bundle_liquidity
+
+            enrich_bundle_liquidity(bundle, int(dealer_id), repo.get_holidays())
+        else:
+            bundle["predicted_clearance_date"] = (
+                bundle.get("target_funding_date")
+                or bundle.get("true_settlement_date")
+                or bundle["cheque_date"]
+            )
     return bundle
 
 
@@ -93,6 +108,8 @@ def load_bundle_state(session, dealer_id: int, default_ceiling: float = 500000) 
             "validation_issues": session_state.get("validation_issues", []),
             "allow_exceed_ceiling": session_state.get("allow_exceed_ceiling", False),
             "pending_review": session_state.get("pending_review"),
+            "strategy_summary": session_state.get("strategy_summary"),
+            "proposed_cheques": session_state.get("proposed_cheques"),
         }
 
     if db_draft:
@@ -116,6 +133,8 @@ def load_bundle_state(session, dealer_id: int, default_ceiling: float = 500000) 
         "validation_issues": [],
         "allow_exceed_ceiling": False,
         "pending_review": session_state.get("pending_review"),
+        "strategy_summary": session_state.get("strategy_summary"),
+        "proposed_cheques": session_state.get("proposed_cheques"),
     }
 
 
@@ -128,10 +147,14 @@ def save_bundle_state(
     validation_issues: list | None = None,
     allow_exceed_ceiling: bool = False,
     pending_review: str | None = None,
+    strategy_summary: str | None = None,
+    proposed_cheques: list | None = None,
 ):
     existing = session.setdefault("bundle_state", {}).get(str(dealer_id), {})
     allow_exceed = allow_exceed_ceiling or existing.get("allow_exceed_ceiling", False)
     review_flag = pending_review if pending_review is not None else existing.get("pending_review")
+    strategy_text = strategy_summary if strategy_summary is not None else existing.get("strategy_summary")
+    cheques_plan = proposed_cheques if proposed_cheques is not None else existing.get("proposed_cheques")
     issues = (
         validation_issues
         if validation_issues is not None
@@ -151,6 +174,8 @@ def save_bundle_state(
         "validation_issues": issues,
         "allow_exceed_ceiling": allow_exceed,
         "pending_review": review_flag,
+        "strategy_summary": strategy_text,
+        "proposed_cheques": cheques_plan,
     }
     session.modified = True
     repo.save_bundle_draft(

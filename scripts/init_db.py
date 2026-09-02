@@ -15,6 +15,7 @@ load_dotenv(ROOT / ".env")
 DB_PATH = ROOT / os.getenv("DATABASE_PATH", "database/invoice_cheque.db")
 SCHEMA = ROOT / "database" / "schema.sql"
 SEED = ROOT / "database" / "seed.sql"
+SEED_CHEQUES = ROOT / "database" / "seed_cheques.sql"
 
 
 MIGRATIONS = [
@@ -121,6 +122,78 @@ MIGRATIONS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_cheque ON cheque_invoice_allocation(cheque_id)",
     "CREATE INDEX IF NOT EXISTS idx_cheque_alloc_invoice ON cheque_invoice_allocation(invoices_id)",
+    "ALTER TABLE invoices ADD COLUMN delivery_date TEXT",
+    "ALTER TABLE user_bank_account ADD COLUMN overdraft_limit REAL NOT NULL DEFAULT 0",
+    """CREATE TABLE IF NOT EXISTS bank_cheque_templates (
+        bank_code VARCHAR(20) PRIMARY KEY,
+        bank_name VARCHAR(100) NOT NULL,
+        cheque_width_mm REAL NOT NULL DEFAULT 177.8,
+        cheque_height_mm REAL NOT NULL DEFAULT 88.9,
+        date_x REAL NOT NULL,
+        date_y REAL NOT NULL,
+        date_letter_spacing REAL DEFAULT 3.5,
+        payee_x REAL NOT NULL,
+        payee_y REAL NOT NULL,
+        amount_words_x REAL NOT NULL,
+        amount_words_y REAL NOT NULL,
+        amount_words_max_width REAL DEFAULT 110.0,
+        amount_figures_x REAL NOT NULL,
+        amount_figures_y REAL NOT NULL,
+        crossing_x REAL DEFAULT 15.0,
+        crossing_y REAL DEFAULT 75.0
+    )""",
+    """CREATE TABLE IF NOT EXISTS shop_printer_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_bank_acc_id INTEGER REFERENCES user_bank_account(user_bank_acc_id),
+        bank_code VARCHAR(20) NOT NULL REFERENCES bank_cheque_templates(bank_code),
+        offset_x_mm REAL DEFAULT 0.0,
+        offset_y_mm REAL DEFAULT 0.0,
+        feed_orientation TEXT DEFAULT 'VERTICAL' CHECK (feed_orientation IN ('VERTICAL', 'HORIZONTAL')),
+        is_active INTEGER DEFAULT 1,
+        UNIQUE(user_bank_acc_id, bank_code)
+    )""",
+    "ALTER TABLE shop_printer_settings ADD COLUMN cheque_width_mm REAL",
+    "ALTER TABLE shop_printer_settings ADD COLUMN cheque_height_mm REAL",
+    """CREATE TABLE IF NOT EXISTS whatsapp_allowed_senders (
+        sender_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        phone_e164 TEXT NOT NULL,
+        display_name TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(user_id, phone_e164),
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_whatsapp_allowed_senders_user ON whatsapp_allowed_senders(user_id)",
+    """CREATE TABLE IF NOT EXISTS inbound_messages (
+        inbound_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wa_msg_id TEXT NOT NULL UNIQUE,
+        sender_phone TEXT,
+        received_at TEXT,
+        location_path TEXT,
+        pipeline_status TEXT NOT NULL DEFAULT 'processing',
+        invoice_id INTEGER,
+        error_message TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_inbound_messages_status ON inbound_messages(pipeline_status)",
+    """CREATE TABLE IF NOT EXISTS unprocessed_media_log (
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        wa_msg_id TEXT,
+        sender_phone TEXT,
+        location_path TEXT NOT NULL,
+        received_at TEXT,
+        reject_reason TEXT NOT NULL DEFAULT 'not_invoice',
+        classifier_json TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_user ON unprocessed_media_log(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_status ON unprocessed_media_log(status)",
 ]
 
 
@@ -178,7 +251,13 @@ def migrate_db(conn: sqlite3.Connection):
         )
     except sqlite3.OperationalError:
         pass
+    _seed_cheque_templates(conn)
     conn.commit()
+
+
+def _seed_cheque_templates(conn: sqlite3.Connection):
+    if SEED_CHEQUES.exists():
+        conn.executescript(SEED_CHEQUES.read_text(encoding="utf-8"))
 
 
 def init_db(force_recreate: bool = True):
@@ -190,6 +269,7 @@ def init_db(force_recreate: bool = True):
         if force_recreate or not DB_PATH.exists():
             conn.executescript(SCHEMA.read_text(encoding="utf-8"))
             conn.executescript(SEED.read_text(encoding="utf-8"))
+            _seed_cheque_templates(conn)
             password = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
             conn.execute(
                 "UPDATE user SET password_hash = ? WHERE user_id = 1",
@@ -208,6 +288,39 @@ def init_db(force_recreate: bool = True):
             print(f"Database migrated at {DB_PATH}")
     finally:
         conn.close()
+
+    # Ensure seed/committed cheques have allocation + cash-flow timetable rows
+    try:
+        from db import repositories as repo
+        from db.connection import query, execute
+
+        missing = query(
+            """SELECT i.invoices_id, i.cheque_id, i.total_amount
+               FROM invoices i
+               WHERE i.cheque_id IS NOT NULL
+                 AND NOT EXISTS (
+                   SELECT 1 FROM cheque_invoice_allocation a
+                   WHERE a.cheque_id = i.cheque_id AND a.invoices_id = i.invoices_id
+                 )"""
+        )
+        for row in missing:
+            execute(
+                """INSERT INTO cheque_invoice_allocation
+                   (cheque_id, invoices_id, amount, part_index, part_count)
+                   VALUES (?, ?, ?, 1, 1)""",
+                (row["cheque_id"], row["invoices_id"], row["total_amount"]),
+            )
+        for row in query("SELECT cheque_id FROM cheque"):
+            inv = query(
+                "SELECT dealer_id FROM invoices WHERE cheque_id = ? LIMIT 1",
+                (row["cheque_id"],),
+            )
+            repo.sync_timetable_from_cheque(
+                row["cheque_id"], inv[0]["dealer_id"] if inv else None
+            )
+        print("Cheque allocations + deposit timetable synced")
+    except Exception as exc:
+        print(f"Warning: could not sync cheque timetable ({exc})")
 
 
 if __name__ == "__main__":

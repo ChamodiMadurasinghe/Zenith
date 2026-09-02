@@ -1,4 +1,4 @@
-"""Bridge Twilio WhatsApp webhook ↔ agentic orchestrator."""
+"""Bridge local WhatsApp intake ↔ agentic orchestrator (legacy agentic path)."""
 
 from __future__ import annotations
 

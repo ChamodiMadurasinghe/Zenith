@@ -18,6 +18,14 @@ def _client():
     return OpenAI(api_key=api_key)
 
 
+def get_openai_client():
+    """Return OpenAI client or None if unavailable."""
+    try:
+        return _client()
+    except RuntimeError:
+        return None
+
+
 def openai_text(prompt: str, system: str = "", model: str | None = None) -> str:
     client = _client()
     model_name = Config.resolve_openai_model(model, Config.openai_chat_model())

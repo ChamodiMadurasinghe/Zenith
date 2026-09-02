@@ -1,0 +1,39 @@
+---
+description: Meta WhatsApp webhook, inbox-v2, and optional Node bridge
+globs: whatsapp_agent.py,**/whatsapp*,whatsapp-bridge/**
+alwaysApply: false
+---
+
+# WhatsApp Intake
+
+## Production (Meta Cloud API)
+
+1. `POST /webhook/whatsapp` — download image, **save to `whatsapp_inbox` only**
+2. No Gemini on webhook receive (`inbox-v2`, `gemini_on_whatsapp_receive: false`)
+3. User opens **Invoices → WhatsApp photos** → **Send to AI**
+4. `POST /whatsapp-inbox/<id>/extract` → `core/whatsapp_intake.py` → pending verify
+
+## Whitelist
+
+- Primary: DB table `whatsapp_allowed_senders` via `routes/whatsapp_settings.py`
+- Fallback: `WHATSAPP_ALLOWED_NUMBERS` env if DB list empty
+- Check in `whatsapp_agent.py` `_sender_allowed()`
+
+## Key files
+
+- `whatsapp_agent.py` — webhook verify + receive
+- `core/meta_whatsapp.py` — Graph API media + outbound
+- `routes/ingestion.py` — inbox extract/dismiss routes
+- `core/whatsapp_sender.py` — Meta/Twilio send
+
+## Optional dev bridge
+
+- `whatsapp-bridge/` → `POST /api/invoices/ingest` with `X-Zenith-Bridge-Token`
+- `core/ingestion_pipeline.py` — auto classify + OCR (skips web inbox)
+- Not required for Meta production
+
+## Rules
+
+- Do not auto-run OCR on Meta webhook POST
+- Extend inbox routes; do not remove WhatsApp tab from `templates/upload.html`
+- Tunnel: `cloudflared` → `https://<host>/webhook/whatsapp`

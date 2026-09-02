@@ -1,12 +1,68 @@
+from datetime import date
+from pathlib import Path
+
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
 from config import Config
 from core.auth import login_required
 from core.bundle_session import load_bundle_state
+from core.dates import format_date, parse_date
 from core.i18n import flash_t
 from db import repositories as repo
 
 dealers_bp = Blueprint("dealers", __name__)
+
+
+def _image_url(location_path: str | None) -> str | None:
+    if not location_path:
+        return None
+    filename = Path(location_path).name
+    return url_for("ingestion.serve_upload", filename=filename)
+
+
+def _aging_days(invoice: dict) -> int:
+    raw = (invoice.get("delivery_date") or invoice.get("invoiced_date") or "").strip()
+    if not raw:
+        return 0
+    try:
+        d = parse_date(str(raw)[:10])
+    except ValueError:
+        return 0
+    return max(0, (date.today() - d).days)
+
+
+def _parse_invoice_form(location_path=None) -> dict:
+    delivery_raw = (request.form.get("delivery_date") or "").strip()
+    return {
+        "invoice_no": (request.form.get("invoice_no") or "").strip(),
+        "invoiced_date": request.form["invoiced_date"],
+        "delivery_date": delivery_raw or None,
+        "credit_period_days": request.form["credit_period_days"],
+        "total_amount": request.form["total_amount"],
+        "location_path": location_path,
+    }
+
+
+def _parse_items_from_form() -> list:
+    codes = request.form.getlist("item_code")
+    names = request.form.getlist("item_name")
+    qtys = request.form.getlist("item_qty")
+    prices = request.form.getlist("item_price")
+    items = []
+    for i in range(len(names)):
+        name = (names[i] or "").strip()
+        if not name:
+            continue
+        items.append(
+            {
+                "item_code": (codes[i] if i < len(codes) else "") or "",
+                "item_name": name,
+                "item_qty": int(qtys[i] if i < len(qtys) and qtys[i] else 1),
+                "item_price": float(prices[i] if i < len(prices) and prices[i] else 0),
+                "item_discount": 0,
+            }
+        )
+    return items
 
 
 def _dealer_from_form(form) -> dict:
@@ -134,18 +190,92 @@ def details(dealer_id):
 def cheques(dealer_id):
     dealer = _get_dealer_or_404(dealer_id)
     state = load_bundle_state(session, dealer_id)
+    cheque_filter = repo.written_cheque_filters_from_args(request.args)
+    committed = repo.get_committed_cheque_bundles(
+        dealer_id, **repo.written_cheque_repo_kwargs(cheque_filter)
+    )
     return render_template(
         "dealer_hub.html",
         dealer=dealer,
         active_tab="cheques",
         invoices=repo.get_verified_unassigned_invoices(dealer_id),
         pending_invoices=repo.get_pending_verification_invoices(dealer_id),
-        committed_cheques=repo.get_committed_cheque_bundles(dealer_id),
+        committed_cheques=committed,
+        cheque_filter=cheque_filter,
+        list_summary=repo.list_amount_summary(committed, "amount_in_numerals"),
         summary=repo.get_dealer_invoice_summary(dealer_id),
         bundles=state["bundles"],
         ceiling_lkr=state["ceiling_lkr"],
         chat_history=state["chat_history"],
         validation_issues=state["validation_issues"],
         pending_review=state.get("pending_review"),
+        strategy_summary=state.get("strategy_summary"),
         use_fake_ai=Config.use_fake_ai(),
+    )
+
+
+@dealers_bp.route("/dealers/<int:dealer_id>/invoices")
+@login_required
+def invoices(dealer_id):
+    dealer = _get_dealer_or_404(dealer_id)
+    invoice_filter = repo.invoice_filters_from_args(request.args)
+    rows = repo.get_dealer_invoices(dealer_id, **repo.invoice_repo_kwargs(invoice_filter))
+    for row in rows:
+        row["aging_days"] = _aging_days(row)
+    return render_template(
+        "dealer_hub.html",
+        dealer=dealer,
+        active_tab="invoices",
+        dealer_invoices=rows,
+        invoice_filter=invoice_filter,
+        list_summary=repo.list_amount_summary(rows, "total_amount"),
+    )
+
+
+@dealers_bp.route(
+    "/dealers/<int:dealer_id>/invoices/<int:invoice_id>",
+    methods=["GET", "POST"],
+)
+@login_required
+def invoice_detail(dealer_id, invoice_id):
+    dealer = _get_dealer_or_404(dealer_id)
+    invoice = repo.get_invoice(invoice_id)
+    if not invoice or int(invoice["dealer_id"]) != int(dealer_id):
+        abort(404)
+    if invoice.get("user_id") is not None and int(invoice["user_id"]) != int(Config.USER_ID):
+        abort(404)
+
+    if request.method == "POST":
+        data = _parse_invoice_form(invoice.get("location_path"))
+        if not data["invoice_no"]:
+            flash_t("flash_invoice_no_required", "error")
+            return redirect(
+                url_for("dealers.invoice_detail", dealer_id=dealer_id, invoice_id=invoice_id)
+            )
+        existing = repo.find_invoice_by_no_and_dealer(
+            data["invoice_no"], dealer_id, exclude_invoice_id=invoice_id
+        )
+        if existing:
+            flash_t("flash_invoice_duplicate", "error", invoice_no=data["invoice_no"])
+            return redirect(
+                url_for("dealers.invoice_detail", dealer_id=dealer_id, invoice_id=invoice_id)
+            )
+        items = _parse_items_from_form()
+        try:
+            repo.update_invoice_record(invoice_id, data, items, dealer_id)
+            flash_t("flash_invoice_updated", "success")
+        except Exception:
+            flash_t("flash_invoice_update_failed", "error")
+        return redirect(url_for("dealers.invoices", dealer_id=dealer_id))
+
+    items = repo.get_invoice_items(invoice_id)
+    return render_template(
+        "dealer_invoice_detail.html",
+        dealer=dealer,
+        invoice=invoice,
+        items=items,
+        image_url=_image_url(invoice.get("location_path")),
+        default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
+        aging_days=_aging_days(invoice),
+        today=format_date(date.today()),
     )

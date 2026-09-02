@@ -7,6 +7,8 @@
 <div class="tab-bar">
   <a href="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"
      class="tab {{ 'active' if active_tab == 'details' }}">{{ t('tab_dealer_details') }}</a>
+  <a href="{{ url_for('dealers.invoices', dealer_id=dealer.dealer_id) }}"
+     class="tab {{ 'active' if active_tab == 'invoices' }}">{{ t('tab_dealer_invoices') }}</a>
   <a href="{{ url_for('dealers.cheques', dealer_id=dealer.dealer_id) }}"
      class="tab {{ 'active' if active_tab == 'cheques' }}">{{ t('tab_dealer_cheques') }}</a>
 </div>
@@ -32,9 +34,14 @@
   {% include '_dealer_bank_fields.html' %}
   <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
 </form>
+{% elif active_tab == 'invoices' %}
+<div class="card">
+  {% include 'dealer_invoices.html' %}
+</div>
 {% else %}
 {% include 'dealer_cheques.html' %}
 {% endif %}
+{% include '_cheque_detail_modal.html' %}
 {% endblock %}
 {% block scripts %}
 {% if active_tab == 'cheques' %}
@@ -47,5 +54,6 @@
 </script>
 <script src="{{ url_for('static', filename='js/bundling.js') }}?v=18"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}?v=17"></script>
+<script src="{{ url_for('static', filename='js/cheque_detail.js') }}?v=1"></script>
 {% endif %}
 {% endblock %}

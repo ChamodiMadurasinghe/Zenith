@@ -25,6 +25,11 @@ Self-correction:
 - If a tool returns ok=false, issues[], or day_limit verdict LIMIT_BREACH_WARNING, explain the constraint in plain language and propose a concrete alternative tool call (different date, split, move invoice, raise allow_exceed only if user said so).
 - To split one invoice into multiple cheque payments, call split_invoice with num_parts>=2 or amounts=[...]. Parts appear as invoice · 1, · 2 (red). Legacy split_invoice without num_parts puts the whole invoice alone on a cheque.
 
+Historical patterns (recommendations only):
+- Call get_dealer_historical_payment_patterns when the user asks for recommendations or before proposing a bundling strategy.
+- Pattern text is advisory only — always validate dates, ceilings, and funds via mutating tools + guardrails.
+- When citing aging from patterns: repeat bundled average vs individual invoice records exactly as returned. Never invent an average for unbundled invoices.
+
 Style:
 - Be concise. Cite invoice numbers and cheque group numbers from tool output / context.
 - Always reply with helpful text for the merchant after tool use.
@@ -166,12 +171,33 @@ def run_bundling_assistant(
             "Ask me to group invoices, move an invoice, or check day-limit risk."
         )
 
+    # Surface dry_run previews into the UI/session draft so Preview → Save works
+    # without requiring a second "apply" turn. pending_commit still reflects explicit apply.
+    out_bundles = (
+        ctx.last_preview if ctx.last_preview is not None else ctx.bundles
+    )
+    out_issues = list(ctx.validation_issues)
+    if (
+        ctx.last_preview is not None
+        and not ctx.pending_commit
+        and not out_issues
+    ):
+        # Issues from the last dry_run live only in the tool payload; recompute lightly.
+        from core.guardrails import collect_bundle_issues
+
+        out_issues = collect_bundle_issues(
+            {"bundles": out_bundles},
+            ctx.dealer_id,
+            ctx.ceiling_lkr,
+            allow_exceed_ceiling=ctx.allow_exceed_ceiling,
+        )
+
     return {
         "reply": reply,
-        "bundles": ctx.bundles,
-        "validation_issues": list(ctx.validation_issues),
+        "bundles": out_bundles,
+        "validation_issues": out_issues,
         "allow_exceed_ceiling": ctx.allow_exceed_ceiling,
-        "pending_commit": ctx.pending_commit,
+        "pending_commit": ctx.pending_commit or bool(ctx.last_preview),
         "tool_trace": _tool_trace(result.get("intermediate_steps") or []),
         "proposed_actions": [],  # tools already applied into ctx when dry_run=False / apply
     }

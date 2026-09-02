@@ -5,9 +5,10 @@ from flask import Blueprint, current_app, jsonify, redirect, render_template, re
 from config import Config
 from core.amounts import amount_to_words
 from core.auth import login_required
+from core.cash_flow import simulate_extra_cheques
 from core.i18n import flash_t, get_lang, translate
 from core.bundle_session import hydrate_bundles, load_bundle_state, save_bundle_state, slim_bundles
-from core.bundling import build_bundles_from_assignments, compute_bundles
+from core.bundling import build_bundles_from_assignments
 from core.bundling_intent import infer_bundling_actions, normalize_proposed_actions
 from core.guardrails import apply_proposed_actions, collect_bundle_issues, validate_bundle_state
 from core.bundle_orchestrator import auto_review_until_approved
@@ -17,12 +18,12 @@ bundling_bp = Blueprint("bundling", __name__)
 
 
 def _chat_error_hint(err: str) -> str:
-    if "OPENAI_API_KEY not set" in err:
-        return "Agent unavailable. Set OPENAI_API_KEY in .env and restart the app."
     if "GEMINI_API_KEY not set" in err:
-        return "Vision agent unavailable. Set GEMINI_API_KEY in .env for invoice upload."
+        return "Agent unavailable. Set GEMINI_API_KEY in .env and restart the app."
+    if "OPENAI_API_KEY not set" in err:
+        return "Bundling chat unavailable. Set OPENAI_API_KEY in .env for the assistant."
     if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
-        return "Invalid OpenAI API key. Replace OPENAI_API_KEY in .env and restart."
+        return "Invalid API key. Check GEMINI_API_KEY (and OPENAI_API_KEY for chat) in .env and restart."
     err_l = err.lower()
     # Billing / prepaid balance (often confused with ChatGPT Plus credits).
     if (
@@ -66,6 +67,8 @@ def _save_state(
     validation_issues: list | None = None,
     allow_exceed_ceiling: bool = False,
     pending_review: str | None = None,
+    strategy_summary: str | None = None,
+    proposed_cheques: list | None = None,
 ):
     save_bundle_state(
         session,
@@ -76,6 +79,8 @@ def _save_state(
         validation_issues,
         allow_exceed_ceiling,
         pending_review=pending_review,
+        strategy_summary=strategy_summary,
+        proposed_cheques=proposed_cheques,
     )
 
 
@@ -96,7 +101,7 @@ def bundling_home():
 @bundling_bp.route("/bundling/<int:dealer_id>")
 @login_required
 def bundling_dealer(dealer_id):
-    return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+    return redirect(url_for("dealers.invoices", dealer_id=dealer_id))
 
 
 @bundling_bp.route("/bundling/<int:dealer_id>/compute", methods=["POST"])
@@ -104,11 +109,22 @@ def bundling_dealer(dealer_id):
 def compute(dealer_id):
     invoice_ids = [int(x) for x in request.form.getlist("invoice_ids")]
     ceiling = float(request.form.get("ceiling_lkr", 500000))
+    # If nothing ticked (common after AI already grouped), use all ready invoices.
+    if not invoice_ids:
+        invoice_ids = [
+            int(inv["invoices_id"])
+            for inv in repo.get_verified_unassigned_invoices(dealer_id)
+        ]
     if not invoice_ids:
         flash_t("flash_select_invoice", "error")
         return redirect(_dealer_cheques_url(dealer_id))
 
-    bundles = compute_bundles(dealer_id, invoice_ids, ceiling)
+    from agents.strategist import propose_cheque_strategy, proposed_cheques_to_bundles
+
+    strategy = propose_cheque_strategy(dealer_id, invoice_ids, ceiling)
+    bundles = strategy.get("bundles") or proposed_cheques_to_bundles(
+        dealer_id, strategy.get("proposed_cheques") or [], invoice_ids
+    )
     state = _load_state(dealer_id)
     validation_issues = collect_bundle_issues({"bundles": bundles}, dealer_id, ceiling)
     _save_state(
@@ -118,9 +134,20 @@ def compute(dealer_id):
         state["chat_history"],
         validation_issues,
         pending_review="compute",
+        strategy_summary=strategy.get("strategy_summary"),
+        proposed_cheques=strategy.get("proposed_cheques"),
     )
     flash_t("flash_bundling_complete", "success", count=len(bundles))
     return redirect(_dealer_cheques_url(dealer_id))
+
+
+@bundling_bp.route("/api/cheques/<int:cheque_id>/detail", methods=["GET"])
+@login_required
+def cheque_detail(cheque_id):
+    detail = repo.get_cheque_detail(cheque_id)
+    if not detail:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(detail)
 
 
 @bundling_bp.route("/api/chat/bundling/<int:dealer_id>/health", methods=["GET"])
@@ -352,6 +379,12 @@ def bundle_review(dealer_id):
         )
         lang = get_lang()
 
+        state = _load_state(dealer_id)
+        strategist_context = {
+            "strategy_summary": state.get("strategy_summary"),
+            "proposed_cheques": state.get("proposed_cheques"),
+        }
+
         try:
             if Config.use_fake_ai():
                 from agents.mock import mock_bundle_review
@@ -363,7 +396,13 @@ def bundle_review(dealer_id):
                 from agents.reviewer import review_bundles
 
                 result = review_bundles(
-                    dealer_id, bundles, ceiling, validation_issues, lang, trigger
+                    dealer_id,
+                    bundles,
+                    ceiling,
+                    validation_issues,
+                    lang,
+                    trigger,
+                    strategist_context=strategist_context,
                 )
         except Exception as e:
             err = str(e)
@@ -674,11 +713,30 @@ def preview(dealer_id):
     }
     session.modified = True
     dealer = repo.get_dealer(dealer_id)
+    extra_cheques = [
+        {
+            "amount": b["total_lkr"],
+            "clearance_date": (
+                b.get("predicted_clearance_date")
+                or b.get("target_funding_date")
+                or b.get("true_settlement_date")
+                or b.get("cheque_date")
+            ),
+            "cheque_date": b.get("cheque_date"),
+            "label": f"New cheque ({b.get('cheque_date')})",
+        }
+        for b in previews
+    ]
+    account_projections = {
+        int(acc["user_bank_acc_id"]): simulate_extra_cheques(int(acc["user_bank_acc_id"]), extra_cheques)
+        for acc in accounts
+    }
     return render_template(
         "cheque_preview.html",
         bundles=previews,
         dealer=dealer,
         accounts=accounts,
+        account_projections=account_projections,
         default_user_bank_acc_id=dealer.get("default_user_bank_acc_id") if dealer else None,
         validation_issues=validation_issues,
         warnings_acknowledged=bool(validation_issues and acknowledge),
@@ -693,19 +751,47 @@ def commit():
         flash_t("flash_no_cheques", "error")
         return redirect(url_for("bundling.bundling_home"))
 
-    bundles = hydrate_bundles(pending["bundles"])
+    dealer_id = int(pending.get("dealer_id") or 0)
+    bundles = hydrate_bundles(pending.get("bundles") or [])
+    bundles = [b for b in bundles if b.get("invoices")]
+    if not bundles:
+        flash_t("flash_no_cheques", "error")
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
+
     bank_raw = (request.form.get("user_bank_acc_id") or "").strip()
     if not bank_raw:
         flash_t("flash_select_paying_account", "error")
-        return redirect(url_for("bundling.bundling_home"))
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
     bank_acc_id = int(bank_raw)
     if not repo.get_bank_account(bank_acc_id):
         flash_t("flash_bank_account_missing", "error")
-        return redirect(url_for("bundling.bundling_home"))
+        return redirect(
+            url_for("dealers.cheques", dealer_id=dealer_id)
+            if dealer_id
+            else url_for("bundling.bundling_home")
+        )
+
     cheques = []
     invoice_map = {}
     for i, b in enumerate(bundles):
-        cheque_no = request.form.get(f"cheque_no_{i}", f"DRAFT-{i+1}")
+        clearance = (
+            b.get("predicted_clearance_date")
+            or b.get("target_funding_date")
+            or b.get("true_settlement_date")
+            or b.get("cheque_date")
+        )
+        if not b.get("cheque_date") or not clearance:
+            flash_t("flash_no_cheques", "error")
+            return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+        cheque_no = (request.form.get(f"cheque_no_{i}") or "").strip() or f"DRAFT-{i+1}"
         cheques.append(
             {
                 "user_bank_acc_id": bank_acc_id,
@@ -713,7 +799,7 @@ def commit():
                 "cheque_date": b["cheque_date"],
                 "amount_in_words": amount_to_words(b["total_lkr"]),
                 "amount_in_numerals": b["total_lkr"],
-                "predicted_clearance_date": b["predicted_clearance_date"],
+                "predicted_clearance_date": clearance,
             }
         )
         invoice_map[i] = [
@@ -726,21 +812,41 @@ def commit():
             for inv in b["invoices"]
         ]
 
-    repo.save_cheques(cheques, invoice_map)
+    try:
+        repo.save_cheques(cheques, invoice_map)
+    except Exception:
+        current_app.logger.exception("Cheque commit failed")
+        flash_t("flash_cheques_commit_failed", "error")
+        return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+
     session.pop("pending_cheques", None)
-    _bundle_session().pop(str(pending["dealer_id"]), None)
+    _bundle_session().pop(str(dealer_id), None)
+    try:
+        repo.clear_bundle_draft(dealer_id)
+    except Exception:
+        current_app.logger.exception("Failed to clear bundle draft after commit")
     session.modified = True
     flash_t("flash_cheques_committed", "success")
 
+    def refresh_patterns():
+        try:
+            from core.vector_store import upsert_dealer_pattern
+
+            upsert_dealer_pattern(dealer_id)
+        except Exception:
+            current_app.logger.exception("Dealer pattern vector refresh failed")
+
+    threading.Thread(target=refresh_patterns, daemon=True).start()
+
     def run_analyst():
         try:
-            from agents.analyst import generate_report
+            from agents.analyst import build_report_markdown
 
             metrics = repo.get_analytics_metrics()
-            report = generate_report(metrics)
+            report = build_report_markdown(metrics)
             repo.save_analyst_report(report)
         except Exception:
-            pass
+            current_app.logger.exception("Background analyst report failed")
 
     threading.Thread(target=run_analyst, daemon=True).start()
-    return redirect(url_for("analytics.analytics"))
+    return redirect(url_for("dealers.cheques", dealer_id=dealer_id))

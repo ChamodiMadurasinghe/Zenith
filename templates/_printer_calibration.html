@@ -1,0 +1,44 @@
+{% set cal = printer_calibration | default({'offset_x_mm': 0, 'offset_y_mm': 0, 'feed_orientation': 'VERTICAL'}) %}
+<fieldset class="printer-calibration-section card card-nested"
+          id="printer-calibration"
+          data-account-id="{{ selected_account_id }}"
+          data-offset-x="{{ cal.offset_x_mm }}"
+          data-offset-y="{{ cal.offset_y_mm }}"
+          data-feed-orientation="{{ cal.feed_orientation }}">
+  <legend><strong>{{ t('printer_setup_title') }}</strong></legend>
+  <ol class="printer-setup-steps muted">
+    <li>{{ t('printer_step_1') }}</li>
+    <li>{{ t('printer_step_2') }}</li>
+    <li>{{ t('printer_step_3') }}</li>
+  </ol>
+
+  <div class="printer-offset-readout">
+    <span id="printer-offset-x-label">{{ t('printer_offset_x') }}: <strong id="printer-offset-x-value">+0.0</strong> mm</span>
+    <span id="printer-offset-y-label">{{ t('printer_offset_y') }}: <strong id="printer-offset-y-value">+0.0</strong> mm</span>
+  </div>
+
+  <label>{{ t('printer_feed_orientation') }}
+    <select id="printer-feed-orientation">
+      <option value="VERTICAL" {% if cal.feed_orientation == 'VERTICAL' %}selected{% endif %}>{{ t('printer_feed_vertical') }}</option>
+      <option value="HORIZONTAL" {% if cal.feed_orientation == 'HORIZONTAL' %}selected{% endif %}>{{ t('printer_feed_horizontal') }}</option>
+    </select>
+  </label>
+
+  <div class="printer-arrow-pad" aria-label="{{ t('printer_setup_title') }}">
+    <span></span>
+    <button type="button" class="btn btn-secondary printer-arrow-btn" id="printer-shift-up" title="{{ t('printer_shift_up') }}">&#9650;</button>
+    <span></span>
+    <button type="button" class="btn btn-secondary printer-arrow-btn" id="printer-shift-left" title="{{ t('printer_shift_left') }}">&#9664;</button>
+    <button type="button" class="btn btn-secondary printer-arrow-btn" id="printer-reset-offsets" title="{{ t('printer_reset_offsets') }}">{{ t('printer_reset_offsets') }}</button>
+    <button type="button" class="btn btn-secondary printer-arrow-btn" id="printer-shift-right" title="{{ t('printer_shift_right') }}">&#9654;</button>
+    <span></span>
+    <button type="button" class="btn btn-secondary printer-arrow-btn" id="printer-shift-down" title="{{ t('printer_shift_down') }}">&#9660;</button>
+    <span></span>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="btn btn-secondary btn-lg" id="printer-test-print">{{ t('print_test_cheque') }}</button>
+    <button type="button" class="btn btn-primary btn-lg" id="printer-save-calibration">{{ t('save_printer_calibration') }}</button>
+  </div>
+  <p class="muted help-tip" id="printer-calibration-status" hidden></p>
+</fieldset>

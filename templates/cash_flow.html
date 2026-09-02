@@ -4,66 +4,28 @@
 <h1>{{ t('page_cash_flow') }}</h1>
 <p class="help-tip">{{ t('help_tip_cash') }}</p>
 
-{# --- Account switcher --- #}
-<section class="bank-accounts-panel">
-  <div class="bank-accounts-header">
-    <h2>{{ t('your_bank_accounts') }}</h2>
-    <a href="{{ url_for('cash_flow.cash_flow', account_id=selected_account_id, add=1) if selected_account_id else url_for('cash_flow.cash_flow', add=1) }}"
-       class="btn btn-secondary">{{ t('add_bank_account') }}</a>
-  </div>
+<p class="actions-top">
+  <a href="{{ url_for('cash_flow.new_account') }}" class="btn btn-primary btn-lg">{{ t('add_bank_account') }}</a>
+</p>
 
-  {% if accounts %}
-  <div class="account-switcher" role="tablist" aria-label="{{ t('your_bank_accounts') }}">
-    {% for acc in accounts %}
-    <a href="{{ url_for('cash_flow.cash_flow', account_id=acc.user_bank_acc_id) }}"
-       class="account-card {% if selected_account_id == acc.user_bank_acc_id %}active{% endif %}"
-       data-account-id="{{ acc.user_bank_acc_id }}"
-       role="tab"
-       aria-selected="{{ 'true' if selected_account_id == acc.user_bank_acc_id else 'false' }}">
-      <span class="account-card-name">{{ acc.nickname or acc.account_name }}</span>
-      <span class="account-card-bank muted">{{ acc.bank_name }}{% if acc.branch_name %} · {{ acc.branch_name }}{% endif %}</span>
-      <span class="account-card-balance">Rs. {{ "{:,.2f}".format(acc.available_balance or 0) }}</span>
+{% if accounts %}
+<div class="dealer-grid">
+  {% for acc in accounts %}
+  {% set label = acc.nickname or acc.account_name or '?' %}
+  <a href="{{ url_for('cash_flow.account_balance', account_id=acc.user_bank_acc_id) }}" class="dealer-card">
+    <span class="dealer-icon">{{ label[0] }}</span>
+    <span>{{ label }}</span>
+    <span class="muted">{{ acc.bank_name }}</span>
+    <span class="dealer-badges">
       {% if default_bank_acc_id == acc.user_bank_acc_id %}
-      <span class="account-card-badge">{{ t('default_account_badge') }}</span>
+      <span class="badge badge-ready">{{ t('default_account_badge') }}</span>
       {% endif %}
-    </a>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="muted">{{ t('no_bank_accounts_yet') }}</p>
-  {% endif %}
-</section>
-
-{% if show_add_form or not accounts %}
-<form class="card" method="post" action="{{ url_for('cash_flow.create_account') }}" data-zenith-validate>
-  <h3>{{ t('add_bank_account') }}</h3>
-  <p class="muted">{{ t('add_bank_account_help') }}</p>
-  <div class="grid-2">
-    <label>{{ t('bank_nickname') }} <input name="nickname" placeholder="{{ t('bank_nickname_ph') }}"></label>
-    <label>{{ t('bank_account_name') }} <input name="account_name" required placeholder="{{ t('bank_account_name_ph') }}"></label>
-    <label>{{ t('bank_name_label') }} <input name="bank_name" required placeholder="e.g. Commercial Bank"></label>
-    <label>{{ t('bank_branch') }} <input name="branch_name" placeholder="e.g. Colombo 07"></label>
-    <label>{{ t('opening_balance') }} <input type="number" step="0.01" name="available_balance" value="0" required></label>
-  </div>
-  <label class="confirm-label">
-    <input type="checkbox" name="set_as_default" value="1" {% if not accounts %}checked{% endif %}>
-    {{ t('set_as_default_account') }}
-  </label>
-  <div class="actions">
-    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_bank_account') }}</button>
-    {% if accounts %}
-    <a href="{{ url_for('cash_flow.cash_flow', account_id=selected_account_id) }}" class="btn btn-secondary">{{ t('cancel') }}</a>
-    {% endif %}
-  </div>
-</form>
-{% endif %}
-
-{% if selected_account and report %}
-<div id="cash-flow-account-panel">
-{% include '_cash_flow_account_panel.html' %}
+    </span>
+  </a>
+  {% endfor %}
 </div>
+{% else %}
+<p class="muted">{{ t('no_bank_accounts_yet') }}</p>
+{% include '_bank_account_form.html' %}
 {% endif %}
-{% endblock %}
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/cash_flow.js') }}"></script>
 {% endblock %}

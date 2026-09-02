@@ -127,15 +127,51 @@ class Config:
 
     @staticmethod
     def use_whatsapp_mock() -> bool:
-        # Prefer USE_WHATSAPP_MOCK; fall back to legacy USE_TWILIO_MOCK
         if _env("USE_WHATSAPP_MOCK", ""):
             return _env_bool("USE_WHATSAPP_MOCK", True)
-        return _env_bool("USE_TWILIO_MOCK", True)
+        return _env_bool("USE_TWILIO_MOCK", False)
 
     @staticmethod
     def use_twilio_mock() -> bool:
-        """Backward-compatible alias for use_whatsapp_mock()."""
         return Config.use_whatsapp_mock()
+
+    @staticmethod
+    def mock_image_path() -> str:
+        return _env("MOCK_IMAGE_PATH", "")
+
+    @staticmethod
+    def webhook_public_url() -> str:
+        return _env("WEBHOOK_PUBLIC_URL", "http://127.0.0.1:5000").rstrip("/")
+
+    @staticmethod
+    def host() -> str:
+        return _env("HOST", "127.0.0.1")
+
+    @staticmethod
+    def port() -> int:
+        try:
+            return int(_env("PORT", "5000"))
+        except ValueError:
+            return 5000
+
+    @staticmethod
+    def inbound_queue_dir() -> Path:
+        return BASE_DIR / _env("INBOUND_QUEUE_DIR", "data/inbound_queue")
+
+    @staticmethod
+    def whatsapp_bridge_secret() -> str:
+        return _env("WHATSAPP_BRIDGE_SECRET", "")
+
+    @staticmethod
+    def whatsapp_bridge_url() -> str:
+        return _env("WHATSAPP_BRIDGE_URL", "http://127.0.0.1:3001")
+
+    @staticmethod
+    def zenith_ingest_url() -> str:
+        return _env(
+            "ZENITH_INGEST_URL",
+            f"http://{Config.host()}:{Config.port()}/api/invoices/ingest",
+        )
 
     @staticmethod
     def use_agentic_orchestrator() -> bool:
@@ -148,12 +184,34 @@ class Config:
         return _env_bool("USE_BUNDLING_TOOL_AGENT", True)
 
     @staticmethod
-    def mock_image_path() -> str:
-        return _env("MOCK_IMAGE_PATH", "")
+    def use_strategist_tool_agent() -> bool:
+        """Agent 3: Gemini tool-calling over bundling.py + guardrails."""
+        return _env_bool("USE_STRATEGIST_TOOL_AGENT", True)
+
+    @staticmethod
+    def enable_vector_patterns() -> bool:
+        return _env_bool("ENABLE_VECTOR_PATTERNS", True)
+
+    @staticmethod
+    def chroma_persist_dir() -> str:
+        return _env("CHROMA_PERSIST_DIR", "database/chroma")
+
+    @staticmethod
+    def openai_embedding_model() -> str:
+        return _env("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+
+    @staticmethod
+    def pattern_large_bill_lkr() -> float:
+        try:
+            return float(_env("PATTERN_LARGE_BILL_LKR", "500000"))
+        except ValueError:
+            return 500_000.0
 
     @staticmethod
     def merchant_whatsapp_phone() -> str:
-        return _env("MERCHANT_WHATSAPP_PHONE", "")
+        from db import repositories as repo
+
+        return repo.get_merchant_whatsapp_phone()
 
     @staticmethod
     def cash_alert_days_ahead() -> int:

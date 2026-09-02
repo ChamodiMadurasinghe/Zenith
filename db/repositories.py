@@ -1,7 +1,13 @@
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from config import Config
+from core.date_presets import (
+    PRESET_ALL,
+    PRESET_CUSTOM,
+    WEEK_MONTH_PRESETS,
+    preset_date_strings,
+)
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME
 from db.connection import execute, query, query_one, transaction
 
@@ -23,30 +29,79 @@ def set_setting(key: str, value: str):
     )
 
 
+MERCHANT_WHATSAPP_PHONE_KEY = "merchant_whatsapp_phone"
+
+
+def get_merchant_whatsapp_phone() -> str:
+    """Shop owner WhatsApp for alerts; app_settings overrides .env."""
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    stored = get_setting(MERCHANT_WHATSAPP_PHONE_KEY, "").strip()
+    if stored:
+        return normalize_whatsapp_phone(stored)
+    env_phone = _env_merchant_whatsapp_phone()
+    return normalize_whatsapp_phone(env_phone) if env_phone else ""
+
+
+def _env_merchant_whatsapp_phone() -> str:
+    import os
+
+    return os.getenv("MERCHANT_WHATSAPP_PHONE", "").strip()
+
+
+def save_merchant_whatsapp_phone(phone: str) -> str:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    normalized = normalize_whatsapp_phone(phone)
+    if not normalized or not normalized.startswith("+"):
+        raise ValueError("invalid phone")
+    set_setting(MERCHANT_WHATSAPP_PHONE_KEY, normalized)
+    return normalized
+
+
+def clear_merchant_whatsapp_phone():
+    execute("DELETE FROM app_settings WHERE setting_key = ?", (MERCHANT_WHATSAPP_PHONE_KEY,))
+
+
 def get_bank_accounts():
-    return query(
+    rows = query(
         "SELECT * FROM user_bank_account WHERE user_id = ? ORDER BY user_bank_acc_id",
         (Config.USER_ID,),
     )
+    for row in rows:
+        row.setdefault("overdraft_limit", 0)
+    return rows
 
 
 def get_bank_account(acc_id: int):
-    return query_one(
+    row = query_one(
         "SELECT * FROM user_bank_account WHERE user_bank_acc_id = ? AND user_id = ?",
         (acc_id, Config.USER_ID),
     )
+    if row is not None:
+        row.setdefault("overdraft_limit", 0)
+    return row
+
+
+def _overdraft_limit_from(data: dict) -> float:
+    try:
+        value = float(data.get("overdraft_limit") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, value)
 
 
 def create_bank_account(data: dict) -> int:
     return execute(
         """INSERT INTO user_bank_account
-           (user_id, account_name, nickname, available_balance, branch_name, bank_name)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+           (user_id, account_name, nickname, available_balance, overdraft_limit, branch_name, bank_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
             Config.USER_ID,
             (data.get("account_name") or "").strip(),
             (data.get("nickname") or data.get("account_name") or "").strip() or None,
             float(data.get("available_balance") or 0),
+            _overdraft_limit_from(data),
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
         ),
@@ -56,13 +111,14 @@ def create_bank_account(data: dict) -> int:
 def update_bank_account(acc_id: int, data: dict):
     execute(
         """UPDATE user_bank_account
-           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?
+           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?, overdraft_limit = ?
            WHERE user_bank_acc_id = ? AND user_id = ?""",
         (
             (data.get("account_name") or "").strip(),
             (data.get("nickname") or data.get("account_name") or "").strip() or None,
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
+            _overdraft_limit_from(data),
             acc_id,
             Config.USER_ID,
         ),
@@ -90,8 +146,17 @@ def paying_account_id_for_dealer(dealer_id: int | None = None) -> int:
 def validate_bank_account_input(data: dict) -> str | None:
     if not (data.get("account_name") or "").strip():
         return "flash_bank_account_name_required"
-    if not (data.get("bank_name") or "").strip():
+    if not (data.get("bank_name") or "").strip() and not (data.get("bank_code") or "").strip():
         return "flash_bank_name_required"
+    bank_code = (data.get("bank_code") or "").strip()
+    if bank_code and not bank_name_for_code(bank_code):
+        return "flash_bank_name_required"
+    try:
+        overdraft = float(data.get("overdraft_limit") or 0)
+    except (TypeError, ValueError):
+        return "flash_overdraft_invalid"
+    if overdraft < 0:
+        return "flash_overdraft_invalid"
     return None
 
 
@@ -277,7 +342,8 @@ def get_pending_verification_invoices(dealer_id: int = None):
         )
     return query(
         f"""SELECT i.*, d.dealer_name,
-                   {display_name} AS display_dealer_name
+                   {display_name} AS display_dealer_name,
+                   json_extract(i.pending_dealer_json, '$.source') AS source
            FROM invoices i
            JOIN dealers d ON d.dealer_id = i.dealer_id
            WHERE i.user_id = ? AND i.is_invoice_verified = 0
@@ -307,36 +373,541 @@ def get_all_dealer_summaries() -> dict:
     return {d["dealer_id"]: get_dealer_invoice_summary(d["dealer_id"]) for d in dealers}
 
 
-def get_committed_cheque_bundles(dealer_id: int):
+def _parse_iso_date(value) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def invoice_due_date_value(invoice: dict) -> date | None:
+    inv_date = _parse_iso_date(invoice.get("invoiced_date"))
+    if not inv_date:
+        return None
+    try:
+        days = int(invoice.get("credit_period_days") or 0)
+    except (TypeError, ValueError):
+        days = 0
+    return inv_date + timedelta(days=days)
+
+
+CHEQUE_VISIBLE_AFTER_CLEARANCE_DAYS = 7
+
+
+def cheque_clearance_date(ch: dict) -> str | None:
+    """Predicted clearance, else deposit_timetable fund-by, else stated cheque date."""
+    if ch.get("predicted_clearance_date"):
+        return ch["predicted_clearance_date"]
+    row = query_one(
+        """SELECT target_funding_date FROM deposit_timetable
+           WHERE cheque_id = ? ORDER BY timetable_id DESC LIMIT 1""",
+        (ch.get("cheque_id"),),
+    )
+    if row and row.get("target_funding_date"):
+        return row["target_funding_date"]
+    return ch.get("cheque_date")
+
+
+def _parse_optional_float(raw) -> float | None:
+    text = (str(raw) if raw is not None else "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def list_amount_summary(rows: list, amount_key: str = "total_amount") -> dict:
+    """Aggregate count / sum / average for the currently visible list rows."""
+    total = 0.0
+    count = 0
+    for row in rows or []:
+        try:
+            total += float(row.get(amount_key) or 0)
+            count += 1
+        except (TypeError, ValueError):
+            continue
+    return {
+        "count": count,
+        "total": total,
+        "average": (total / count) if count else 0.0,
+    }
+
+
+def written_cheque_filters_from_args(args) -> dict:
+    """Parse list-page query params. Searching or show_all overrides the 7-day cutoff."""
+    cheque_no = (args.get("cheque_no") or "").strip() or None
+    period = (args.get("period") or "").strip().lower() or PRESET_CUSTOM
+    start_date = (args.get("start_date") or "").strip() or None
+    end_date = (args.get("end_date") or "").strip() or None
+    if period in WEEK_MONTH_PRESETS:
+        start_date, end_date = preset_date_strings(period)
+    elif period == PRESET_ALL:
+        start_date, end_date = None, None
+    min_amount = _parse_optional_float(args.get("min_amount"))
+    max_amount = _parse_optional_float(args.get("max_amount"))
+    show_all = str(args.get("show_all") or "").strip().lower() in ("1", "true", "on", "yes")
+    if period == PRESET_ALL:
+        show_all = True
+    searching = bool(
+        cheque_no
+        or start_date
+        or end_date
+        or show_all
+        or min_amount is not None
+        or max_amount is not None
+        or period in WEEK_MONTH_PRESETS
+        or period == PRESET_ALL
+    )
+    return {
+        "include_archived": searching,
+        "cheque_no": cheque_no,
+        "start_date": start_date,
+        "end_date": end_date,
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+        "period": period,
+        "show_all": show_all,
+    }
+
+
+def written_cheque_repo_kwargs(filters: dict) -> dict:
+    return {
+        "include_archived": bool(filters.get("include_archived")),
+        "cheque_no": filters.get("cheque_no"),
+        "start_date": filters.get("start_date"),
+        "end_date": filters.get("end_date"),
+        "min_amount": filters.get("min_amount"),
+        "max_amount": filters.get("max_amount"),
+    }
+
+
+def filter_written_cheques(
+    rows: list,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+) -> list:
+    """Hide cheques older than 7 days past clearance unless searching/show-all."""
+    needle = (cheque_no or "").strip().lower()
+    start = _parse_iso_date(start_date)
+    end = _parse_iso_date(end_date)
+    apply_cutoff = not (
+        include_archived or needle or start or end or min_amount is not None or max_amount is not None
+    )
+    cutoff = date.today() - timedelta(days=CHEQUE_VISIBLE_AFTER_CLEARANCE_DAYS)
+    out = []
+    for ch in rows:
+        if needle and needle not in str(ch.get("cheque_no") or "").lower():
+            continue
+        stated = _parse_iso_date(ch.get("cheque_date"))
+        if start and (stated is None or stated < start):
+            continue
+        if end and (stated is None or stated > end):
+            continue
+        try:
+            amount = float(ch.get("amount_in_numerals") if ch.get("amount_in_numerals") is not None else ch.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        if min_amount is not None and amount < min_amount:
+            continue
+        if max_amount is not None and amount > max_amount:
+            continue
+        if apply_cutoff:
+            clearance = _parse_iso_date(
+                ch.get("expected_clearance_date")
+                or ch.get("predicted_clearance_date")
+                or ch.get("cheque_date")
+            )
+            if clearance is not None and clearance < cutoff:
+                continue
+        out.append(ch)
+    return out
+
+
+INVOICE_PAYMENT_WITHOUT_CHEQUE = "without_cheque"
+INVOICE_PAYMENT_WITH_CHEQUE = "with_cheque"
+INVOICE_PAYMENT_ALL = "all"
+INVOICE_PAYMENT_STATUSES = frozenset(
+    {INVOICE_PAYMENT_WITHOUT_CHEQUE, INVOICE_PAYMENT_WITH_CHEQUE, INVOICE_PAYMENT_ALL}
+)
+
+
+def invoice_filters_from_args(args) -> dict:
+    """Parse dealer-invoice list query params. Default shows unpaid (no cheque) only."""
+    invoice_no = (args.get("invoice_no") or "").strip() or None
+    period = (args.get("period") or "").strip().lower() or PRESET_CUSTOM
+    start_date = (args.get("start_date") or "").strip() or None
+    end_date = (args.get("end_date") or "").strip() or None
+    if period in WEEK_MONTH_PRESETS:
+        start_date, end_date = preset_date_strings(period)
+    elif period == PRESET_ALL:
+        start_date, end_date = None, None
+    payment_status = (args.get("payment_status") or "").strip().lower()
+    if payment_status not in INVOICE_PAYMENT_STATUSES:
+        # Legacy checkbox: include_committed=1 meant show all invoices
+        if str(args.get("include_committed") or "").strip().lower() in ("1", "true", "on", "yes"):
+            payment_status = INVOICE_PAYMENT_ALL
+        else:
+            payment_status = INVOICE_PAYMENT_WITHOUT_CHEQUE
+    return {
+        "invoice_no": invoice_no,
+        "start_date": start_date,
+        "end_date": end_date,
+        "min_amount": _parse_optional_float(args.get("min_amount")),
+        "max_amount": _parse_optional_float(args.get("max_amount")),
+        "period": period,
+        "payment_status": payment_status,
+    }
+
+
+def invoice_repo_kwargs(filters: dict) -> dict:
+    return {
+        "payment_status": filters.get("payment_status") or INVOICE_PAYMENT_WITHOUT_CHEQUE,
+        "invoice_no": filters.get("invoice_no"),
+        "date_from": filters.get("start_date"),
+        "date_to": filters.get("end_date"),
+        "min_amount": filters.get("min_amount"),
+        "max_amount": filters.get("max_amount"),
+    }
+
+
+def days_gained_vs_due(invoices: list, clearance_str: str | None) -> int | None:
+    """(expected_clearance_date - earliest_invoice_due_date).days"""
+    clearance = _parse_iso_date(clearance_str)
+    if not clearance or not invoices:
+        return None
+    dues = [d for d in (invoice_due_date_value(inv) for inv in invoices) if d]
+    if not dues:
+        return None
+    return (clearance - min(dues)).days
+
+
+def _invoices_for_cheque(cheque_id: int) -> list:
+    return query(
+        """SELECT i.invoices_id, i.invoice_no, i.invoiced_date, i.delivery_date,
+                  i.credit_period_days, i.total_amount, i.dealer_id,
+                  a.amount AS allocated_amount, a.part_index, a.part_count
+           FROM invoices i
+           LEFT JOIN cheque_invoice_allocation a
+             ON a.invoices_id = i.invoices_id AND a.cheque_id = ?
+           WHERE i.user_id = ?
+             AND (
+               i.cheque_id = ?
+               OR i.invoices_id IN (
+                 SELECT invoices_id FROM cheque_invoice_allocation WHERE cheque_id = ?
+               )
+             )
+           ORDER BY i.invoice_no, a.part_index""",
+        (cheque_id, Config.USER_ID, cheque_id, cheque_id),
+    )
+
+
+def get_dealer_committed_payment_history(dealer_id: int) -> list[dict]:
+    """Committed cheques for pattern analysis (all history, verified only)."""
+    bundles = get_committed_cheque_bundles(dealer_id, include_archived=True)
+    history: list[dict] = []
+    for ch in bundles:
+        if int(ch.get("verification_status") or 0) != 1:
+            continue
+        acc_id = int(ch.get("user_bank_acc_id") or 0)
+        acc = get_bank_account(acc_id) if acc_id else None
+        clearance = ch.get("expected_clearance_date") or cheque_clearance_date(ch)
+        invoices = []
+        for inv in ch.get("invoices") or []:
+            invoices.append(
+                {
+                    **inv,
+                    "part_index": int(inv.get("part_index") or 1),
+                    "part_count": int(inv.get("part_count") or 1),
+                    "clearance_date": clearance,
+                }
+            )
+        history.append(
+            {
+                **ch,
+                "user_bank_acc_id": acc_id,
+                "bank_name": acc.get("bank_name") if acc else None,
+                "account_nickname": acc.get("nickname") if acc else None,
+                "clearance_date": clearance,
+                "invoices": invoices,
+            }
+        )
+    return history
+
+
+def get_committed_cheque_bundles(
+    dealer_id: int,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+):
+    # Prefer invoice.cheque_id; also include allocation links (split parts / partial updates).
     cheques = query(
         """SELECT DISTINCT c.* FROM cheque c
-           JOIN invoices i ON i.cheque_id = c.cheque_id
-           WHERE i.dealer_id = ? AND i.user_id = ?
+           WHERE c.cheque_id IN (
+               SELECT i.cheque_id FROM invoices i
+               WHERE i.dealer_id = ? AND i.user_id = ? AND i.cheque_id IS NOT NULL
+               UNION
+               SELECT a.cheque_id FROM cheque_invoice_allocation a
+               JOIN invoices i ON i.invoices_id = a.invoices_id
+               WHERE i.dealer_id = ? AND i.user_id = ?
+           )
            ORDER BY c.cheque_date DESC""",
-        (dealer_id, Config.USER_ID),
+        (dealer_id, Config.USER_ID, dealer_id, Config.USER_ID),
     )
+    dealer = get_dealer(dealer_id)
+    dealer_name = dealer["dealer_name"] if dealer else None
     result = []
     for ch in cheques:
-        invoices = query(
-            """SELECT invoice_no, total_amount, invoiced_date, credit_period_days
-               FROM invoices WHERE cheque_id = ? ORDER BY invoice_no""",
-            (ch["cheque_id"],),
+        invoices = _invoices_for_cheque(ch["cheque_id"])
+        clearance = cheque_clearance_date(ch)
+        result.append(
+            {
+                **ch,
+                "invoices": invoices,
+                "dealer_name": dealer_name,
+                "expected_clearance_date": clearance,
+                "days_gained": days_gained_vs_due(invoices, clearance),
+            }
         )
-        result.append({**ch, "invoices": invoices})
-    return result
+    return filter_written_cheques(
+        result,
+        include_archived=include_archived,
+        cheque_no=cheque_no,
+        start_date=start_date,
+        end_date=end_date,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
+
+
+def list_account_written_cheques(
+    account_id: int,
+    *,
+    include_archived: bool = False,
+    cheque_no: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+) -> list:
+    """Committed cheques on an account for history lists (not cash-flow projection)."""
+    rows = []
+    for ch in get_upcoming_cheques(account_id):
+        clearance = cheque_clearance_date(ch)
+        rows.append(
+            {
+                **ch,
+                "expected_clearance_date": clearance,
+                "amount": float(ch.get("amount_in_numerals") or 0),
+            }
+        )
+    return filter_written_cheques(
+        rows,
+        include_archived=include_archived,
+        cheque_no=cheque_no,
+        start_date=start_date,
+        end_date=end_date,
+        min_amount=min_amount,
+        max_amount=max_amount,
+    )
+
+
+def get_cheque_detail(cheque_id: int) -> dict | None:
+    """Read-only cheque + payee + linked invoices (and line items). None if missing/unauthorized."""
+    from core.amounts import amount_to_words
+
+    ch = query_one(
+        """SELECT c.*,
+                  uba.nickname AS bank_nickname,
+                  uba.account_name AS bank_account_name,
+                  uba.bank_name AS paying_bank_name,
+                  uba.branch_name AS paying_branch
+           FROM cheque c
+           JOIN user_bank_account uba ON uba.user_bank_acc_id = c.user_bank_acc_id
+           WHERE c.cheque_id = ? AND uba.user_id = ?""",
+        (cheque_id, Config.USER_ID),
+    )
+    if not ch:
+        return None
+
+    invoice_rows = _invoices_for_cheque(cheque_id)
+    invoices_out = []
+    dealer_id = None
+    for inv in invoice_rows:
+        dealer_id = dealer_id or inv.get("dealer_id")
+        items = get_invoice_items(inv["invoices_id"])
+        due = invoice_due_date_value(inv)
+        allocated = inv.get("allocated_amount")
+        invoices_out.append(
+            {
+                "invoices_id": inv["invoices_id"],
+                "invoice_no": inv["invoice_no"],
+                "invoiced_date": inv.get("invoiced_date"),
+                "due_date": due.isoformat() if due else None,
+                "credit_period_days": inv.get("credit_period_days"),
+                "total_amount": float(inv.get("total_amount") or 0),
+                "allocated_amount": float(allocated if allocated is not None else inv.get("total_amount") or 0),
+                "part_index": inv.get("part_index"),
+                "part_count": inv.get("part_count"),
+                "line_items": [
+                    {
+                        "item_code": it.get("item_code"),
+                        "item_name": it.get("item_name"),
+                        "item_qty": it.get("item_qty"),
+                        "item_price": it.get("item_price"),
+                    }
+                    for it in items
+                ],
+            }
+        )
+
+    dealer = get_dealer(dealer_id) if dealer_id else None
+    clearance = cheque_clearance_date(ch)
+    amount = float(ch.get("amount_in_numerals") or 0)
+    return {
+        "cheque_id": ch["cheque_id"],
+        "cheque_no": ch.get("cheque_no"),
+        "cheque_date": ch.get("cheque_date"),
+        "expected_clearance_date": clearance,
+        "amount": amount,
+        "amount_in_words": ch.get("amount_in_words") or amount_to_words(amount),
+        "days_gained": days_gained_vs_due(invoice_rows, clearance),
+        "bank": {
+            "nickname": ch.get("bank_nickname"),
+            "account_name": ch.get("bank_account_name"),
+            "bank_name": ch.get("paying_bank_name"),
+            "branch_name": ch.get("paying_branch"),
+        },
+        "dealer": {
+            "dealer_id": dealer["dealer_id"] if dealer else None,
+            "dealer_name": dealer["dealer_name"] if dealer else None,
+            "dealer_email": dealer.get("dealer_email") if dealer else None,
+            "dealer_telno": dealer.get("dealer_telno") if dealer else None,
+            "dealer_address": dealer.get("dealer_address") if dealer else None,
+            "casual_days": dealer.get("casual_days") if dealer else None,
+            "dealer_strictness": dealer.get("dealer_strictness") if dealer else None,
+        },
+        "invoices": invoices_out,
+    }
+
+
+def ensure_invoice_delivery_date_column():
+    """Add delivery_date on existing DBs without a full migrate."""
+    try:
+        execute("ALTER TABLE invoices ADD COLUMN delivery_date TEXT")
+    except Exception:
+        pass
+
+
+def get_dealer_invoices(
+    dealer_id: int,
+    *,
+    payment_status: str = INVOICE_PAYMENT_WITHOUT_CHEQUE,
+    invoice_no: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    min_amount: float | None = None,
+    max_amount: float | None = None,
+):
+    """Invoices for a dealer with optional archival/search filters.
+
+    payment_status: without_cheque (default), with_cheque, or all.
+    Date range uses COALESCE(delivery_date, invoiced_date).
+    """
+    ensure_invoice_delivery_date_column()
+    status = payment_status if payment_status in INVOICE_PAYMENT_STATUSES else INVOICE_PAYMENT_WITHOUT_CHEQUE
+    sql = [
+        """SELECT invoices_id, invoice_no, total_amount, invoiced_date, delivery_date,
+                  credit_period_days, location_path, is_invoice_verified, cheque_id
+           FROM invoices
+           WHERE dealer_id = ? AND user_id = ?"""
+    ]
+    params: list = [dealer_id, Config.USER_ID]
+    if status == INVOICE_PAYMENT_WITHOUT_CHEQUE:
+        sql.append("AND cheque_id IS NULL")
+    elif status == INVOICE_PAYMENT_WITH_CHEQUE:
+        sql.append("AND cheque_id IS NOT NULL")
+    needle = (invoice_no or "").strip()
+    if needle:
+        sql.append("AND LOWER(invoice_no) LIKE ?")
+        params.append(f"%{needle.lower()}%")
+    if date_from:
+        sql.append("AND COALESCE(delivery_date, invoiced_date) >= ?")
+        params.append(date_from)
+    if date_to:
+        sql.append("AND COALESCE(delivery_date, invoiced_date) <= ?")
+        params.append(date_to)
+    if min_amount is not None:
+        sql.append("AND total_amount >= ?")
+        params.append(float(min_amount))
+    if max_amount is not None:
+        sql.append("AND total_amount <= ?")
+        params.append(float(max_amount))
+    sql.append("ORDER BY COALESCE(delivery_date, invoiced_date) ASC, invoice_no ASC")
+    return query("\n".join(sql), tuple(params))
 
 
 def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id: int):
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         conn.execute(
             """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
-               credit_period_days = ?, total_amount = ?, is_invoice_verified = 1,
-               pending_dealer_json = NULL
+               delivery_date = ?, credit_period_days = ?, total_amount = ?,
+               is_invoice_verified = 1, pending_dealer_json = NULL
                WHERE invoices_id = ? AND user_id = ?""",
             (
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
+                int(data["credit_period_days"]),
+                float(data["total_amount"]),
+                invoice_id,
+                Config.USER_ID,
+            ),
+        )
+        conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
+        for item in items:
+            conn.execute(
+                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    invoice_id,
+                    item["item_code"],
+                    item["item_name"],
+                    int(item["item_qty"]),
+                    float(item["item_price"]),
+                    float(item.get("item_discount", 0)),
+                ),
+            )
+
+
+def update_invoice_record(invoice_id: int, data: dict, items: list, dealer_id: int):
+    """Update invoice header + line items without changing verification status."""
+    ensure_invoice_delivery_date_column()
+    with transaction() as conn:
+        conn.execute(
+            """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
+               delivery_date = ?, credit_period_days = ?, total_amount = ?
+               WHERE invoices_id = ? AND user_id = ?""",
+            (
+                dealer_id,
+                data["invoice_no"],
+                data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 invoice_id,
@@ -360,6 +931,7 @@ def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id:
 
 
 def get_invoice(invoice_id: int):
+    ensure_invoice_delivery_date_column()
     return query_one(
         "SELECT i.*, d.dealer_name FROM invoices i JOIN dealers d ON d.dealer_id = i.dealer_id WHERE i.invoices_id = ?",
         (invoice_id,),
@@ -410,17 +982,172 @@ def get_dealer_invoice_stats(dealer_id: int) -> dict:
     }
 
 
+def get_dealer_item_price_stats(dealer_id: int, item_code: str) -> dict:
+    """Backward-compatible wrapper — use get_dealer_item_history_stats when possible."""
+    stats = get_dealer_item_history_stats(dealer_id, item_code=item_code)
+    return {
+        "sample_count": stats.get("sample_count", 0),
+        "avg_price": stats.get("avg_price", 0.0),
+        "avg_qty": stats.get("avg_qty", 0.0),
+    }
+
+
+def _normalize_item_name(name: str) -> str:
+    return " ".join((name or "").strip().lower().split())
+
+
+def get_dealer_item_history_stats(
+    dealer_id: int,
+    *,
+    item_code: str | None = None,
+    item_name: str | None = None,
+) -> dict:
+    """Historical qty/price stats for a dealer line item (verified invoices only)."""
+    code = (item_code or "").strip()
+    name_norm = _normalize_item_name(item_name or "")
+    if code:
+        row = query_one(
+            """SELECT COUNT(*) AS sample_count,
+                      AVG(i.item_price) AS avg_price,
+                      AVG(i.item_qty) AS avg_qty,
+                      MAX(i.item_qty) AS max_qty,
+                      MIN(i.item_qty) AS min_qty
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND i.item_code = ?""",
+            (Config.USER_ID, dealer_id, code),
+        )
+        last = query_one(
+            """SELECT inv.invoice_no, inv.invoiced_date
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND i.item_code = ?
+               ORDER BY inv.invoiced_date DESC, inv.invoices_id DESC
+               LIMIT 1""",
+            (Config.USER_ID, dealer_id, code),
+        )
+    elif name_norm:
+        row = query_one(
+            """SELECT COUNT(*) AS sample_count,
+                      AVG(i.item_price) AS avg_price,
+                      AVG(i.item_qty) AS avg_qty,
+                      MAX(i.item_qty) AS max_qty,
+                      MIN(i.item_qty) AS min_qty
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND LOWER(TRIM(i.item_name)) = ?""",
+            (Config.USER_ID, dealer_id, name_norm),
+        )
+        last = query_one(
+            """SELECT inv.invoice_no, inv.invoiced_date
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND LOWER(TRIM(i.item_name)) = ?
+               ORDER BY inv.invoiced_date DESC, inv.invoices_id DESC
+               LIMIT 1""",
+            (Config.USER_ID, dealer_id, name_norm),
+        )
+    else:
+        return {
+            "sample_count": 0,
+            "avg_price": 0.0,
+            "avg_qty": 0.0,
+            "max_qty": 0.0,
+            "min_qty": 0.0,
+            "last_invoice_no": None,
+            "last_invoiced_date": None,
+        }
+    return {
+        "sample_count": int((row or {}).get("sample_count") or 0),
+        "avg_price": float((row or {}).get("avg_price") or 0),
+        "avg_qty": float((row or {}).get("avg_qty") or 0),
+        "max_qty": float((row or {}).get("max_qty") or 0),
+        "min_qty": float((row or {}).get("min_qty") or 0),
+        "last_invoice_no": (last or {}).get("invoice_no"),
+        "last_invoiced_date": (last or {}).get("invoiced_date"),
+    }
+
+
+def find_recent_item_orders(
+    dealer_id: int,
+    *,
+    item_code: str | None = None,
+    item_name: str | None = None,
+    within_days: int = 30,
+    exclude_invoice_id: int | None = None,
+) -> list[dict]:
+    """Verified invoices containing this item within the last N days."""
+    from datetime import date, timedelta
+
+    cutoff = (date.today() - timedelta(days=int(within_days))).isoformat()
+    code = (item_code or "").strip()
+    name_norm = _normalize_item_name(item_name or "")
+    params: list = [Config.USER_ID, dealer_id, cutoff]
+    exclude_sql = ""
+    if exclude_invoice_id is not None:
+        exclude_sql = " AND inv.invoices_id != ?"
+        params.append(int(exclude_invoice_id))
+
+    if code:
+        sql = f"""
+            SELECT DISTINCT inv.invoices_id, inv.invoice_no, inv.invoiced_date,
+                   i.item_qty, i.item_name, i.item_code
+            FROM item i
+            JOIN invoices inv ON inv.invoices_id = i.invoices_id
+            WHERE inv.user_id = ? AND inv.dealer_id = ?
+              AND inv.is_invoice_verified = 1
+              AND inv.invoiced_date >= ?
+              AND i.item_code = ?
+              {exclude_sql}
+            ORDER BY inv.invoiced_date DESC
+        """
+        params = [Config.USER_ID, dealer_id, cutoff, code]
+        if exclude_invoice_id is not None:
+            params.append(int(exclude_invoice_id))
+    elif name_norm:
+        sql = f"""
+            SELECT DISTINCT inv.invoices_id, inv.invoice_no, inv.invoiced_date,
+                   i.item_qty, i.item_name, i.item_code
+            FROM item i
+            JOIN invoices inv ON inv.invoices_id = i.invoices_id
+            WHERE inv.user_id = ? AND inv.dealer_id = ?
+              AND inv.is_invoice_verified = 1
+              AND inv.invoiced_date >= ?
+              AND LOWER(TRIM(i.item_name)) = ?
+              {exclude_sql}
+            ORDER BY inv.invoiced_date DESC
+        """
+        params = [Config.USER_ID, dealer_id, cutoff, name_norm]
+        if exclude_invoice_id is not None:
+            params.append(int(exclude_invoice_id))
+    else:
+        return []
+
+    return query(sql, tuple(params))
+
+
 def save_verified_invoice(data: dict, items: list, dealer_id: int) -> int:
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
-               credit_period_days, total_amount, location_path, is_invoice_verified)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
+               delivery_date, credit_period_days, total_amount, location_path,
+               is_invoice_verified)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)""",
             (
                 Config.USER_ID,
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 data.get("location_path"),
@@ -449,17 +1176,19 @@ def save_pending_invoice(
     dealer_id: int,
     pending_dealer_json: str | None = None,
 ) -> int:
+    ensure_invoice_delivery_date_column()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
-               credit_period_days, total_amount, location_path, pending_dealer_json,
-               is_invoice_verified)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+               delivery_date, credit_period_days, total_amount, location_path,
+               pending_dealer_json, is_invoice_verified)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
             (
                 Config.USER_ID,
                 dealer_id,
                 data["invoice_no"],
                 data["invoiced_date"],
+                data.get("delivery_date") or None,
                 int(data["credit_period_days"]),
                 float(data["total_amount"]),
                 data.get("location_path"),
@@ -846,11 +1575,36 @@ def get_planned_deposits(account_id: int):
     )
 
 
-def get_bank_deposits(account_id: int):
-    return query(
-        "SELECT * FROM bank_deposits WHERE user_bank_acc_id = ? ORDER BY deposit_date",
-        (account_id,),
-    )
+def get_bank_deposits(account_id: int, limit: int | None = None):
+    sql = """SELECT * FROM bank_deposits
+             WHERE user_bank_acc_id = ?
+             ORDER BY deposit_date DESC, deposit_id DESC"""
+    params: tuple = (account_id,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        params = (account_id, int(limit))
+    return query(sql, params)
+
+
+def record_deposit(account_id: int, deposit_date: str, amount: float, reference: str = ""):
+    """Credit available_balance and append a bank_deposits row."""
+    if amount <= 0:
+        return None
+    acc = get_bank_account(account_id)
+    if not acc:
+        return None
+    with transaction() as conn:
+        conn.execute(
+            """INSERT INTO bank_deposits (user_bank_acc_id, deposit_date, amount, reference)
+               VALUES (?, ?, ?, ?)""",
+            (account_id, deposit_date, amount, reference or ""),
+        )
+        conn.execute(
+            """UPDATE user_bank_account SET available_balance = available_balance + ?
+               WHERE user_bank_acc_id = ? AND user_id = ?""",
+            (amount, account_id, Config.USER_ID),
+        )
+    return True
 
 
 def add_planned_deposit(account_id: int, planned_date: str, amount: float, notes: str = ""):
@@ -951,14 +1705,8 @@ def save_cheques(cheques: list, invoice_map: dict):
                 if inv_id not in first_cheque_for_invoice:
                     first_cheque_for_invoice[inv_id] = cheque_id
                     conn.execute(
-                        "UPDATE invoices SET cheque_id = ? WHERE invoices_id = ? AND cheque_id IS NULL",
+                        "UPDATE invoices SET cheque_id = ? WHERE invoices_id = ?",
                         (cheque_id, inv_id),
-                    )
-                    # Also set when previously unset on this commit path
-                    conn.execute(
-                        """UPDATE invoices SET cheque_id = ?
-                           WHERE invoices_id = ? AND (cheque_id IS NULL OR cheque_id = ?)""",
-                        (first_cheque_for_invoice[inv_id], inv_id, first_cheque_for_invoice[inv_id]),
                     )
 
     for idx, ch in enumerate(cheques):
@@ -1057,3 +1805,487 @@ def save_bundle_draft(
 def load_bundle_draft(dealer_id: int):
     ensure_bundle_drafts_table()
     return query_one("SELECT * FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))
+
+
+def clear_bundle_draft(dealer_id: int):
+    ensure_bundle_drafts_table()
+    execute("DELETE FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))
+
+
+def list_bank_cheque_templates():
+    return query("SELECT * FROM bank_cheque_templates ORDER BY bank_name")
+
+
+def get_bank_cheque_template(bank_code: str):
+    return query_one("SELECT * FROM bank_cheque_templates WHERE bank_code = ?", (bank_code,))
+
+
+def get_printer_settings(user_bank_acc_id: int | None, bank_code: str) -> dict:
+    if user_bank_acc_id:
+        row = query_one(
+            """SELECT * FROM shop_printer_settings
+               WHERE bank_code = ? AND is_active = 1 AND user_bank_acc_id = ?""",
+            (bank_code, user_bank_acc_id),
+        )
+        if row:
+            return dict(row)
+    row = query_one(
+        """SELECT * FROM shop_printer_settings
+           WHERE bank_code = ? AND is_active = 1 AND user_bank_acc_id IS NULL""",
+        (bank_code,),
+    )
+    if row:
+        return dict(row)
+    return {
+        "offset_x_mm": 0.0,
+        "offset_y_mm": 0.0,
+        "feed_orientation": "VERTICAL",
+    }
+
+
+CITS_CHEQUE_LENGTH_MM = 177.8
+CITS_CHEQUE_WIDTH_MM = 88.9
+
+
+def validate_cheque_dimensions(length_mm: float, width_mm: float) -> str | None:
+    """Validate user-facing length (long edge) and width (short edge) in mm."""
+    try:
+        length = float(length_mm)
+        width = float(width_mm)
+    except (TypeError, ValueError):
+        return "flash_cheque_dimensions_invalid"
+    if length <= 0 or width <= 0:
+        return "flash_cheque_dimensions_invalid"
+    if not (150.0 <= length <= 220.0):
+        return "flash_cheque_length_out_of_range"
+    if not (60.0 <= width <= 120.0):
+        return "flash_cheque_width_out_of_range"
+    return None
+
+
+def get_account_cheque_setup(user_bank_acc_id: int | None, bank_name: str | None) -> dict:
+    """Return form-friendly cheque dimensions (length = long edge, width = short edge)."""
+    from core.cheque_utils import resolve_bank_code
+
+    length_mm = CITS_CHEQUE_LENGTH_MM
+    width_mm = CITS_CHEQUE_WIDTH_MM
+    use_standard = True
+
+    bank_code = resolve_bank_code(bank_name)
+    if bank_code:
+        template = get_bank_cheque_template(bank_code)
+        if template:
+            length_mm = float(template.get("cheque_width_mm") or CITS_CHEQUE_LENGTH_MM)
+            width_mm = float(template.get("cheque_height_mm") or CITS_CHEQUE_WIDTH_MM)
+
+    if user_bank_acc_id and bank_code:
+        settings = get_printer_settings(user_bank_acc_id, bank_code)
+        if settings.get("cheque_width_mm") is not None:
+            length_mm = float(settings["cheque_width_mm"])
+        if settings.get("cheque_height_mm") is not None:
+            width_mm = float(settings["cheque_height_mm"])
+
+    use_standard = (
+        abs(length_mm - CITS_CHEQUE_LENGTH_MM) < 0.05
+        and abs(width_mm - CITS_CHEQUE_WIDTH_MM) < 0.05
+    )
+    return {
+        "length_mm": length_mm,
+        "width_mm": width_mm,
+        "use_standard_cheque_size": use_standard,
+    }
+
+
+def validate_printer_offsets(offset_x_mm: float, offset_y_mm: float) -> str | None:
+    try:
+        x = float(offset_x_mm)
+        y = float(offset_y_mm)
+    except (TypeError, ValueError):
+        return "flash_printer_offsets_invalid"
+    if not (-20.0 <= x <= 20.0) or not (-20.0 <= y <= 20.0):
+        return "flash_printer_offsets_out_of_range"
+    return None
+
+
+def get_account_printer_calibration(user_bank_acc_id: int | None, bank_name: str | None) -> dict:
+    from core.cheque_utils import resolve_bank_code
+
+    calibration = {
+        "offset_x_mm": 0.0,
+        "offset_y_mm": 0.0,
+        "feed_orientation": "VERTICAL",
+        "bank_code": resolve_bank_code(bank_name),
+    }
+    bank_code = calibration["bank_code"]
+    if user_bank_acc_id and bank_code:
+        settings = get_printer_settings(user_bank_acc_id, bank_code)
+        calibration["offset_x_mm"] = float(settings.get("offset_x_mm") or 0.0)
+        calibration["offset_y_mm"] = float(settings.get("offset_y_mm") or 0.0)
+        calibration["feed_orientation"] = settings.get("feed_orientation") or "VERTICAL"
+    return calibration
+
+
+def save_account_printer_calibration(
+    user_bank_acc_id: int,
+    bank_code: str,
+    offset_x_mm: float,
+    offset_y_mm: float,
+    feed_orientation: str = "VERTICAL",
+) -> str | None:
+    err = validate_printer_offsets(offset_x_mm, offset_y_mm)
+    if err:
+        return err
+    if not get_bank_cheque_template(bank_code):
+        return "flash_bank_name_required"
+    existing = get_printer_settings(user_bank_acc_id, bank_code)
+    upsert_printer_settings(
+        bank_code,
+        user_bank_acc_id=user_bank_acc_id,
+        offset_x_mm=float(offset_x_mm),
+        offset_y_mm=float(offset_y_mm),
+        feed_orientation=feed_orientation,
+        cheque_width_mm=existing.get("cheque_width_mm"),
+        cheque_height_mm=existing.get("cheque_height_mm"),
+    )
+    return None
+
+
+def bank_name_for_code(bank_code: str | None) -> str | None:
+    if not bank_code:
+        return None
+    template = get_bank_cheque_template(bank_code.strip())
+    return template["bank_name"] if template else None
+
+
+def save_account_cheque_setup(
+    user_bank_acc_id: int,
+    bank_name: str,
+    length_mm: float,
+    width_mm: float,
+    bank_code: str | None = None,
+) -> str | None:
+    """Persist per-account cheque leaf dimensions. Returns flash key on validation error."""
+    from core.cheque_utils import resolve_bank_code
+
+    err = validate_cheque_dimensions(length_mm, width_mm)
+    if err:
+        return err
+
+    if not bank_code:
+        bank_code = resolve_bank_code(bank_name)
+    if not bank_code:
+        return None
+
+    existing = get_printer_settings(user_bank_acc_id, bank_code)
+    upsert_printer_settings(
+        bank_code,
+        user_bank_acc_id=user_bank_acc_id,
+        offset_x_mm=float(existing.get("offset_x_mm") or 0.0),
+        offset_y_mm=float(existing.get("offset_y_mm") or 0.0),
+        feed_orientation=existing.get("feed_orientation") or "VERTICAL",
+        cheque_width_mm=float(length_mm),
+        cheque_height_mm=float(width_mm),
+    )
+    return None
+
+
+def upsert_printer_settings(
+    bank_code: str,
+    *,
+    user_bank_acc_id: int | None = None,
+    offset_x_mm: float = 0.0,
+    offset_y_mm: float = 0.0,
+    feed_orientation: str = "VERTICAL",
+    cheque_width_mm: float | None = None,
+    cheque_height_mm: float | None = None,
+    is_active: bool = True,
+):
+    existing = query_one(
+        """SELECT id FROM shop_printer_settings
+           WHERE bank_code = ? AND user_bank_acc_id IS ?""",
+        (bank_code, user_bank_acc_id),
+    )
+    orientation = feed_orientation.upper()
+    if orientation not in ("VERTICAL", "HORIZONTAL"):
+        orientation = "VERTICAL"
+    if existing:
+        execute(
+            """UPDATE shop_printer_settings
+               SET offset_x_mm = ?, offset_y_mm = ?, feed_orientation = ?, is_active = ?,
+                   cheque_width_mm = COALESCE(?, cheque_width_mm),
+                   cheque_height_mm = COALESCE(?, cheque_height_mm)
+               WHERE id = ?""",
+            (
+                offset_x_mm,
+                offset_y_mm,
+                orientation,
+                1 if is_active else 0,
+                cheque_width_mm,
+                cheque_height_mm,
+                existing["id"],
+            ),
+        )
+        return existing["id"]
+    return execute(
+        """INSERT INTO shop_printer_settings
+           (user_bank_acc_id, bank_code, offset_x_mm, offset_y_mm, feed_orientation,
+            cheque_width_mm, cheque_height_mm, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            user_bank_acc_id,
+            bank_code,
+            offset_x_mm,
+            offset_y_mm,
+            orientation,
+            cheque_width_mm,
+            cheque_height_mm,
+            1 if is_active else 0,
+        ),
+    )
+
+
+# --- WhatsApp local bridge: whitelist, inbound idempotency, unprocessed media ---
+
+
+def ensure_whatsapp_allowed_senders_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS whatsapp_allowed_senders (
+            sender_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phone_e164 TEXT NOT NULL,
+            display_name TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(user_id, phone_e164),
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )"""
+    )
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_allowed_senders_user ON whatsapp_allowed_senders(user_id)"
+    )
+
+
+def ensure_inbound_messages_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS inbound_messages (
+            inbound_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wa_msg_id TEXT NOT NULL UNIQUE,
+            sender_phone TEXT,
+            received_at TEXT,
+            location_path TEXT,
+            pipeline_status TEXT NOT NULL DEFAULT 'processing',
+            invoice_id INTEGER,
+            error_message TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+        )"""
+    )
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_inbound_messages_status ON inbound_messages(pipeline_status)"
+    )
+
+
+def ensure_unprocessed_media_schema():
+    execute(
+        """CREATE TABLE IF NOT EXISTS unprocessed_media_log (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            wa_msg_id TEXT,
+            sender_phone TEXT,
+            location_path TEXT NOT NULL,
+            received_at TEXT,
+            reject_reason TEXT NOT NULL DEFAULT 'not_invoice',
+            classifier_json TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES user(user_id)
+        )"""
+    )
+    execute("CREATE INDEX IF NOT EXISTS idx_unprocessed_media_user ON unprocessed_media_log(user_id)")
+    execute(
+        "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_status ON unprocessed_media_log(status)"
+    )
+
+
+def _ensure_whatsapp_bridge_schemas():
+    ensure_whatsapp_allowed_senders_schema()
+    ensure_inbound_messages_schema()
+    ensure_unprocessed_media_schema()
+
+
+def list_allowed_senders():
+    _ensure_whatsapp_bridge_schemas()
+    return query(
+        """SELECT * FROM whatsapp_allowed_senders
+           WHERE user_id = ?
+           ORDER BY display_name, phone_e164""",
+        (Config.USER_ID,),
+    )
+
+
+def get_allowed_sender(sender_id: int):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one(
+        "SELECT * FROM whatsapp_allowed_senders WHERE sender_id = ? AND user_id = ?",
+        (sender_id, Config.USER_ID),
+    )
+
+
+def add_allowed_sender(phone_e164: str, display_name: str | None = None) -> int:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    _ensure_whatsapp_bridge_schemas()
+    phone = normalize_whatsapp_phone(phone_e164)
+    with transaction() as conn:
+        cursor = conn.execute(
+            """INSERT INTO whatsapp_allowed_senders (user_id, phone_e164, display_name)
+               VALUES (?, ?, ?)""",
+            (Config.USER_ID, phone, (display_name or "").strip() or None),
+        )
+        return cursor.lastrowid
+
+
+def update_allowed_sender(
+    sender_id: int,
+    *,
+    display_name: str | None = None,
+    is_active: bool | None = None,
+):
+    _ensure_whatsapp_bridge_schemas()
+    row = get_allowed_sender(sender_id)
+    if not row:
+        return
+    name = row.get("display_name") if display_name is None else display_name
+    active = row.get("is_active") if is_active is None else (1 if is_active else 0)
+    execute(
+        """UPDATE whatsapp_allowed_senders
+           SET display_name = ?, is_active = ?, updated_at = datetime('now')
+           WHERE sender_id = ? AND user_id = ?""",
+        (name, active, sender_id, Config.USER_ID),
+    )
+
+
+def remove_allowed_sender(sender_id: int):
+    execute(
+        "DELETE FROM whatsapp_allowed_senders WHERE sender_id = ? AND user_id = ?",
+        (sender_id, Config.USER_ID),
+    )
+
+
+def is_sender_allowed(phone: str) -> bool:
+    from core.whatsapp_utils import normalize_whatsapp_phone
+
+    _ensure_whatsapp_bridge_schemas()
+    active = query(
+        """SELECT phone_e164 FROM whatsapp_allowed_senders
+           WHERE user_id = ? AND is_active = 1""",
+        (Config.USER_ID,),
+    )
+    if not active:
+        return False
+    normalized = normalize_whatsapp_phone(phone)
+    allowed = {normalize_whatsapp_phone(r["phone_e164"]) for r in active}
+    return normalized in allowed
+
+
+def get_inbound_message(wa_msg_id: str):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one("SELECT * FROM inbound_messages WHERE wa_msg_id = ?", (wa_msg_id,))
+
+
+def begin_inbound_processing(
+    wa_msg_id: str,
+    *,
+    sender_phone: str | None,
+    received_at: str | None,
+    location_path: str | None,
+) -> tuple[str, dict | None]:
+    """Returns ('new', None) or ('duplicate', existing_row)."""
+    _ensure_whatsapp_bridge_schemas()
+    existing = get_inbound_message(wa_msg_id)
+    if existing:
+        return "duplicate", existing
+    with transaction() as conn:
+        conn.execute(
+            """INSERT INTO inbound_messages
+               (wa_msg_id, sender_phone, received_at, location_path, pipeline_status)
+               VALUES (?, ?, ?, ?, 'processing')""",
+            (wa_msg_id, sender_phone, received_at, location_path),
+        )
+    return "new", None
+
+
+def finalize_inbound(
+    wa_msg_id: str,
+    *,
+    status: str,
+    invoice_id: int | None = None,
+    location_path: str | None = None,
+    error_message: str | None = None,
+):
+    _ensure_whatsapp_bridge_schemas()
+    execute(
+        """UPDATE inbound_messages
+           SET pipeline_status = ?, invoice_id = COALESCE(?, invoice_id),
+               location_path = COALESCE(?, location_path),
+               error_message = ?
+           WHERE wa_msg_id = ?""",
+        (status, invoice_id, location_path, error_message, wa_msg_id),
+    )
+
+
+def save_unprocessed_media_log(
+    *,
+    wa_msg_id: str | None,
+    sender_phone: str | None,
+    location_path: str,
+    received_at: str | None,
+    reject_reason: str,
+    classifier_json: str | None = None,
+) -> int:
+    _ensure_whatsapp_bridge_schemas()
+    with transaction() as conn:
+        cursor = conn.execute(
+            """INSERT INTO unprocessed_media_log
+               (user_id, wa_msg_id, sender_phone, location_path, received_at,
+                reject_reason, classifier_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                Config.USER_ID,
+                wa_msg_id,
+                sender_phone,
+                location_path,
+                received_at,
+                reject_reason,
+                classifier_json,
+            ),
+        )
+        return cursor.lastrowid
+
+
+def get_unprocessed_media_pending():
+    _ensure_whatsapp_bridge_schemas()
+    return query(
+        """SELECT * FROM unprocessed_media_log
+           WHERE user_id = ? AND status = 'pending'
+           ORDER BY created_at DESC""",
+        (Config.USER_ID,),
+    )
+
+
+def get_unprocessed_media_item(log_id: int):
+    _ensure_whatsapp_bridge_schemas()
+    return query_one(
+        "SELECT * FROM unprocessed_media_log WHERE log_id = ? AND user_id = ?",
+        (log_id, Config.USER_ID),
+    )
+
+
+def dismiss_unprocessed_media(log_id: int):
+    execute(
+        """UPDATE unprocessed_media_log SET status = 'dismissed'
+           WHERE log_id = ? AND user_id = ?""",
+        (log_id, Config.USER_ID),
+    )
+

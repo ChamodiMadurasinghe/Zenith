@@ -1,0 +1,102 @@
+<div class="summary-grid">
+  <div class="stat-card">
+    <span class="stat-label">{{ t('current_balance') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(report.current_balance) }}</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">{{ t('overdraft_limit') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(report.overdraft_limit) }}</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">{{ t('usable_funds') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(report.usable_funds) }}</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">{{ t('cheques_30_days') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(report.cheques_next_30_days) }}</span>
+  </div>
+</div>
+
+{% if report.alerts %}
+<h2>{{ t('deposit_alerts') }}</h2>
+{% for alert in report.alerts %}
+<div class="alert-card {% if alert.severity == 'overdraft' %}alert-card-danger{% endif %}">
+  {% if alert.severity == 'overdraft' %}
+  <strong>{{ t('alert_overdraft', amount="{:,.2f}".format(alert.amount_needed), date=alert.deposit_by_date) }}</strong>
+  {% else %}
+  <strong>{{ t('alert_deposit', amount="{:,.2f}".format(alert.amount_needed), date=alert.deposit_by_date) }}</strong>
+  {% endif %}
+  <p>{{ t('alert_reason', reason=alert.reason, date=alert.clearance_date) }}</p>
+</div>
+{% endfor %}
+{% else %}
+<p class="success-msg">{{ t('no_alerts') }}</p>
+{% endif %}
+
+<div class="grid-2">
+  <form class="card" method="post" action="{{ url_for('cash_flow.record_deposit') }}" data-zenith-validate>
+    <h3>{{ t('record_deposit') }}</h3>
+    <p class="muted">{{ t('record_deposit_help') }}</p>
+    <input type="hidden" name="account_id" value="{{ selected_account_id }}">
+    <label>{{ t('col_date') }} <input type="date" name="deposit_date" value="{{ today }}" required></label>
+    <label>{{ t('col_amount') }} <input type="number" step="0.01" min="0.01" name="amount" required></label>
+    <label>{{ t('notes') }} <input name="reference" placeholder="{{ t('notes_placeholder') }}"></label>
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_deposit') }}</button>
+  </form>
+
+  <form class="card" method="post" action="{{ url_for('cash_flow.update_balance') }}" data-zenith-validate>
+    <h3>{{ t('update_balance') }}</h3>
+    <p class="muted">{{ t('update_balance_help') }}</p>
+    <input type="hidden" name="account_id" value="{{ selected_account_id }}">
+    <label>{{ t('new_balance') }} <input type="number" step="0.01" name="balance" value="{{ report.current_balance }}" required></label>
+    <button type="submit" class="btn btn-secondary btn-lg">{{ t('save_balance') }}</button>
+  </form>
+</div>
+
+<form class="card" method="post" action="{{ url_for('cash_flow.add_planned') }}" data-zenith-validate>
+  <h3>{{ t('plan_deposit') }}</h3>
+  <input type="hidden" name="account_id" value="{{ selected_account_id }}">
+  <div class="grid-2">
+    <label>{{ t('col_date') }} <input type="date" name="planned_date" required></label>
+    <label>{{ t('col_amount') }} <input type="number" step="0.01" name="amount" required></label>
+  </div>
+  <label>{{ t('notes') }} <input name="notes" placeholder="{{ t('notes_placeholder') }}"></label>
+  <button type="submit" class="btn btn-secondary btn-lg">{{ t('add_planned') }}</button>
+</form>
+
+{% if planned_deposits %}
+<h3>{{ t('planned_deposits') }}</h3>
+<table class="data-table">
+  <thead><tr><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('notes') }}</th><th></th></tr></thead>
+  <tbody>
+    {% for p in planned_deposits %}
+    <tr>
+      <td>{{ p.planned_date }}</td>
+      <td>Rs. {{ "{:,.2f}".format(p.amount) }}</td>
+      <td>{{ p.notes or '—' }}</td>
+      <td>
+        <form method="post" action="{{ url_for('cash_flow.complete_planned', planned_id=p.planned_deposit_id) }}" class="inline">
+          <button type="submit" class="btn btn-secondary">{{ t('mark_done') }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if bank_deposits %}
+<h3>{{ t('recent_deposits') }}</h3>
+<table class="data-table">
+  <thead><tr><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('notes') }}</th></tr></thead>
+  <tbody>
+    {% for d in bank_deposits %}
+    <tr>
+      <td>{{ d.deposit_date }}</td>
+      <td>Rs. {{ "{:,.2f}".format(d.amount) }}</td>
+      <td>{{ d.reference or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

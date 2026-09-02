@@ -13,6 +13,7 @@ CREATE TABLE user_bank_account (
     account_name        TEXT    NOT NULL,
     nickname            TEXT,
     available_balance   REAL    NOT NULL DEFAULT 0.00,
+    overdraft_limit     REAL    NOT NULL DEFAULT 0.00,
     branch_name         TEXT,
     bank_name           TEXT    NOT NULL,
     FOREIGN KEY (user_id) REFERENCES user(user_id)
@@ -60,6 +61,7 @@ CREATE TABLE invoices (
     cheque_id               INTEGER,
     invoice_no              TEXT    NOT NULL,
     invoiced_date           TEXT    NOT NULL,
+    delivery_date           TEXT,
     credit_period_days      INTEGER NOT NULL,
     total_amount            REAL    NOT NULL,
     location_path           TEXT,
@@ -174,12 +176,83 @@ CREATE TABLE whatsapp_inbox (
     FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
 );
 
+CREATE TABLE whatsapp_allowed_senders (
+    sender_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL,
+    phone_e164      TEXT NOT NULL,
+    display_name    TEXT,
+    is_active       INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, phone_e164),
+    FOREIGN KEY (user_id) REFERENCES user(user_id)
+);
+
+CREATE TABLE inbound_messages (
+    inbound_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    wa_msg_id       TEXT NOT NULL UNIQUE,
+    sender_phone    TEXT,
+    received_at     TEXT,
+    location_path   TEXT,
+    pipeline_status TEXT NOT NULL DEFAULT 'processing',
+    invoice_id      INTEGER,
+    error_message   TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(invoices_id)
+);
+
+CREATE TABLE unprocessed_media_log (
+    log_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id           INTEGER NOT NULL,
+    wa_msg_id         TEXT,
+    sender_phone      TEXT,
+    location_path     TEXT NOT NULL,
+    received_at       TEXT,
+    reject_reason     TEXT NOT NULL DEFAULT 'not_invoice',
+    classifier_json   TEXT,
+    status            TEXT NOT NULL DEFAULT 'pending',
+    created_at        TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES user(user_id)
+);
+
 CREATE TABLE alert_log (
     alert_id        INTEGER PRIMARY KEY AUTOINCREMENT,
     channel         TEXT NOT NULL,
     recipient       TEXT NOT NULL,
     message         TEXT NOT NULL,
     sent_at         TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE bank_cheque_templates (
+    bank_code               VARCHAR(20) PRIMARY KEY,
+    bank_name               VARCHAR(100) NOT NULL,
+    cheque_width_mm         REAL NOT NULL DEFAULT 177.8,
+    cheque_height_mm        REAL NOT NULL DEFAULT 88.9,
+    date_x                  REAL NOT NULL,
+    date_y                  REAL NOT NULL,
+    date_letter_spacing     REAL DEFAULT 3.5,
+    payee_x                 REAL NOT NULL,
+    payee_y                 REAL NOT NULL,
+    amount_words_x          REAL NOT NULL,
+    amount_words_y          REAL NOT NULL,
+    amount_words_max_width  REAL DEFAULT 110.0,
+    amount_figures_x        REAL NOT NULL,
+    amount_figures_y        REAL NOT NULL,
+    crossing_x              REAL DEFAULT 15.0,
+    crossing_y              REAL DEFAULT 75.0
+);
+
+CREATE TABLE shop_printer_settings (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id    INTEGER REFERENCES user_bank_account(user_bank_acc_id),
+    bank_code           VARCHAR(20) NOT NULL REFERENCES bank_cheque_templates(bank_code),
+    offset_x_mm         REAL DEFAULT 0.0,
+    offset_y_mm         REAL DEFAULT 0.0,
+    feed_orientation    TEXT DEFAULT 'VERTICAL' CHECK (feed_orientation IN ('VERTICAL', 'HORIZONTAL')),
+    cheque_width_mm     REAL,
+    cheque_height_mm    REAL,
+    is_active           INTEGER DEFAULT 1,
+    UNIQUE(user_bank_acc_id, bank_code)
 );
 
 CREATE INDEX idx_user_bank_account_user_id ON user_bank_account(user_id);
@@ -202,6 +275,10 @@ CREATE INDEX idx_deposit_timetable_stated ON deposit_timetable(stated_date);
 CREATE INDEX idx_whatsapp_sessions_updated ON whatsapp_sessions(updated_at);
 CREATE INDEX idx_whatsapp_inbox_status ON whatsapp_inbox(status);
 CREATE INDEX idx_whatsapp_inbox_user ON whatsapp_inbox(user_id);
+CREATE INDEX idx_whatsapp_allowed_senders_user ON whatsapp_allowed_senders(user_id);
+CREATE INDEX idx_inbound_messages_status ON inbound_messages(pipeline_status);
+CREATE INDEX idx_unprocessed_media_user ON unprocessed_media_log(user_id);
+CREATE INDEX idx_unprocessed_media_status ON unprocessed_media_log(status);
 CREATE INDEX idx_alert_log_sent_at ON alert_log(sent_at);
 
 -- One invoice number per dealer (per user). Different dealers may reuse the same number.

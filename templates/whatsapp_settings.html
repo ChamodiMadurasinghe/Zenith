@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ t('whatsapp_settings_title') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>{{ t('whatsapp_settings_title') }}</h1>
+  <p class="lead">{{ t('whatsapp_settings_lead') }}</p>
+  <p><a href="{{ url_for('ingestion.dashboard') }}" class="btn btn-secondary">{{ t('back_to_invoices') }}</a></p>
+</header>
+
+<section class="section-block">
+  <h2 class="section-title">{{ t('merchant_whatsapp_title') }}</h2>
+  <p class="muted">{{ t('merchant_whatsapp_help') }}</p>
+  <form class="card card-lg form-stack" method="post" action="{{ url_for('whatsapp_settings.save_merchant_phone') }}">
+    <label>
+      {{ t('merchant_whatsapp_label') }}
+      <input type="tel" name="merchant_phone" value="{{ merchant_phone or '' }}" placeholder="+94771234567">
+    </label>
+    <p class="muted help-tip">{{ t('merchant_whatsapp_hint') }}</p>
+    <button type="submit" class="btn btn-primary">{{ t('save') }}</button>
+  </form>
+</section>
+
+<section class="section-block">
+  <h2 class="section-title">{{ t('whatsapp_allowed_senders') }}</h2>
+  <p class="muted">{{ t('whatsapp_allowed_senders_help') }}</p>
+
+  <form class="card card-lg form-stack" method="post" action="{{ url_for('whatsapp_settings.add_sender') }}">
+    <h3 class="card-title">{{ t('whatsapp_add_sender') }}</h3>
+    <label>
+      {{ t('whatsapp_phone_label') }}
+      <input type="tel" name="phone_e164" required placeholder="+94771234567">
+    </label>
+    <label>
+      {{ t('whatsapp_display_name') }}
+      <input type="text" name="display_name" placeholder="{{ t('whatsapp_display_name_hint') }}">
+    </label>
+    <button type="submit" class="btn btn-primary">{{ t('add') }}</button>
+  </form>
+
+  {% if senders %}
+  <div class="table-scroll">
+    <table class="data-table data-table-lg">
+      <thead>
+        <tr>
+          <th>{{ t('whatsapp_phone_label') }}</th>
+          <th>{{ t('whatsapp_display_name') }}</th>
+          <th>{{ t('col_status') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in senders %}
+        <tr>
+          <td>{{ s.phone_e164 }}</td>
+          <td>
+            <form method="post" action="{{ url_for('whatsapp_settings.update_sender', sender_id=s.sender_id) }}" class="inline-form-row">
+              <input type="text" name="display_name" value="{{ s.display_name or '' }}">
+              <label class="checkbox-inline">
+                <input type="checkbox" name="is_active" value="1" {% if s.is_active %}checked{% endif %}>
+                {{ t('active') }}
+              </label>
+              <button type="submit" class="btn btn-secondary btn-sm">{{ t('save') }}</button>
+            </form>
+          </td>
+          <td>{{ t('active') if s.is_active else t('inactive') }}</td>
+          <td>
+            <form method="post" action="{{ url_for('whatsapp_settings.delete_sender', sender_id=s.sender_id) }}">
+              <button type="submit" class="btn btn-secondary btn-sm">{{ t('remove') }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted section-empty">{{ t('whatsapp_no_senders') }}</p>
+  {% endif %}
+</section>
+
+<section class="section-block">
+  <h2 class="section-title">{{ t('unprocessed_media_log') }}</h2>
+  <p class="muted">{{ t('unprocessed_media_help') }}</p>
+  {% if unprocessed %}
+  <ul class="wa-inbox-grid">
+    {% for row in unprocessed %}
+    <li class="wa-inbox-icon">
+      {% if row.image_url %}
+      <a href="{{ row.image_url }}" target="_blank" rel="noopener" class="wa-inbox-icon-thumb">
+        <img src="{{ row.image_url }}" alt="">
+      </a>
+      {% endif %}
+      <p class="wa-inbox-icon-meta">
+        <span>{{ row.sender_phone or '—' }}</span>
+        <span class="muted">{{ row.reject_reason }}</span>
+      </p>
+      <form method="post" action="{{ url_for('whatsapp_settings.dismiss_unprocessed', log_id=row.log_id) }}">
+        <button type="submit" class="btn btn-secondary btn-block">{{ t('dismiss') }}</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted section-empty">{{ t('no_unprocessed_media') }}</p>
+  {% endif %}
+</section>
+{% endblock %}

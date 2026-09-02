@@ -1,0 +1,27 @@
+<form class="card" method="post" action="{{ url_for('cash_flow.create_account') }}" data-zenith-validate>
+  <h3>{{ t('add_bank_account') }}</h3>
+  <p class="muted">{{ t('add_bank_account_help') }}</p>
+  <div class="grid-2">
+    <label>{{ t('bank_nickname') }} <input name="nickname" placeholder="{{ t('bank_nickname_ph') }}"></label>
+    <label>{{ t('bank_account_name') }} <input name="account_name" required placeholder="{{ t('bank_account_name_ph') }}"></label>
+    {% include '_bank_select.html' %}
+    <label>{{ t('bank_branch') }} <input name="branch_name" placeholder="e.g. Colombo 07"></label>
+    <label>{{ t('opening_balance') }} <input type="number" step="0.01" name="available_balance" value="0" required></label>
+    <label>{{ t('overdraft_limit') }}
+      <input type="number" step="0.01" min="0" name="overdraft_limit" value="0">
+      <span class="muted help-tip">{{ t('overdraft_limit_help') }}</span>
+    </label>
+  </div>
+  <label class="confirm-label">
+    <input type="checkbox" name="set_as_default" value="1" {% if not accounts %}checked{% endif %}>
+    {{ t('set_as_default_account') }}
+    </label>
+  {% include '_cheque_dimensions_guide.html' %}
+  <p class="muted help-tip">{{ t('printer_calibrate_after_save') }}</p>
+  <div class="actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_bank_account') }}</button>
+    {% if accounts %}
+    <a href="{{ url_for('cash_flow.cash_flow') }}" class="btn btn-secondary">{{ t('cancel') }}</a>
+    {% endif %}
+  </div>
+</form>

@@ -1,0 +1,46 @@
+{% set filter_action = url_for('dealers.invoices', dealer_id=dealer.dealer_id) %}
+{% set reset_url = filter_action %}
+{% include '_invoice_filter_bar.html' %}
+
+{% set summary_title = t('invoice_list_summary_title') %}
+{% set summary_noun = t('list_summary_invoices') %}
+{% include '_list_summary_bar.html' %}
+
+{% if dealer_invoices %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>{{ t('col_invoice_no') }}</th>
+      <th>{{ t('total_amount') }}</th>
+      <th>{{ t('col_date') }}</th>
+      <th>{{ t('delivery_date') }}</th>
+      <th>{{ t('col_aging') }}</th>
+      <th>{{ t('col_payment') }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for inv in dealer_invoices %}
+    <tr class="clickable-row" onclick="window.location='{{ url_for('dealers.invoice_detail', dealer_id=dealer.dealer_id, invoice_id=inv.invoices_id) }}'">
+      <td>
+        <a href="{{ url_for('dealers.invoice_detail', dealer_id=dealer.dealer_id, invoice_id=inv.invoices_id) }}">
+          {{ inv.invoice_no }}
+        </a>
+      </td>
+      <td>Rs. {{ "{:,.2f}".format(inv.total_amount or 0) }}</td>
+      <td>{{ inv.invoiced_date }}</td>
+      <td>{{ inv.delivery_date or '—' }}</td>
+      <td>{{ inv.aging_days }}</td>
+      <td>
+        {% if inv.cheque_id %}
+        <span class="status-paid" aria-label="{{ t('payment_paid') }}" title="{{ t('payment_paid') }}">&#10003;</span>
+        {% else %}
+        <span class="status-unpaid" aria-label="{{ t('payment_unpaid') }}" title="{{ t('payment_unpaid') }}">&#10007;</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">{{ t('no_dealer_invoices') }}</p>
+{% endif %}

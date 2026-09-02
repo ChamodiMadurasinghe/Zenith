@@ -5,6 +5,9 @@
 <header class="page-header">
   <h1>{{ t('page_upload') }}</h1>
   <p class="lead">{{ t('lead_upload') }}</p>
+  <p>
+    <a href="{{ url_for('whatsapp_settings.settings_index') }}" class="btn btn-secondary">{{ t('whatsapp_settings_link') }}</a>
+  </p>
 </header>
 
 <div class="intake-tabs">
@@ -118,7 +121,7 @@
   <div class="table-scroll">
     <table class="data-table data-table-lg">
       <thead>
-        <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th></th></tr>
+        <tr><th>{{ t('col_invoice_no') }}</th><th>{{ t('col_dealer') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_source') }}</th><th></th></tr>
       </thead>
       <tbody>
         {% for inv in pending_invoices %}
@@ -127,6 +130,7 @@
           <td>{{ inv.display_dealer_name or inv.dealer_name }}</td>
           <td>{{ inv.invoiced_date }}</td>
           <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
+          <td>{% if inv.source in ('whatsapp', 'whatsapp_web') %}<span class="badge badge-pending">{{ t('source_whatsapp') }}</span>{% else %}—{% endif %}</td>
           <td><a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-primary btn-lg">{{ t('verify') }}</a></td>
         </tr>
         {% endfor %}

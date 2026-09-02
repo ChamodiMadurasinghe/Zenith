@@ -1,29 +1,55 @@
 <p class="help-tip">{{ t('help_tip_cheques') }}</p>
 
+{% if strategy_summary %}
+<div class="card strategy-summary-banner">
+  <h3>Agent 3 — Payment strategy</h3>
+  <p>{{ strategy_summary }}</p>
+</div>
+{% endif %}
+
 <div class="layout-split" id="cheques-layout">
   <div class="card" id="bundle-workspace" data-dealer="{{ dealer.dealer_id }}">
     <button type="button" id="chat-expand-btn" class="btn btn-secondary btn-lg chat-expand-fab" hidden>
       {{ t('chat_show') }}
     </button>
 
-    {% if committed_cheques %}
     <h3>{{ t('committed_cheques') }}</h3>
-    <table class="data-table">
+    <p class="text-muted">{{ t('cheque_click_hint') }}</p>
+    {% set filter_action = url_for('dealers.cheques', dealer_id=dealer.dealer_id) %}
+    {% set reset_url = filter_action %}
+    {% include '_cheque_filter_bar.html' %}
+    {% set summary_title = t('cheque_list_summary_title') %}
+    {% set summary_noun = t('list_summary_cheques') %}
+    {% include '_list_summary_bar.html' %}
+    {% if committed_cheques %}
+    <div class="table-scroll">
+    <table class="data-table" id="written-cheques-table">
       <thead>
-        <tr><th>{{ t('col_cheque_no') }}</th><th>{{ t('col_date') }}</th><th>{{ t('col_clearance') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_invoices') }}</th></tr>
+        <tr>
+          <th>{{ t('col_cheque_no') }}</th>
+          <th>{{ t('col_stated_date') }}</th>
+          <th>{{ t('col_clearance') }}</th>
+          <th>{{ t('col_days_gained') }}</th>
+          <th>{{ t('col_amount') }}</th>
+          <th>{{ t('dealer') }}</th>
+        </tr>
       </thead>
       <tbody>
         {% for ch in committed_cheques %}
-        <tr>
+        <tr class="clickable-row" data-cheque-id="{{ ch.cheque_id }}" tabindex="0">
           <td>{{ ch.cheque_no }}</td>
           <td>{{ ch.cheque_date }}</td>
-          <td>{{ ch.predicted_clearance_date or '—' }}</td>
-          <td>{{ "{:,.2f}".format(ch.amount_in_numerals) }}</td>
-          <td>{% for inv in ch.invoices %}{{ inv.invoice_no }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          <td><strong>{{ ch.expected_clearance_date or ch.predicted_clearance_date or '—' }}</strong></td>
+          <td>{% if ch.days_gained is not none %}{{ ch.days_gained }}{% else %}—{% endif %}</td>
+          <td>Rs. {{ "{:,.2f}".format(ch.amount_in_numerals or 0) }}</td>
+          <td>{{ ch.dealer_name or dealer.dealer_name }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
+    {% else %}
+    <p class="muted">{{ t('cheque_filter_empty') }}</p>
     {% endif %}
 
     {% if pending_invoices %}

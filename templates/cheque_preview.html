@@ -12,20 +12,28 @@
 
 <form method="post" action="{{ url_for('bundling.commit') }}" data-zenith-validate>
   <label>{{ t('bank_account') }}
-    <select name="user_bank_acc_id" required>
+    <select name="user_bank_acc_id" id="paying-account" required>
       <option value="">{{ t('select_paying_account') }}</option>
       {% for acc in accounts %}
-      <option value="{{ acc.user_bank_acc_id }}" {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
+      {% set od = acc.overdraft_limit or 0 %}
+      {% set bal = acc.available_balance or 0 %}
+      {% set proj = account_projections.get(acc.user_bank_acc_id) if account_projections else none %}
+      <option value="{{ acc.user_bank_acc_id }}"
+              data-exceeds="{{ '1' if proj and proj.exceeds_overdraft else '0' }}"
+              {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
         {{ acc.nickname or acc.account_name }} — {{ acc.bank_name }}
-        (Rs. {{ "{:,.2f}".format(acc.available_balance or 0) }})
+        (Rs. {{ "{:,.2f}".format(bal) }}{% if od > 0 %} · {{ t('overdraft_limit') }} Rs. {{ "{:,.2f}".format(od) }} · {{ t('usable_funds') }} Rs. {{ "{:,.2f}".format(bal + od) }}{% endif %})
       </option>
       {% endfor %}
     </select>
   </label>
   <p class="muted help-tip">{{ t('cheque_bank_select_help') }}</p>
+  <div id="overdraft-warning" class="alert-card alert-card-danger" hidden>
+    <strong>{{ t('cheque_overdraft_warning') }}</strong>
+  </div>
 
   {% for b in bundles %}
-  <div class="cheque-print card">
+  <div class="cheque-print card" data-cheque-amount="{{ b.total_lkr }}" data-cheque-date="{{ b.cheque_date }}">
     <div class="cheque-header">{{ t('cheque_header') }}</div>
     <div class="cheque-row"><span>{{ t('cheque_date') }}:</span> {{ b.cheque_date }}</div>
     <div class="cheque-row"><span>{{ t('cheque_pay') }}:</span> {{ dealer.dealer_name }}</div>
@@ -34,6 +42,9 @@
     <div class="cheque-row"><span>{{ t('cheque_clearance') }}:</span> {{ b.predicted_clearance_date }}</div>
     <label>{{ t('cheque_number') }} <input name="cheque_no_{{ loop.index0 }}" placeholder="{{ t('cheque_number_ph') }}" required></label>
     <div class="cheque-invoices">{{ t('invoices') }}: {% for inv in b.invoices %}{{ inv.invoice_no }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+    <div class="actions no-print">
+      <button type="button" class="btn btn-secondary btn-print-cheque-pdf" data-payee="{{ dealer.dealer_name }}">{{ t('cheque_print_pdf') }}</button>
+    </div>
   </div>
   {% endfor %}
 
@@ -42,4 +53,64 @@
     <button type="submit" class="btn btn-primary btn-lg">{{ t('commit_db') }}</button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var sel = document.getElementById("paying-account");
+  var box = document.getElementById("overdraft-warning");
+  if (sel && box) {
+    function update() {
+      var opt = sel.options[sel.selectedIndex];
+      box.hidden = !(opt && opt.getAttribute("data-exceeds") === "1");
+    }
+    sel.addEventListener("change", update);
+    update();
+  }
+
+  document.querySelectorAll(".btn-print-cheque-pdf").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var accountSel = document.getElementById("paying-account");
+      if (!accountSel || !accountSel.value) {
+        alert("Please select a paying bank account first.");
+        return;
+      }
+      var card = btn.closest(".cheque-print");
+      if (!card) return;
+      var payload = {
+        user_bank_acc_id: parseInt(accountSel.value, 10),
+        payee_name: btn.getAttribute("data-payee") || "",
+        amount: parseFloat(card.getAttribute("data-cheque-amount") || "0"),
+        date_str: card.getAttribute("data-cheque-date") || "",
+        crossing: true
+      };
+      btn.disabled = true;
+      fetch("/api/cheque/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.json().then(function (data) {
+              throw new Error(data.error || "Print failed");
+            });
+          }
+          return res.blob();
+        })
+        .then(function (blob) {
+          var url = URL.createObjectURL(blob);
+          window.open(url, "_blank");
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        })
+        .catch(function (err) {
+          alert(err.message || "Could not generate cheque PDF.");
+        })
+        .finally(function () {
+          btn.disabled = false;
+        });
+    });
+  });
+})();
+</script>
 {% endblock %}
