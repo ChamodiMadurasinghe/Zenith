@@ -27,7 +27,9 @@
       {% for f in findings %}
       <li class="finding-{{ f.severity }}">
         {{ f.message }}
-        {% if f.needs_confirmation %}
+        {% if f.blocking %}
+        <span class="agent2-blocking-hint">— cannot be confirmed, must fix before saving</span>
+        {% elif f.needs_confirmation %}
         <span class="agent2-confirm-hint">— please confirm</span>
         {% endif %}
         <span class="muted">({{ f.severity }})</span>

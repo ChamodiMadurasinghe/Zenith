@@ -46,6 +46,7 @@ def _finding(
     message: str,
     *,
     needs_confirmation: bool = False,
+    blocking: bool = False,
     chat_line: str | None = None,
 ) -> dict:
     return {
@@ -53,6 +54,7 @@ def _finding(
         "severity": severity,
         "message": message,
         "needs_confirmation": needs_confirmation,
+        "blocking": blocking,
         "chat_line": chat_line or message,
     }
 
@@ -297,6 +299,12 @@ def _collect_findings(
                     "duplicate_invoice_no",
                     "high",
                     f"Invoice number {invoice_no} already exists for this dealer.",
+                    blocking=True,
+                    chat_line=(
+                        f"Invoice number {invoice_no} already exists for this dealer — "
+                        "unlike other warnings, this cannot be confirmed through. "
+                        "Please change the invoice number before saving."
+                    ),
                 )
             )
 
@@ -402,8 +410,12 @@ def build_agent2_chat_messages(audit: dict) -> list[dict]:
         )
         return messages
 
-    confirm_lines = [f for f in findings if f.get("needs_confirmation")]
-    other_lines = [f for f in findings if not f.get("needs_confirmation")]
+    blocking_lines = [f for f in findings if f.get("blocking")]
+    confirm_lines = [f for f in findings if f.get("needs_confirmation") and not f.get("blocking")]
+    other_lines = [f for f in findings if not f.get("needs_confirmation") and not f.get("blocking")]
+
+    for f in blocking_lines:
+        messages.append({"role": "agent2", "content": f.get("chat_line") or f.get("message", "")})
 
     for f in confirm_lines[:5]:
         messages.append({"role": "agent2", "content": f.get("chat_line") or f.get("message", "")})
@@ -416,8 +428,19 @@ def build_agent2_chat_messages(audit: dict) -> list[dict]:
             {
                 "role": "agent2",
                 "content": (
-                    "These are warnings only — you can still approve if everything is correct. "
+                    "Those are warnings only — you can still approve if everything is correct. "
                     "Tick confirm matches when you are satisfied."
+                ),
+            }
+        )
+
+    if blocking_lines:
+        messages.append(
+            {
+                "role": "agent2",
+                "content": (
+                    "The invoice number issue above is a hard stop — confirm matches will not "
+                    "let it through until the invoice number is changed."
                 ),
             }
         )
@@ -476,6 +499,7 @@ def check_invoice_anomalies(
             "code": f.get("code"),
             "severity": f.get("severity"),
             "message": f.get("message"),
+            "blocking": f.get("blocking", False),
         }
         for f in findings
     ]

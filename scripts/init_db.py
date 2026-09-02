@@ -205,7 +205,15 @@ MIGRATIONS = [
 
 
 def _sync_cbsl_holidays():
-    """Best-effort CBSL holiday sync after fresh DB create."""
+    """Best-effort CBSL holiday sync after fresh DB create.
+
+    cbsl.gov.lk blocks scraper user agents (403) on many networks, in which case
+    sync_years() silently falls back to weekends-only for the affected years. To
+    avoid a fresh setup quietly losing real bank-holiday data, always layer the
+    bundled database/populate_cbsl_holidays.sql on top afterward — it only fills
+    in dates the live sync did not already populate (INSERT OR IGNORE), so a
+    successful live sync is never overwritten.
+    """
     try:
         from scripts.sync_cbsl_holidays import sync_years
 
@@ -213,6 +221,13 @@ def _sync_cbsl_holidays():
         sync_years([2025, 2026, 2027], dry_run=False)
     except Exception as e:
         print(f"Warning: CBSL holiday sync failed ({e}). Run: python scripts/sync_cbsl_holidays.py")
+
+    try:
+        from scripts.sync_cbsl_holidays import load_from_sql
+
+        load_from_sql()
+    except Exception as e:
+        print(f"Warning: could not load bundled CBSL holiday seed ({e}).")
 
 
 def migrate_db(conn: sqlite3.Connection):

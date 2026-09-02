@@ -1992,6 +1992,7 @@ body.modal-open { overflow: hidden; }
 .agent2-findings h4 { margin: 0 0 0.35rem; font-size: 0.95rem; }
 .agent2-findings ul { margin: 0; padding-left: 1.2rem; }
 .agent2-confirm-hint { color: #9a6700; font-weight: 600; font-size: 0.88rem; }
+.agent2-blocking-hint { color: var(--danger); font-weight: 600; font-size: 0.88rem; }
 .finding-high { color: var(--danger); }
 .finding-medium { color: #9a6700; }
 [data-theme="dark"] .agent2-chat { background: #1e2430; }
