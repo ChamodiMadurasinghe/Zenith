@@ -94,7 +94,7 @@ def _save_pipeline_pending_invoice(
     sender_phone: str | None,
     delivery_date: str | None,
 ) -> int:
-    from agents.anomaly import check_invoice_anomalies
+    from agents.anomaly import audit_invoice, check_invoice_anomalies
 
     dealer = (
         repo.find_dealer_by_name(extracted["supplier_name"])
@@ -104,8 +104,14 @@ def _save_pipeline_pending_invoice(
     dealer_id = dealer["dealer_id"] if dealer else repo.get_pending_supplier_dealer_id()
 
     try:
+        audit = audit_invoice(extracted, dealer["dealer_id"] if dealer else None)
         anomalies = check_invoice_anomalies(extracted, dealer["dealer_id"] if dealer else None)
     except Exception:
+        audit = {
+            "status": "GOOD_TO_GO",
+            "risk_level": "LOW",
+            "remark": "Automatic checks could not run — please review manually.",
+        }
         anomalies = []
 
     items = extracted["line_items"] or [
@@ -120,6 +126,7 @@ def _save_pipeline_pending_invoice(
     pending_payload = {
         **dealer_setup_from_extraction(extracted),
         "anomalies": anomalies,
+        "audit": audit,
         "whatsapp_sender": sender_phone,
         "source": "whatsapp_web",
     }

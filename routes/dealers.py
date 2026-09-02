@@ -209,6 +209,7 @@ def cheques(dealer_id):
         chat_history=state["chat_history"],
         validation_issues=state["validation_issues"],
         pending_review=state.get("pending_review"),
+        strategy_summary=state.get("strategy_summary"),
         use_fake_ai=Config.use_fake_ai(),
     )
 

@@ -8,16 +8,7 @@
 {% include '_pending_dealer_form.html' %}
 {% endif %}
 
-{% if anomalies %}
-<div class="card alert">
-  <h3>Invoice anomaly warnings</h3>
-  <ul>
-    {% for a in anomalies %}
-    <li>{{ a.message }} ({{ a.severity }})</li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
+{% include '_agent2_audit_card.html' %}
 
 <div class="review-split">
   <div class="card review-image-pane">
@@ -91,4 +82,5 @@
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
+<script src="{{ url_for('static', filename='js/agent2_review.js') }}"></script>
 {% endblock %}

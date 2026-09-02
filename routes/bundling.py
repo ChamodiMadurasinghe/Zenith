@@ -8,7 +8,7 @@ from core.auth import login_required
 from core.cash_flow import simulate_extra_cheques
 from core.i18n import flash_t, get_lang, translate
 from core.bundle_session import hydrate_bundles, load_bundle_state, save_bundle_state, slim_bundles
-from core.bundling import build_bundles_from_assignments, compute_bundles
+from core.bundling import build_bundles_from_assignments
 from core.bundling_intent import infer_bundling_actions, normalize_proposed_actions
 from core.guardrails import apply_proposed_actions, collect_bundle_issues, validate_bundle_state
 from core.bundle_orchestrator import auto_review_until_approved
@@ -18,12 +18,12 @@ bundling_bp = Blueprint("bundling", __name__)
 
 
 def _chat_error_hint(err: str) -> str:
-    if "OPENAI_API_KEY not set" in err:
-        return "Agent unavailable. Set OPENAI_API_KEY in .env and restart the app."
     if "GEMINI_API_KEY not set" in err:
-        return "Vision agent unavailable. Set GEMINI_API_KEY in .env for invoice upload."
+        return "Agent unavailable. Set GEMINI_API_KEY in .env and restart the app."
+    if "OPENAI_API_KEY not set" in err:
+        return "Bundling chat unavailable. Set OPENAI_API_KEY in .env for the assistant."
     if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
-        return "Invalid OpenAI API key. Replace OPENAI_API_KEY in .env and restart."
+        return "Invalid API key. Check GEMINI_API_KEY (and OPENAI_API_KEY for chat) in .env and restart."
     err_l = err.lower()
     # Billing / prepaid balance (often confused with ChatGPT Plus credits).
     if (
@@ -67,6 +67,8 @@ def _save_state(
     validation_issues: list | None = None,
     allow_exceed_ceiling: bool = False,
     pending_review: str | None = None,
+    strategy_summary: str | None = None,
+    proposed_cheques: list | None = None,
 ):
     save_bundle_state(
         session,
@@ -77,6 +79,8 @@ def _save_state(
         validation_issues,
         allow_exceed_ceiling,
         pending_review=pending_review,
+        strategy_summary=strategy_summary,
+        proposed_cheques=proposed_cheques,
     )
 
 
@@ -115,7 +119,12 @@ def compute(dealer_id):
         flash_t("flash_select_invoice", "error")
         return redirect(_dealer_cheques_url(dealer_id))
 
-    bundles = compute_bundles(dealer_id, invoice_ids, ceiling)
+    from agents.strategist import propose_cheque_strategy, proposed_cheques_to_bundles
+
+    strategy = propose_cheque_strategy(dealer_id, invoice_ids, ceiling)
+    bundles = strategy.get("bundles") or proposed_cheques_to_bundles(
+        dealer_id, strategy.get("proposed_cheques") or [], invoice_ids
+    )
     state = _load_state(dealer_id)
     validation_issues = collect_bundle_issues({"bundles": bundles}, dealer_id, ceiling)
     _save_state(
@@ -125,6 +134,8 @@ def compute(dealer_id):
         state["chat_history"],
         validation_issues,
         pending_review="compute",
+        strategy_summary=strategy.get("strategy_summary"),
+        proposed_cheques=strategy.get("proposed_cheques"),
     )
     flash_t("flash_bundling_complete", "success", count=len(bundles))
     return redirect(_dealer_cheques_url(dealer_id))
@@ -368,6 +379,12 @@ def bundle_review(dealer_id):
         )
         lang = get_lang()
 
+        state = _load_state(dealer_id)
+        strategist_context = {
+            "strategy_summary": state.get("strategy_summary"),
+            "proposed_cheques": state.get("proposed_cheques"),
+        }
+
         try:
             if Config.use_fake_ai():
                 from agents.mock import mock_bundle_review
@@ -379,7 +396,13 @@ def bundle_review(dealer_id):
                 from agents.reviewer import review_bundles
 
                 result = review_bundles(
-                    dealer_id, bundles, ceiling, validation_issues, lang, trigger
+                    dealer_id,
+                    bundles,
+                    ceiling,
+                    validation_issues,
+                    lang,
+                    trigger,
+                    strategist_context=strategist_context,
                 )
         except Exception as e:
             err = str(e)

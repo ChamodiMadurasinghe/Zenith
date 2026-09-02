@@ -1,0 +1,40 @@
+---
+description: Agent 1–4 mapping and agentic layer conventions
+globs: agents/**,agentic/**
+alwaysApply: false
+---
+
+# Zenith Agents
+
+## Numbered agents (map to real code)
+
+| Agent | Role | Primary files |
+|-------|------|----------------|
+| 1 Vision | OCR invoice fields | `agents/ingestion.py`, `core/whatsapp_intake.py` |
+| 2 Anomaly | Pre-verify audit + chat panel (SQLite) | `agents/anomaly.py` — math, qty/reorder history, `{findings, chat_messages}` |
+| 3 Strategist | Cunning cheque planner (Gemini tool-calling) | `agents/strategist_agent.py` → `agents/bundling_tools.py` → `core/bundling.py`, `core/strategist_dates.py`, `core/guardrails.py` |
+| 4 Reviewer | Plain-language strategy explainer (Gemini) | `agents/reviewer.py` — lang-aware teacher tone |
+
+**Guardrails** — Python only: `core/guardrails.py` (runs after Agent 3).
+
+**Fallback bundling math** — `core/bundling.py` (`compute_bundles`) used when strategist fails or `USE_FAKE_AI=true`.
+
+## Agentic layer (`agentic/`)
+
+- Parallel to normal web flows; `USE_AGENTIC_ORCHESTRATOR=false` by default
+- Entry: `handle_event()` / `POST /api/orchestrate`
+- WhatsApp **photos** still use inbox-v2 even when agentic is on
+- Agentic text routing: `agentic/adapters/whatsapp_bridge.py`
+
+## Config flags
+
+- `USE_FAKE_AI=true` — mock OCR/strategist/reviewer (demo)
+- `USE_STRATEGIST_TOOL_AGENT=true` — Agent 3 Gemini tool loop (default); fallback one-shot JSON
+- `OPENAI_API_KEY` — bundling chat assistant only (not reviewer)
+- `ENABLE_VECTOR_PATTERNS` — Chroma at `database/chroma` (`core/vector_store.py`)
+
+## When adding agent behavior
+
+- Reuse `agents/base.py` for Gemini calls (Agents 1, 3, 4)
+- Store `audit` + `anomalies` in `pending_dealer_json` for verify UI
+- Do not bypass human verify on the standard web path unless explicitly requested

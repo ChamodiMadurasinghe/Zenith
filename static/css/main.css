@@ -1398,3 +1398,43 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .account-card.active { box-shadow: 0 0 0 2px rgba(120, 180, 220, 0.25); }
 [data-theme="dark"] .account-card-badge { background: #243040; color: #a8d0e8; }
 
+/* Agent 2 verify chat panel */
+.agent2-audit.audit-good_to_go { border-left: 4px solid var(--success); }
+.agent2-audit.audit-issue_detected { border-left: 4px solid var(--danger); }
+.agent2-audit.audit-insufficient_data { border-left: 4px solid #c77800; }
+.agent2-chat {
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+  background: #f4f6fa;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.agent2-chat-bubble {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 10px 4px;
+  padding: 0.55rem 0.75rem;
+}
+.agent2-chat-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.agent2-chat-bubble p { margin: 0; font-size: 0.95rem; }
+.agent2-findings { margin-top: 0.5rem; }
+.agent2-findings h4 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.agent2-findings ul { margin: 0; padding-left: 1.2rem; }
+.agent2-confirm-hint { color: #9a6700; font-weight: 600; font-size: 0.88rem; }
+.finding-high { color: var(--danger); }
+.finding-medium { color: #9a6700; }
+[data-theme="dark"] .agent2-chat { background: #1e2430; }
+[data-theme="dark"] .agent2-chat-bubble { background: #252b38; }
+

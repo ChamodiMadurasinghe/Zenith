@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from config import Config
 from core.bundling import compute_bundles
 from core.cheque_batcher import audit_bundle_day_limits
 from core.guardrails import apply_proposed_actions, collect_bundle_issues
@@ -569,4 +570,171 @@ def build_bundling_tools(ctx: BundlingToolContext) -> list:
             args_schema=ApplyBundleChangesInput,
         ),
     ]
+    return tools
+
+
+class SelectPayingAccountInput(BaseModel):
+    cheque_group: int = Field(..., ge=1)
+    account_id: int = Field(..., description="user_bank_acc_id from shop accounts")
+    dry_run: bool = False
+
+
+class SuggestMaxFloatDateInput(BaseModel):
+    cheque_group: int = Field(..., ge=1)
+    prefer_interbank: bool = True
+    dry_run: bool = False
+
+
+class ListInterbankOptionsInput(BaseModel):
+    pass
+
+
+class DealerPatternTextInput(BaseModel):
+    invoice_total: float = Field(
+        default=0.0,
+        description="Total LKR of invoices being planned (for pattern context).",
+    )
+
+
+def build_strategist_tools(ctx: BundlingToolContext) -> list:
+    """Agent 3 tools — Python bundling/guardrails authority, dry_run=False by default."""
+    from langchain_core.tools import StructuredTool
+
+    from core.dealer_patterns import build_dealer_pattern_document
+    from core.strategist_dates import interbank_account_options, suggest_float_date_for_bundle
+
+    chat_tools = {t.name: t for t in build_bundling_tools(ctx)}
+
+    def list_interbank_account_options() -> str:
+        return json.dumps(
+            {"ok": True, "options": interbank_account_options(ctx.dealer_id)},
+            default=str,
+        )
+
+    def get_dealer_payment_patterns(invoice_total: float = 0.0) -> str:
+        doc = build_dealer_pattern_document(ctx.dealer_id)
+        if Config.enable_vector_patterns() and not Config.use_fake_ai():
+            try:
+                from core.vector_store import query_dealer_patterns
+
+                doc = query_dealer_patterns(ctx.dealer_id, float(invoice_total or 0))
+            except Exception:
+                pass
+        return json.dumps(
+            {
+                "ok": True,
+                "patterns_text": doc,
+                "dealer_id": ctx.dealer_id,
+                "invoice_total": float(invoice_total or 0),
+            },
+            default=str,
+        )
+
+    def select_paying_account(cheque_group: int, account_id: int, dry_run: bool = False) -> str:
+        bundles = copy.deepcopy(ctx.bundles or [])
+        found = False
+        for b in bundles:
+            if int(b.get("group") or 0) == int(cheque_group):
+                b["paying_account_id"] = int(account_id)
+                dealer_bank = repo.get_dealer_preferred_bank(ctx.dealer_id)
+                payee = (dealer_bank or {}).get("bank_name") or ""
+                acc = repo.get_bank_account(int(account_id))
+                shop_bank = (acc or {}).get("bank_name") or ""
+                if payee and shop_bank:
+                    b["clearing_type"] = (
+                        "INTRABANK" if shop_bank.lower() == payee.lower() else "INTERBANK"
+                    )
+                found = True
+        if not found:
+            return json.dumps({"ok": False, "error": f"Cheque group {cheque_group} not found."})
+        from core.bundling import recalculate_all_bundles
+
+        new_bundles = recalculate_all_bundles(bundles, ctx.dealer_id)
+        issues = collect_bundle_issues(
+            {"bundles": new_bundles},
+            ctx.dealer_id,
+            ctx.ceiling_lkr,
+            allow_exceed_ceiling=ctx.allow_exceed_ceiling,
+        )
+        return _finish_mutation(
+            ctx,
+            new_bundles=new_bundles,
+            issues=issues,
+            allow_exceed=ctx.allow_exceed_ceiling,
+            dry_run=dry_run,
+        )
+
+    def suggest_max_float_date(
+        cheque_group: int, prefer_interbank: bool = True, dry_run: bool = False
+    ) -> str:
+        bundles = copy.deepcopy(ctx.bundles or [])
+        target = None
+        for b in bundles:
+            if int(b.get("group") or 0) == int(cheque_group):
+                target = b
+                break
+        if not target:
+            return json.dumps({"ok": False, "error": f"Cheque group {cheque_group} not found."})
+        suggestion = suggest_float_date_for_bundle(
+            target, ctx.dealer_id, prefer_interbank=prefer_interbank
+        )
+        target["cheque_date"] = suggestion["proposed_date"]
+        from core.bundling import recalculate_all_bundles
+
+        new_bundles = recalculate_all_bundles(bundles, ctx.dealer_id)
+        issues = collect_bundle_issues(
+            {"bundles": new_bundles},
+            ctx.dealer_id,
+            ctx.ceiling_lkr,
+            allow_exceed_ceiling=ctx.allow_exceed_ceiling,
+        )
+        payload = _finish_mutation(
+            ctx,
+            new_bundles=new_bundles,
+            issues=issues,
+            allow_exceed=ctx.allow_exceed_ceiling,
+            dry_run=dry_run,
+        )
+        data = json.loads(payload)
+        data["float_suggestion"] = suggestion
+        return json.dumps(data, default=str)
+
+    strategist_names = [
+        "compute_cheque_bundles",
+        "divide_into_cheques",
+        "split_invoice",
+        "postpone_cheque",
+        "set_cheque_date",
+        "recalculate_dates",
+        "check_day_limit_risk",
+    ]
+    tools = [
+        StructuredTool.from_function(
+            list_interbank_account_options,
+            name="list_interbank_account_options",
+            description="List shop accounts and whether each is INTERBANK vs distributor bank.",
+            args_schema=ListInterbankOptionsInput,
+        ),
+        StructuredTool.from_function(
+            get_dealer_payment_patterns,
+            name="get_dealer_payment_patterns",
+            description="RAG: past cheque habits, preferred paying account, split patterns.",
+            args_schema=DealerPatternTextInput,
+        ),
+        StructuredTool.from_function(
+            select_paying_account,
+            name="select_paying_account",
+            description="Set paying shop account on a cheque group (prefer INTERBANK for float).",
+            args_schema=SelectPayingAccountInput,
+        ),
+        StructuredTool.from_function(
+            suggest_max_float_date,
+            name="suggest_max_float_date",
+            description="Python optimizer: best cheque date in credit window for max float (holidays/interbank).",
+            args_schema=SuggestMaxFloatDateInput,
+        ),
+    ]
+    for name in strategist_names:
+        if name in chat_tools:
+            tools.append(chat_tools[name])
     return tools

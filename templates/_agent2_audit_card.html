@@ -1,0 +1,58 @@
+{% if audit %}
+<div class="card agent2-audit audit-{{ audit.status | lower }}" id="agent2-audit-panel">
+  <h3>Agent 2 — Invoice check</h3>
+  <p class="audit-status">
+    <strong>Status:</strong> {{ audit.status | replace('_', ' ') }}
+    &nbsp;·&nbsp;
+    <strong>Risk:</strong> {{ audit.risk_level }}
+  </p>
+  <p class="audit-remark">{{ audit.remark }}</p>
+
+  {% if audit.chat_messages %}
+  <div class="agent2-chat" id="agent2-chat">
+    {% for msg in audit.chat_messages %}
+    <div class="agent2-chat-bubble">
+      <span class="agent2-chat-label">Agent 2</span>
+      <p>{{ msg.content }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% set findings = audit.findings or [] %}
+  {% if findings %}
+  <div class="agent2-findings">
+    <h4>Findings</h4>
+    <ul>
+      {% for f in findings %}
+      <li class="finding-{{ f.severity }}">
+        {{ f.message }}
+        {% if f.needs_confirmation %}
+        <span class="agent2-confirm-hint">— please confirm</span>
+        {% endif %}
+        <span class="muted">({{ f.severity }})</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% elif anomalies %}
+  <div class="agent2-findings">
+    <h4>Findings</h4>
+    <ul>
+      {% for a in anomalies %}
+      <li class="finding-{{ a.severity }}">{{ a.message }} ({{ a.severity }})</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% elif anomalies %}
+<div class="card alert">
+  <h3>Invoice anomaly warnings</h3>
+  <ul>
+    {% for a in anomalies %}
+    <li>{{ a.message }} ({{ a.severity }})</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

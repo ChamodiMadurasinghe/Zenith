@@ -982,6 +982,158 @@ def get_dealer_invoice_stats(dealer_id: int) -> dict:
     }
 
 
+def get_dealer_item_price_stats(dealer_id: int, item_code: str) -> dict:
+    """Backward-compatible wrapper — use get_dealer_item_history_stats when possible."""
+    stats = get_dealer_item_history_stats(dealer_id, item_code=item_code)
+    return {
+        "sample_count": stats.get("sample_count", 0),
+        "avg_price": stats.get("avg_price", 0.0),
+        "avg_qty": stats.get("avg_qty", 0.0),
+    }
+
+
+def _normalize_item_name(name: str) -> str:
+    return " ".join((name or "").strip().lower().split())
+
+
+def get_dealer_item_history_stats(
+    dealer_id: int,
+    *,
+    item_code: str | None = None,
+    item_name: str | None = None,
+) -> dict:
+    """Historical qty/price stats for a dealer line item (verified invoices only)."""
+    code = (item_code or "").strip()
+    name_norm = _normalize_item_name(item_name or "")
+    if code:
+        row = query_one(
+            """SELECT COUNT(*) AS sample_count,
+                      AVG(i.item_price) AS avg_price,
+                      AVG(i.item_qty) AS avg_qty,
+                      MAX(i.item_qty) AS max_qty,
+                      MIN(i.item_qty) AS min_qty
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND i.item_code = ?""",
+            (Config.USER_ID, dealer_id, code),
+        )
+        last = query_one(
+            """SELECT inv.invoice_no, inv.invoiced_date
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND i.item_code = ?
+               ORDER BY inv.invoiced_date DESC, inv.invoices_id DESC
+               LIMIT 1""",
+            (Config.USER_ID, dealer_id, code),
+        )
+    elif name_norm:
+        row = query_one(
+            """SELECT COUNT(*) AS sample_count,
+                      AVG(i.item_price) AS avg_price,
+                      AVG(i.item_qty) AS avg_qty,
+                      MAX(i.item_qty) AS max_qty,
+                      MIN(i.item_qty) AS min_qty
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND LOWER(TRIM(i.item_name)) = ?""",
+            (Config.USER_ID, dealer_id, name_norm),
+        )
+        last = query_one(
+            """SELECT inv.invoice_no, inv.invoiced_date
+               FROM item i
+               JOIN invoices inv ON inv.invoices_id = i.invoices_id
+               WHERE inv.user_id = ? AND inv.dealer_id = ?
+                 AND inv.is_invoice_verified = 1
+                 AND LOWER(TRIM(i.item_name)) = ?
+               ORDER BY inv.invoiced_date DESC, inv.invoices_id DESC
+               LIMIT 1""",
+            (Config.USER_ID, dealer_id, name_norm),
+        )
+    else:
+        return {
+            "sample_count": 0,
+            "avg_price": 0.0,
+            "avg_qty": 0.0,
+            "max_qty": 0.0,
+            "min_qty": 0.0,
+            "last_invoice_no": None,
+            "last_invoiced_date": None,
+        }
+    return {
+        "sample_count": int((row or {}).get("sample_count") or 0),
+        "avg_price": float((row or {}).get("avg_price") or 0),
+        "avg_qty": float((row or {}).get("avg_qty") or 0),
+        "max_qty": float((row or {}).get("max_qty") or 0),
+        "min_qty": float((row or {}).get("min_qty") or 0),
+        "last_invoice_no": (last or {}).get("invoice_no"),
+        "last_invoiced_date": (last or {}).get("invoiced_date"),
+    }
+
+
+def find_recent_item_orders(
+    dealer_id: int,
+    *,
+    item_code: str | None = None,
+    item_name: str | None = None,
+    within_days: int = 30,
+    exclude_invoice_id: int | None = None,
+) -> list[dict]:
+    """Verified invoices containing this item within the last N days."""
+    from datetime import date, timedelta
+
+    cutoff = (date.today() - timedelta(days=int(within_days))).isoformat()
+    code = (item_code or "").strip()
+    name_norm = _normalize_item_name(item_name or "")
+    params: list = [Config.USER_ID, dealer_id, cutoff]
+    exclude_sql = ""
+    if exclude_invoice_id is not None:
+        exclude_sql = " AND inv.invoices_id != ?"
+        params.append(int(exclude_invoice_id))
+
+    if code:
+        sql = f"""
+            SELECT DISTINCT inv.invoices_id, inv.invoice_no, inv.invoiced_date,
+                   i.item_qty, i.item_name, i.item_code
+            FROM item i
+            JOIN invoices inv ON inv.invoices_id = i.invoices_id
+            WHERE inv.user_id = ? AND inv.dealer_id = ?
+              AND inv.is_invoice_verified = 1
+              AND inv.invoiced_date >= ?
+              AND i.item_code = ?
+              {exclude_sql}
+            ORDER BY inv.invoiced_date DESC
+        """
+        params = [Config.USER_ID, dealer_id, cutoff, code]
+        if exclude_invoice_id is not None:
+            params.append(int(exclude_invoice_id))
+    elif name_norm:
+        sql = f"""
+            SELECT DISTINCT inv.invoices_id, inv.invoice_no, inv.invoiced_date,
+                   i.item_qty, i.item_name, i.item_code
+            FROM item i
+            JOIN invoices inv ON inv.invoices_id = i.invoices_id
+            WHERE inv.user_id = ? AND inv.dealer_id = ?
+              AND inv.is_invoice_verified = 1
+              AND inv.invoiced_date >= ?
+              AND LOWER(TRIM(i.item_name)) = ?
+              {exclude_sql}
+            ORDER BY inv.invoiced_date DESC
+        """
+        params = [Config.USER_ID, dealer_id, cutoff, name_norm]
+        if exclude_invoice_id is not None:
+            params.append(int(exclude_invoice_id))
+    else:
+        return []
+
+    return query(sql, tuple(params))
+
+
 def save_verified_invoice(data: dict, items: list, dealer_id: int) -> int:
     ensure_invoice_delivery_date_column()
     with transaction() as conn:

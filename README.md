@@ -65,6 +65,12 @@ See [database/DATABASE.md](database/DATABASE.md) for full schema reference.
 
 Rebuild anytime: `python scripts/init_db.py`
 
+## Development
+
+- **Workflow guide:** [docs/WORKFLOW.md](docs/WORKFLOW.md)
+- **Cursor AI rules:** `.cursor/rules/*.mdc` (architecture, agents, WhatsApp, bundling, Python)
+- **Long-form product spec:** [docs/.cursorrules](docs/.cursorrules) (reference only)
+
 ## Features
 
 - **Login** — single-user password gate

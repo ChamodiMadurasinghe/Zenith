@@ -1,5 +1,12 @@
 <p class="help-tip">{{ t('help_tip_cheques') }}</p>
 
+{% if strategy_summary %}
+<div class="card strategy-summary-banner">
+  <h3>Agent 3 — Payment strategy</h3>
+  <p>{{ strategy_summary }}</p>
+</div>
+{% endif %}
+
 <div class="layout-split" id="cheques-layout">
   <div class="card" id="bundle-workspace" data-dealer="{{ dealer.dealer_id }}">
     <button type="button" id="chat-expand-btn" class="btn btn-secondary btn-sm chat-expand-fab" hidden>

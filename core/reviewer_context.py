@@ -1,4 +1,4 @@
-"""Full context payload for the SME liquidity reviewer (Agent 2)."""
+"""Full context payload for Agent 4 (AI strategy reviewer)."""
 
 from datetime import date, timedelta
 
@@ -110,6 +110,7 @@ def build_reviewer_context(
     ceiling_lkr: float,
     validation_issues: list | None = None,
     trigger: str = "compute",
+    strategist_context: dict | None = None,
 ) -> dict:
     dealer = repo.get_dealer(dealer_id) or {}
     bank = repo.get_dealer_preferred_bank(dealer_id)
@@ -139,6 +140,7 @@ def build_reviewer_context(
     return {
         "trigger": trigger,
         "today": today.isoformat(),
+        "agent3_strategy": strategist_context or {},
         "dealer": {
             "dealer_id": dealer.get("dealer_id"),
             "dealer_name": dealer.get("dealer_name"),

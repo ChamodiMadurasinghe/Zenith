@@ -1,0 +1,38 @@
+---
+description: Python coding conventions, tests, and secrets
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Conventions
+
+## Style
+
+- Minimal, focused diffs; match surrounding code
+- Reuse `db/repositories.py` — avoid duplicate SQL
+- Business logic in `core/` or `agents/`; thin `routes/`
+
+## i18n
+
+- User-facing strings: `core/i18n.py` keys for **en**, **si**, **ta**
+- Templates use `{{ t('key') }}`; JS via `window.__i18n`
+
+## Config
+
+- Read env via `config.py` `Config` static methods and `_env()`
+- Do not hardcode API keys or secrets
+
+## Tests
+
+- `unittest` in `routes/tests/`, `core/tests/`, `agentic/tests/`
+- Mock external APIs (Gemini, OpenAI) in unit tests
+
+## Never commit
+
+- `.env`, `*.db`, `storage/invoices/*` (except `.gitkeep`)
+- `whatsapp-bridge/.wwebjs_auth/`, `whatsapp-bridge/node_modules/`
+
+## Database
+
+- Schema source: `database/schema.sql`
+- Migrations: `scripts/init_db.py` `MIGRATIONS` list

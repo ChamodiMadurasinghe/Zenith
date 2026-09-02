@@ -124,6 +124,49 @@ def _anomalies_from_invoice(invoice: dict) -> list[dict]:
     return parsed.get("anomalies") or []
 
 
+def _audit_from_invoice(invoice: dict) -> dict | None:
+    raw = invoice.get("pending_dealer_json")
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return parsed.get("audit")
+
+
+def _run_agent2_audit(
+    extracted: dict,
+    dealer_id: int | None,
+    *,
+    exclude_invoice_id: int | None = None,
+) -> tuple[list[dict], dict]:
+    from agents.anomaly import audit_invoice, check_invoice_anomalies
+
+    try:
+        audit = audit_invoice(
+            extracted, dealer_id, exclude_invoice_id=exclude_invoice_id
+        )
+        anomalies = check_invoice_anomalies(
+            extracted, dealer_id, exclude_invoice_id=exclude_invoice_id
+        )
+    except Exception:
+        audit = {
+            "status": "GOOD_TO_GO",
+            "risk_level": "LOW",
+            "remark": "Automatic checks could not run — please review manually.",
+            "findings": [],
+            "chat_messages": [
+                {
+                    "role": "agent2",
+                    "content": "I could not run automatic checks — please review this invoice manually.",
+                }
+            ],
+        }
+        anomalies = []
+    return anomalies, audit
+
+
 @ingestion_bp.route("/uploads/<path:filename>")
 @login_required
 def serve_upload(filename):
@@ -184,13 +227,9 @@ def upload():
 
     supplier = (extracted.get("supplier_name") or "").strip()
     dealer = repo.find_dealer_by_name(supplier) if supplier else None
-    anomalies = []
-    try:
-        from agents.anomaly import check_invoice_anomalies
-
-        anomalies = check_invoice_anomalies(extracted, dealer["dealer_id"] if dealer else None)
-    except Exception:
-        anomalies = []
+    anomalies, audit = _run_agent2_audit(
+        extracted, dealer["dealer_id"] if dealer else None
+    )
     invoice_setup = dealer_setup_from_extraction(extracted)
     dealer_setup = None
 
@@ -212,6 +251,7 @@ def upload():
         "dealer_setup": dealer_setup,
         "new_dealer": dealer is None and bool(supplier),
         "anomalies": anomalies,
+        "audit": audit,
     }
     session.modified = True
 
@@ -283,6 +323,7 @@ def review(draft_id):
         user_bank_accounts=accounts,
         dealer_bank_data={"default_user_bank_acc_id": default_acc},
         anomalies=draft.get("anomalies") or [],
+        audit=draft.get("audit"),
     )
 
 
@@ -332,7 +373,6 @@ def verify_invoice(invoice_id):
 
     pending_supplier_id = repo.get_pending_supplier_dealer_id()
     dealer_setup = _dealer_setup_from_invoice(invoice)
-    anomalies = _anomalies_from_invoice(invoice)
     new_dealer = invoice["dealer_id"] == pending_supplier_id
 
     items = repo.get_invoice_items(invoice_id)
@@ -355,6 +395,15 @@ def verify_invoice(invoice_id):
         "credit_period_days": invoice["credit_period_days"],
         "line_items": line_items,
     }
+
+    dealer_for_audit = invoice["dealer_id"] if not new_dealer else None
+    if dealer_for_audit == pending_supplier_id:
+        dealer_for_audit = None
+    anomalies, audit = _run_agent2_audit(
+        extracted,
+        int(dealer_for_audit) if dealer_for_audit else None,
+        exclude_invoice_id=invoice_id,
+    )
 
     if request.method == "POST" and request.form.get("action") == "create_dealer":
         if not request.form.get("confirm_dealer"):
@@ -426,6 +475,7 @@ def verify_invoice(invoice_id):
         user_bank_accounts=repo.get_bank_accounts(),
         dealer_bank_data={"default_user_bank_acc_id": _default_user_bank_acc_id()},
         anomalies=anomalies,
+        audit=audit,
     )
 
 

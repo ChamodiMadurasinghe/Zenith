@@ -213,3 +213,14 @@ def mock_dealer_payment_patterns(dealer_id: int, invoice_total: float) -> str:
     return (
         f"[Mock patterns for invoice total Rs. {invoice_total:,.0f}]\n{doc}"
     )
+
+
+def mock_strategist(dealer_id: int, invoice_ids: list[int], ceiling_lkr: float) -> dict:
+    from agents.strategist import _bundles_to_strategy
+    from core.bundling import compute_bundles
+
+    bundles = compute_bundles(dealer_id, invoice_ids, ceiling_lkr)
+    result = _bundles_to_strategy(bundles, dealer_id, ceiling_lkr)
+    result["bundles"] = bundles
+    result["tool_trace"] = [{"tool": "compute_cheque_bundles", "input": {"invoice_ids": invoice_ids}}]
+    return result

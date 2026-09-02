@@ -1,0 +1,35 @@
+---
+description: Cheque bundling, guardrails, and reviewer flow
+globs: routes/bundling.py,core/bundling.py,core/guardrails.py,static/js/bundling.js,templates/bundling.html,templates/dealer_cheques.html
+alwaysApply: false
+---
+
+# Bundling & Cheques
+
+## Splitting invoices
+
+- **Python only:** `core/bundling.py` `compute_bundles()` under LKR ceiling
+- UI: `routes/bundling.py`, drag-and-drop in `static/js/bundling.js`
+- Draft state: `bundle_drafts` until user commits
+
+## Guardrails (`core/guardrails.py`)
+
+- CBSL holidays (`cbsl_bank_holidays`), weekends, daily ceiling
+- **No LLM** — adjust invalid dates in Python
+- Preserve manual override UI when user edits cheque dates
+
+## Reviewer (not Agent 4 in bundling)
+
+- `agents/reviewer.py` — OpenAI SME liquidity review after Python proposal
+- `VERDICT: approve` / `VERDICT: suggest_changes`
+- Apply path uses guardrails + `core/bundling_intent.py`
+
+## Commit
+
+- `POST /bundling/commit` → `cheque`, `cheque_invoice_allocation`, `invoices.cheque_id`, `deposit_timetable`
+- Vector pattern refresh on commit when `ENABLE_VECTOR_PATTERNS=true`
+
+## Bundling assistant
+
+- `agents/bundling_assistant.py` — OpenAI + LangChain tools (`USE_BUNDLING_TOOL_AGENT`)
+- Tools call `core/bundling.py`; never bypass guardrails for auto-commit

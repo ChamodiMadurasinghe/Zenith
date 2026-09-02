@@ -184,6 +184,11 @@ class Config:
         return _env_bool("USE_BUNDLING_TOOL_AGENT", True)
 
     @staticmethod
+    def use_strategist_tool_agent() -> bool:
+        """Agent 3: Gemini tool-calling over bundling.py + guardrails."""
+        return _env_bool("USE_STRATEGIST_TOOL_AGENT", True)
+
+    @staticmethod
     def enable_vector_patterns() -> bool:
         return _env_bool("ENABLE_VECTOR_PATTERNS", True)
 
