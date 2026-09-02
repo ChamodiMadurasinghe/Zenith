@@ -8,6 +8,13 @@ _ENV_PATH = BASE_DIR / ".env"
 load_dotenv(_ENV_PATH)
 
 
+def _data_path(env_key: str, default: str) -> Path:
+    """Relative paths stay under the project; absolute paths (PaaS disks) are used as-is."""
+    raw = os.getenv(env_key, default).strip() or default
+    path = Path(raw)
+    return path if path.is_absolute() else BASE_DIR / path
+
+
 def _env(key: str, default: str = "") -> str:
     """Read env var, reloading .env so running server picks up changes."""
     load_dotenv(_ENV_PATH, override=True)
@@ -21,8 +28,8 @@ def _env_bool(key: str, default: bool = False) -> bool:
 
 class Config:
     SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
-    DATABASE_PATH = BASE_DIR / os.getenv("DATABASE_PATH", "database/invoice_cheque.db")
-    UPLOAD_FOLDER = BASE_DIR / os.getenv("UPLOAD_FOLDER", "storage/invoices")
+    DATABASE_PATH = _data_path("DATABASE_PATH", "database/invoice_cheque.db")
+    UPLOAD_FOLDER = _data_path("UPLOAD_FOLDER", "storage/invoices")
     MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
 
     @staticmethod
@@ -145,6 +152,8 @@ class Config:
 
     @staticmethod
     def host() -> str:
+        if _env("FLASK_ENV", "development").strip().lower() == "production":
+            return _env("HOST", "0.0.0.0")
         return _env("HOST", "127.0.0.1")
 
     @staticmethod
@@ -156,7 +165,7 @@ class Config:
 
     @staticmethod
     def inbound_queue_dir() -> Path:
-        return BASE_DIR / _env("INBOUND_QUEUE_DIR", "data/inbound_queue")
+        return _data_path("INBOUND_QUEUE_DIR", "data/inbound_queue")
 
     @staticmethod
     def whatsapp_bridge_secret() -> str:

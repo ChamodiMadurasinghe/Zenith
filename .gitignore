@@ -22,7 +22,9 @@ storage/webhook_meta.jsonl
 cloudflared.exe
 *.exe
 idealize/
+dont upload/
 
-# Generated Word docs (regenerate via scripts/generate_*_docx.py)
+# Competition / generated docs (not part of the running app)
 docs/*.docx
+docs/*.pdf
 

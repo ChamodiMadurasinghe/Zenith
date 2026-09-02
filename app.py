@@ -1,4 +1,5 @@
 ﻿import os
+from pathlib import Path
 
 from flask import Flask
 
@@ -39,6 +40,10 @@ def create_app():
     app.register_blueprint(whatsapp_settings_bp)
     app.register_blueprint(whatsapp_bp)
 
+    @app.get("/health")
+    def health():
+        return {"ok": True}
+
     @app.context_processor
     def inject_i18n():
         lang = get_lang()
@@ -50,6 +55,13 @@ def create_app():
             "speech_lang": speech_lang_code(lang),
             "guide_welcome_tip": guide_welcome_for_path,
         }
+
+    db_path = Path(Config.DATABASE_PATH)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    if not db_path.exists():
+        from scripts.init_db import init_db
+
+        init_db(force_recreate=True)
 
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         start_alert_scheduler(app)
@@ -65,4 +77,5 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host=Config.host(), port=Config.port())
+    debug = os.getenv("FLASK_ENV", "development").strip().lower() != "production"
+    app.run(debug=debug, host=Config.host(), port=Config.port())

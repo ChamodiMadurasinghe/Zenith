@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-DB_PATH = ROOT / os.getenv("DATABASE_PATH", "database/invoice_cheque.db")
+_raw_db = os.getenv("DATABASE_PATH", "database/invoice_cheque.db").strip()
+_db = Path(_raw_db)
+DB_PATH = _db if _db.is_absolute() else ROOT / _db
 
 DEALER_PREFIX = {
     1: "ABD",

@@ -1,81 +1,180 @@
 # Zenith
 
-Local cheque & invoice management for Sri Lankan businesses. Python (Flask) backend with multi-provider AI:
+Local cheque and invoice management for Sri Lankan SMBs: invoice photos in (web or WhatsApp) → human verify → AI-assisted cheque bundling → cash-flow timing → print.
 
-- **Gemini** — invoice document check + OCR (Agent 1)
-- **Bundling Assistant** — OpenAI + LangChain tool-calling over `core/bundling.py`
-- **Analyst** — OpenAI reports
-- **agentic/** pipeline — Agents 1–4 (Vision → Anomaly → Liquidity → Dealer liaison)
+**Problem.** Many businesses still pay suppliers with cheques. Invoices arrive as photos, amounts and due dates get retyped, several invoices are grouped under an LKR ceiling, and cash must sit in the bank before the cheque is presented — including CBSL holidays.
 
-## Setup
+**Solution.** Zenith keeps that loop in one Flask + SQLite app, with a human in the loop before any invoice is accepted, and Python guardrails after the AI proposes bundles.
+
+## Demo video
+
+<!-- Paste the YouTube URL after you upload [Team Name]_Video_Pitch -->
+_Add the public or unlisted YouTube link here._
+
+## Features
+
+- **Login** — single-user password gate (`APP_PASSWORD`)
+- **Invoice upload** — Gemini vision extraction, then human verification
+- **WhatsApp inbox** — Meta Cloud API photos, whitelist, manual **Send to AI**
+- **Cheque bundling** — LKR ceiling grouping, drag-and-drop, chat assistant
+- **Guardrails** — CBSL holidays and amount ceiling in Python (`core/guardrails.py`)
+- **Cash flow** — when money must be in the bank
+- **Cheque print** — formatted cheque output
+- **Analytics** — reports after cheque commits
+- **Languages** — English, Sinhala, Tamil
+
+## AI agents
+
+| Agent | Role |
+|-------|------|
+| **1 Vision** | Invoice document check + OCR (Gemini) |
+| **2 Anomaly** | Pre-verify rules and findings before the human accepts the invoice |
+| **3 Strategist** | Cheque plan via Gemini tool-calling over bundling + dates |
+| **4 Reviewer** | Plain-language explanation of the plan (Gemini) |
+
+**Not an LLM:** holiday and ceiling checks run in Python after Agent 3. If AI is off or fails, fallback bundling is `core/bundling.py` (`compute_bundles`).
+
+Optional extra: `agentic/` orchestrator (`USE_AGENTIC_ORCHESTRATOR`). Standard web + WhatsApp inbox paths do not depend on it.
+
+## Architecture
+
+Intake → verify → draft bundle → preview → commit. Patterns can feed the bundling assistant.
+
+![Business lifecycle](docs/diagrams/vector/02-data-lifecycle.jpg)
+
+![Guardrails vs AI](docs/diagrams/vector/03-guardrails-boundary.jpg)
+
+Full walkthrough: [docs/WORKFLOW.md](docs/WORKFLOW.md). Schema: [database/DATABASE.md](database/DATABASE.md).
+
+## Tech stack
+
+| Layer | Choice |
+|-------|--------|
+| App | Python 3.11+, Flask |
+| Data | SQLite |
+| OCR / strategist / reviewer | Google Gemini |
+| Bundling chat + analyst | OpenAI (optional) |
+| Tool-calling | LangChain |
+| WhatsApp | Meta Cloud API (Twilio / Node bridge optional) |
+| Print | ReportLab |
+| Vector patterns (optional) | ChromaDB |
+
+## Prerequisites
+
+- Python **3.11+**
+- `pip`
+- (Optional) Gemini and/or OpenAI API keys
+- (Optional) Meta WhatsApp app + a public HTTPS URL (e.g. cloudflared) for live intake
+
+## Quick start (judges / local demo)
+
+No paid APIs required.
 
 ```bash
 pip install -r requirements.txt
-copy .env.example .env    # or cp on Linux/Mac
+copy .env.example .env
 ```
 
-Edit `.env`:
-- `APP_PASSWORD` — your login password
-- `GEMINI_API_KEY` — invoice document verification + OCR
-- `META_WHATSAPP_TOKEN`, `META_PHONE_NUMBER_ID`, `META_VERIFY_TOKEN` — Meta WhatsApp Cloud API
-- `OPENAI_API_KEY` — Bundling Assistant + analyst (optional)
-- `USE_FAKE_AI=true` — demo mode (zero API quota while designing UI)
+On Linux/macOS use `cp .env.example .env`.
 
-Initialize the database:
+In `.env` set at least:
+
+```env
+APP_PASSWORD=demo
+USE_FAKE_AI=true
+```
+
+Then:
 
 ```bash
 python scripts/init_db.py
+python scripts/seed_sample_invoices.py
+python app.py
 ```
 
-## Run
+Open http://127.0.0.1:5000 and sign in with `APP_PASSWORD`.
 
-**Terminal 1 — Python backend:**
+## Live hosted link (Idealize web apps)
+
+Zenith is a **Python Flask** app with SQLite, file uploads, and optional WhatsApp webhooks. **Netlify and Vercel cannot run it** (those hosts are for static / Node frontends).
+
+Use a Python host and submit that HTTPS URL:
+
+1. Push this repo to GitHub (do not commit `.env` or `dont upload/`).
+2. Create a web service on [Render](https://render.com) (Blueprint: `render.yaml`) or Railway / Fly.io / any VPS with the `Dockerfile`.
+3. Set environment variables (dashboard, not the repo):
+
+   | Variable | Value |
+   |----------|--------|
+   | `FLASK_ENV` | `production` |
+   | `HOST` | `0.0.0.0` |
+   | `FLASK_SECRET_KEY` | a long random string |
+   | `APP_PASSWORD` | the login you give judges |
+   | `USE_FAKE_AI` | `true` for a no-key demo, or `false` plus `GEMINI_API_KEY` |
+
+4. First boot creates the SQLite database and sample invoices if the DB file is missing.
+5. Open `https://YOUR-SERVICE.onrender.com` — you should see login. Health check: `/health`.
+
+Free-tier disks are often ephemeral: the database resets when the instance sleeps or redeploys. That is enough for a live demo link. For WhatsApp webhooks, set `WEBHOOK_PUBLIC_URL` to the same HTTPS origin.
+
+Local `python app.py` is unchanged (`HOST=127.0.0.1` in `.env`).
+
+## Setup with live AI
+
+Same as quick start, then in `.env`:
+
+- `USE_FAKE_AI=false`
+- `GEMINI_API_KEY` — document check + OCR (Agent 1) and Agents 3–4
+- `OPENAI_API_KEY` — bundling chat assistant and analyst (optional)
+
+See [.env.example](.env.example) for every variable.
+
+## Run
 
 ```bash
 python app.py
 ```
 
-**Terminal 2 — public HTTPS tunnel (for Meta webhooks):**
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:5000
-```
-
-Copy the `https://….trycloudflare.com` URL into Meta Developer Console → WhatsApp → Configuration → Webhook callback URL: `https://YOUR-TUNNEL/webhook/whatsapp`. Use the same `META_VERIFY_TOKEN` as in `.env`. Subscribe to `messages`.
-
-Open http://127.0.0.1:5000 and sign in with `APP_PASSWORD`.
-
 ## WhatsApp invoice intake (Meta Cloud API)
 
-1. Go to **Invoices → WhatsApp settings** and add supplier phone numbers to the whitelist.
-2. Suppliers send invoice photos on WhatsApp to your Meta-linked business number.
-3. Meta POSTs to `/webhook/whatsapp`; photos are saved to the **WhatsApp photos** inbox tab.
-4. In the web app, open **Invoices → WhatsApp photos** and tap **Send to AI** when ready.
-5. Gemini OCR runs; the invoice appears under **Waiting for User Approval** for human verify.
+Optional. The web upload path works without WhatsApp.
 
-**Local mock (no Meta):** set `USE_WHATSAPP_MOCK=true` and `MOCK_IMAGE_PATH=path/to/test.jpg`, then run `python whatsapp_agent.py`.
+1. Set `META_WHATSAPP_TOKEN`, `META_PHONE_NUMBER_ID`, `META_VERIFY_TOKEN` in `.env`.
+2. Tunnel Flask:
 
-**Optional dev bridge:** `whatsapp-bridge/` (Node.js) can POST to `/api/invoices/ingest` — not required for Meta production.
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:5000
+   ```
 
-Probe webhook: `WEBHOOK_PUBLIC_URL=https://your-tunnel python scripts/probe_whatsapp_webhook.py`
+3. In Meta Developer Console → WhatsApp → Configuration, set the webhook to `https://YOUR-TUNNEL/webhook/whatsapp` with the same verify token. Subscribe to `messages`.
+4. In the app: **Invoices → WhatsApp settings** — whitelist supplier numbers.
+5. Suppliers send invoice photos → they land in **WhatsApp photos** → **Send to AI** → human verify.
+
+**Local mock (no Meta):** `USE_WHATSAPP_MOCK=true` and `MOCK_IMAGE_PATH=path/to/test.jpg`, then `python whatsapp_agent.py`.
+
+**Optional Node bridge:** [whatsapp-bridge/README.md](whatsapp-bridge/README.md) — not required for Meta production.
 
 ## Database
 
-See [database/DATABASE.md](database/DATABASE.md) for full schema reference.
+SQLite file: `database/invoice_cheque.db` (gitignored). Rebuild with `python scripts/init_db.py`.
 
-Rebuild anytime: `python scripts/init_db.py`
+## Tests
 
-## Development
+```bash
+pip install pytest
+python -m pytest agentic/tests core/tests agents/tests routes/tests -q
+```
 
-- **Workflow guide:** [docs/WORKFLOW.md](docs/WORKFLOW.md)
-- **Cursor AI rules:** `.cursor/rules/*.mdc` (architecture, agents, WhatsApp, bundling, Python)
-- **Long-form product spec:** [docs/.cursorrules](docs/.cursorrules) (reference only)
+## Team
 
-## Features
+| Name | GitHub |
+|------|--------|
+| Chamodi Madurasinghe | [ChamodiMadurasinghe](https://github.com/ChamodiMadurasinghe) |
+| Sithil | [sithilyapa717](https://github.com/sithilyapa717) |
+| Yohan Ruchitha | [yohanruchitha](https://github.com/yohanruchitha) |
 
-- **Login** — single-user password gate
-- **Invoice upload** — Gemini vision extraction + human verification
-- **WhatsApp inbox** — Meta webhook intake, manual Send to AI, whitelist
-- **Cheque bundling** — LKR ceiling grouping with guardrails + chat assistant
-- **Cash flow** — when to deposit money into the bank
-- **Analytics** — Agent 3 markdown reports after cheque commits
+_Adjust names/roles to match the Idealize registration form._
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

@@ -7,7 +7,7 @@ Migrate existing DB: `python scripts/init_db.py --migrate`
 
 **Vector pattern index (derived):** Committed cheque history is also indexed into a local ChromaDB store at `database/chroma/` for the Bundling Assistant's read-only recommendation tool. SQLite remains the source of truth; refresh via cheque commit or `python scripts/backfill_dealer_patterns.py`.
 
-**Full guide:** [Vector_Pattern_Engine.md](../docs/Vector_Pattern_Engine.md). Word reference: run `python scripts/generate_vector_docs_docx.py` locally. Architecture diagrams: [docs/diagrams/vector/](../docs/diagrams/vector/).
+**Full guide:** [Vector_Pattern_Engine.md](../docs/Vector_Pattern_Engine.md). Architecture diagrams: [docs/diagrams/vector/](../docs/diagrams/vector/).
 
 ---
 

@@ -12,7 +12,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
-DB_PATH = ROOT / os.getenv("DATABASE_PATH", "database/invoice_cheque.db")
+
+def _db_path() -> Path:
+    raw = os.getenv("DATABASE_PATH", "database/invoice_cheque.db").strip()
+    path = Path(raw)
+    return path if path.is_absolute() else ROOT / path
+
+
+DB_PATH = _db_path()
 SCHEMA = ROOT / "database" / "schema.sql"
 SEED = ROOT / "database" / "seed.sql"
 SEED_CHEQUES = ROOT / "database" / "seed_cheques.sql"
@@ -261,6 +268,9 @@ def _seed_cheque_templates(conn: sqlite3.Connection):
 
 
 def init_db(force_recreate: bool = True):
+    global DB_PATH
+    DB_PATH = _db_path()
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     if force_recreate and DB_PATH.exists():
         DB_PATH.unlink()
 

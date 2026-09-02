@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+__pycache__
+*.db
+*.db-journal
+.env
+dont upload
+idealize
+database/chroma
+whatsapp-bridge/node_modules
+storage/invoices
+data/inbound_queue
+docs/*.pdf
+cloudflared.exe
+*.exe
+.cursor

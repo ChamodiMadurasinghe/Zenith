@@ -241,7 +241,7 @@ Vector patterns ──(suggestions only)──► Bundling Assistant
 | Patterns outdated | Commit happened before backfill | Run `python scripts/backfill_dealer_patterns.py` |
 | Feature seems off | Disabled via env | Set `ENABLE_VECTOR_PATTERNS=true` |
 | Mock text only | Demo mode | `USE_FAKE_AI=true` skips Chroma |
-| Diagram image missing | File not pushed yet | Regenerate JPGs with `python scripts/generate_vector_docs_docx.py` or use mermaid.ink links in section 2 |
+| Diagram image missing | File not pushed yet | Use mermaid.ink links in section 2 |
 
 ---
 
@@ -265,10 +265,3 @@ Vector patterns ──(suggestions only)──► Bundling Assistant
 ## 12. Related documentation
 
 - [DATABASE.md](../database/DATABASE.md) — SQLite schema and derived vector index note
-- Run `python scripts/generate_vector_docs_docx.py` for a shareable Word copy of this guide (local output, not committed)
-
-Regenerate Word doc:
-
-```bash
-python scripts/generate_vector_docs_docx.py
-```

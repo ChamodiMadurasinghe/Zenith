@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: zenith
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: USE_FAKE_AI
+        value: "true"
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: APP_PASSWORD
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

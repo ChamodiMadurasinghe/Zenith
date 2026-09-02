@@ -1,41 +1,66 @@
 {% set invoice_filter = invoice_filter|default({}) %}
 {% set period = invoice_filter.period or 'custom' %}
 {% set payment_status = invoice_filter.payment_status or 'without_cheque' %}
+{% set advanced_open = invoice_filter.min_amount is not none
+  or invoice_filter.max_amount is not none
+  or invoice_filter.start_date
+  or invoice_filter.end_date %}
+<p class="list-filter-help muted">{{ t('filter_help') }}</p>
 <form class="cheque-filter-bar list-filter-bar" method="get" action="{{ filter_action }}">
-  <label>{{ t('invoice_filter_no') }}
-    <input name="invoice_no" value="{{ invoice_filter.invoice_no or '' }}" autocomplete="off">
-  </label>
-  <label>{{ t('filter_min_amount') }}
-    <input type="number" step="0.01" name="min_amount" value="{{ invoice_filter.min_amount if invoice_filter.min_amount is not none else '' }}">
-  </label>
-  <label>{{ t('filter_max_amount') }}
-    <input type="number" step="0.01" name="max_amount" value="{{ invoice_filter.max_amount if invoice_filter.max_amount is not none else '' }}">
-  </label>
-  <label>{{ t('filter_payment_status') }}
-    <select name="payment_status">
-      <option value="without_cheque" {{ 'selected' if payment_status == 'without_cheque' }}>{{ t('payment_status_without_cheque') }}</option>
-      <option value="with_cheque" {{ 'selected' if payment_status == 'with_cheque' }}>{{ t('payment_status_with_cheque') }}</option>
-      <option value="all" {{ 'selected' if payment_status == 'all' }}>{{ t('payment_status_all') }}</option>
-    </select>
-  </label>
-  <label>{{ t('filter_period') }}
-    <select name="period">
-      <option value="custom" {{ 'selected' if period == 'custom' }}>{{ t('period_custom') }}</option>
-      <option value="this_week" {{ 'selected' if period == 'this_week' }}>{{ t('period_this_week') }}</option>
-      <option value="last_week" {{ 'selected' if period == 'last_week' }}>{{ t('period_last_week') }}</option>
-      <option value="this_month" {{ 'selected' if period == 'this_month' }}>{{ t('period_this_month') }}</option>
-      <option value="last_month" {{ 'selected' if period == 'last_month' }}>{{ t('period_last_month') }}</option>
-      <option value="all" {{ 'selected' if period == 'all' }}>{{ t('period_all_time') }}</option>
-    </select>
-  </label>
-  <label>{{ t('cheque_filter_from') }}
-    <input type="date" name="start_date" value="{{ invoice_filter.start_date or '' }}">
-  </label>
-  <label>{{ t('cheque_filter_to') }}
-    <input type="date" name="end_date" value="{{ invoice_filter.end_date or '' }}">
-  </label>
-  <div class="actions">
-    <button type="submit" class="btn btn-secondary">{{ t('cheque_filter_apply') }}</button>
-    <a href="{{ reset_url }}" class="btn btn-secondary">{{ t('cheque_filter_reset') }}</a>
+  <div class="list-filter-primary">
+    <label class="list-filter-field">
+      <span class="list-filter-label">{{ t('filter_payment_status') }}</span>
+      <select name="payment_status" data-filter-auto>
+        <option value="without_cheque" {{ 'selected' if payment_status == 'without_cheque' }}>{{ t('payment_status_without_cheque') }}</option>
+        <option value="with_cheque" {{ 'selected' if payment_status == 'with_cheque' }}>{{ t('payment_status_with_cheque') }}</option>
+        <option value="all" {{ 'selected' if payment_status == 'all' }}>{{ t('payment_status_all') }}</option>
+      </select>
+    </label>
+    <label class="list-filter-field">
+      <span class="list-filter-label">{{ t('filter_period') }}</span>
+      <select name="period" data-filter-auto>
+        <option value="custom" {{ 'selected' if period == 'custom' }}>{{ t('period_recent') }}</option>
+        <option value="this_month" {{ 'selected' if period == 'this_month' }}>{{ t('period_this_month') }}</option>
+        <option value="last_month" {{ 'selected' if period == 'last_month' }}>{{ t('period_last_month') }}</option>
+        <option value="this_week" {{ 'selected' if period == 'this_week' }}>{{ t('period_this_week') }}</option>
+        <option value="all" {{ 'selected' if period == 'all' }}>{{ t('period_all_time') }}</option>
+        <option value="last_week" {{ 'selected' if period == 'last_week' }}>{{ t('period_last_week') }}</option>
+      </select>
+    </label>
+    <label class="list-filter-field">
+      <span class="list-filter-label">{{ t('invoice_filter_no') }}</span>
+      <input name="invoice_no" value="{{ invoice_filter.invoice_no or '' }}" autocomplete="off"
+             placeholder="{{ t('filter_optional') }}">
+    </label>
   </div>
+  <div class="list-filter-actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('cheque_filter_apply') }}</button>
+    <a href="{{ reset_url }}" class="btn btn-secondary btn-lg">{{ t('cheque_filter_reset') }}</a>
+  </div>
+  <details class="list-filter-more" {% if advanced_open %}open{% endif %}>
+    <summary class="list-filter-more-summary">{{ t('filter_more_options') }}</summary>
+    <div class="list-filter-more-body">
+      <label class="list-filter-field">
+        <span class="list-filter-label">{{ t('filter_min_amount') }}</span>
+        <input type="number" step="0.01" name="min_amount"
+               value="{{ invoice_filter.min_amount if invoice_filter.min_amount is not none else '' }}">
+      </label>
+      <label class="list-filter-field">
+        <span class="list-filter-label">{{ t('filter_max_amount') }}</span>
+        <input type="number" step="0.01" name="max_amount"
+               value="{{ invoice_filter.max_amount if invoice_filter.max_amount is not none else '' }}">
+      </label>
+      <div class="list-filter-dates">
+        <p class="list-filter-dates-hint muted">{{ t('period_custom') }}</p>
+        <label class="list-filter-field">
+          <span class="list-filter-label">{{ t('cheque_filter_from') }}</span>
+          <input type="date" name="start_date" value="{{ invoice_filter.start_date or '' }}">
+        </label>
+        <label class="list-filter-field">
+          <span class="list-filter-label">{{ t('cheque_filter_to') }}</span>
+          <input type="date" name="end_date" value="{{ invoice_filter.end_date or '' }}">
+        </label>
+      </div>
+    </div>
+  </details>
 </form>
