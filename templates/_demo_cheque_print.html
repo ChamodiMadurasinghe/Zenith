@@ -1,0 +1,28 @@
+<section class="demo-cheque-print card card-nested"
+         id="demo-cheque-print"
+         data-account-id="{{ selected_account_id }}">
+  <h3>{{ t('demo_cheque_print_title') }}</h3>
+  <p class="help-tip">{{ t('demo_cheque_print_help') }}</p>
+
+  <div class="grid-2">
+    <label>{{ t('demo_cheque_payee') }}
+      <input type="text" id="demo-cheque-payee" value="{{ t('demo_cheque_payee_sample') }}" autocomplete="off" required>
+    </label>
+    <label>{{ t('demo_cheque_amount') }}
+      <input type="number" id="demo-cheque-amount" min="0" step="0.01" value="50000.00" required>
+    </label>
+    <label>{{ t('demo_cheque_date') }}
+      <input type="date" id="demo-cheque-date" value="{{ today }}" required>
+    </label>
+    <label class="confirm-label demo-cheque-crossing">
+      <input type="checkbox" id="demo-cheque-crossing" checked>
+      {{ t('demo_cheque_crossing') }}
+    </label>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="btn btn-primary btn-lg" id="demo-cheque-print-btn">{{ t('demo_cheque_print_btn') }}</button>
+  </div>
+  <p class="muted help-tip" id="demo-cheque-print-status" hidden></p>
+  <p class="muted">{{ t('demo_cheque_print_note') }}</p>
+</section>

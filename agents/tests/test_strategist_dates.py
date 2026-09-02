@@ -57,5 +57,25 @@ class TestEnrichBundlePayingAccount(unittest.TestCase):
         self.assertTrue(out.get("is_interbank"))
 
 
+class TestGuardrailCeiling(unittest.TestCase):
+    def test_ceiling_issue_when_over_limit(self):
+        from core.guardrails import collect_bundle_issues
+
+        state = {
+            "bundles": [
+                {
+                    "group": 1,
+                    "total_lkr": 300000,
+                    "cheque_date": "2026-09-20",
+                    "invoices": [{"invoices_id": 1, "total_amount": 300000}],
+                }
+            ]
+        }
+        with patch("core.guardrails.build_invoice_lookup", return_value={}):
+            with patch("core.guardrails.repo.get_holidays", return_value=set()):
+                issues = collect_bundle_issues(state, dealer_id=1, ceiling_lkr=200000)
+        self.assertTrue(any("ceiling" in (i or "").lower() for i in issues))
+
+
 if __name__ == "__main__":
     unittest.main()

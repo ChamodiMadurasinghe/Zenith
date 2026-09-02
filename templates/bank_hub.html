@@ -38,6 +38,7 @@
 {% endblock %}
 {% block scripts %}
 {% if active_tab == 'printer' %}
+<script src="{{ url_for('static', filename='js/demo_cheque_print.js') }}"></script>
 <script src="{{ url_for('static', filename='js/printer_calibration.js') }}"></script>
 {% elif active_tab == 'timetable' %}
 <script src="{{ url_for('static', filename='js/cash_flow.js') }}"></script>

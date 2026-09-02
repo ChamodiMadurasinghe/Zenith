@@ -1689,6 +1689,9 @@ body:has(#cheques-layout) #zenith-guide {
 .cheque-dim-standard { font-size: 0.85rem; margin-top: 0.5rem; text-align: center; }
 .cheque-dim-inputs input:disabled { opacity: 0.7; background: #f0f1f3; }
 
+.demo-cheque-print-wrap { margin-bottom: 1.25rem; }
+.demo-cheque-print h3 { margin-top: 0; }
+.demo-cheque-crossing { align-self: end; margin-bottom: 0.5rem; }
 .printer-calibration-section { margin-top: 1.25rem; }
 .printer-setup-steps { margin: 0.75rem 0 1rem 1.25rem; }
 .printer-setup-steps li { margin: 0.35rem 0; }
