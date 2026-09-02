@@ -3,7 +3,9 @@
 {% block content %}
 <div class="hub-page">
 <p class="page-back"><a href="{{ url_for('cash_flow.cash_flow') }}">&larr; {{ t('back_to_accounts') }}</a></p>
-<h1>{{ selected_account.nickname or selected_account.account_name }}</h1>
+<div class="page-title-row">
+  <h1>{{ selected_account.nickname or selected_account.account_name }}</h1>
+</div>
 
 <div class="tab-bar hub-tabs hub-tabs--bank">
   <a href="{{ url_for('cash_flow.account_details', account_id=selected_account_id) }}"
@@ -36,6 +38,7 @@
 {% endblock %}
 {% block scripts %}
 {% if active_tab == 'printer' %}
+<script src="{{ url_for('static', filename='js/demo_cheque_print.js') }}"></script>
 <script src="{{ url_for('static', filename='js/printer_calibration.js') }}"></script>
 {% elif active_tab == 'timetable' %}
 <script src="{{ url_for('static', filename='js/cash_flow.js') }}"></script>

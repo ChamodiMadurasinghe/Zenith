@@ -1,3 +1,4 @@
+# App runtime. Do not replace this with `pip freeze` — that drops Flask, Gunicorn, and APScheduler.
 flask>=3.0
 gunicorn>=22.0
 python-dotenv>=1.0

@@ -232,12 +232,36 @@
     }
   }
 
+  function bindPasswordToggles(root) {
+    (root || document).querySelectorAll(".password-field").forEach(function (wrap) {
+      var input = wrap.querySelector("input");
+      var btn = wrap.querySelector(".password-toggle");
+      if (!input || !btn || btn.dataset.bound) return;
+      btn.dataset.bound = "1";
+      var showLabel = t("show_password");
+      var hideLabel = t("hide_password");
+      btn.addEventListener("click", function () {
+        var showIcon = btn.querySelector(".password-toggle-show");
+        var hideIcon = btn.querySelector(".password-toggle-hide");
+        var visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        var revealed = input.type === "text";
+        if (showIcon) showIcon.hidden = revealed;
+        if (hideIcon) hideIcon.hidden = !revealed;
+        btn.setAttribute("aria-pressed", revealed ? "true" : "false");
+        btn.setAttribute("aria-label", revealed ? hideLabel : showLabel);
+      });
+    });
+  }
+
   function init() {
     document.querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
+    bindPasswordToggles();
   }
 
   window.zenithBindForms = function (root) {
     (root || document).querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
+    bindPasswordToggles(root);
   };
 
   if (document.readyState === "loading") {

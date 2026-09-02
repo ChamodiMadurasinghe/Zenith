@@ -49,6 +49,24 @@
     applyTheme(getTheme());
     var btn = document.getElementById("theme-toggle");
     if (btn) btn.addEventListener("click", toggleTheme);
+
+    var settingsBtn = document.getElementById("settings-toggle");
+    var panel = document.getElementById("settings-panel");
+    if (settingsBtn && panel) {
+      settingsBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        var open = panel.hasAttribute("hidden");
+        if (open) panel.removeAttribute("hidden");
+        else panel.setAttribute("hidden", "");
+        settingsBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", function (event) {
+        if (panel.hasAttribute("hidden")) return;
+        if (event.target.closest(".settings-menu")) return;
+        panel.setAttribute("hidden", "");
+        settingsBtn.setAttribute("aria-expanded", "false");
+      });
+    }
   }
 
   if (document.readyState === "loading") {

@@ -1,12 +1,20 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon_eye, icon_eye_off %}
 {% block title %}{{ t('sign_in') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
 <div class="login-card">
   <h1>{{ t('app_name') }}</h1>
   <p class="subtitle">{{ t('app_subtitle') }}</p>
+  <p class="login-demo-hint">{{ t('login_demo_password') }}</p>
   <form method="post" action="{{ url_for('auth.login') }}" data-zenith-validate>
     <label for="password">{{ t('password') }}</label>
-    <input type="password" id="password" name="password" required autofocus placeholder="{{ t('password_placeholder') }}">
+    <div class="password-field">
+      <input type="password" id="password" name="password" required autofocus placeholder="{{ t('password_placeholder') }}">
+      <button type="button" class="password-toggle" aria-label="{{ t('show_password') }}" aria-controls="password" aria-pressed="false">
+        <span class="password-toggle-icon password-toggle-show">{{ icon_eye() }}</span>
+        <span class="password-toggle-icon password-toggle-hide" hidden>{{ icon_eye_off() }}</span>
+      </button>
+    </div>
     <button type="submit" class="btn btn-primary btn-lg">{{ t('sign_in') }}</button>
   </form>
 </div>

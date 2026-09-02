@@ -3,7 +3,9 @@
 {% block content %}
 <div class="hub-page">
 <p class="page-back"><a href="{{ url_for('bundling.bundling_home') }}">&larr; {{ t('back_to_cheques') }}</a></p>
-<h1>{{ dealer.dealer_name }}</h1>
+<div class="page-title-row">
+  <h1>{{ dealer.dealer_name }}</h1>
+</div>
 
 <div class="tab-bar hub-tabs hub-tabs--dealer">
   <a href="{{ url_for('dealers.details', dealer_id=dealer.dealer_id) }}"

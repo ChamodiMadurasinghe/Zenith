@@ -11,7 +11,7 @@ from config import Config
 from core.auth import login_required
 from core.dates import format_date
 from core.i18n import flash_t
-from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup
+from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup, parse_items_from_form
 from core.whatsapp_intake import extract_image_to_pending_invoice
 from db import repositories as repo
 
@@ -32,23 +32,7 @@ def _image_url(location_path: Optional[str]) -> Optional[str]:
 
 
 def _parse_items_from_form():
-    items = []
-    codes = request.form.getlist("item_code")
-    names = request.form.getlist("item_name")
-    qtys = request.form.getlist("item_qty")
-    prices = request.form.getlist("item_price")
-    for i in range(len(codes)):
-        if codes[i].strip():
-            items.append(
-                {
-                    "item_code": codes[i],
-                    "item_name": names[i],
-                    "item_qty": qtys[i],
-                    "item_price": prices[i],
-                    "item_discount": 0,
-                }
-            )
-    return items
+    return parse_items_from_form(request.form)
 
 
 def _parse_invoice_data_from_form(location_path=None):
@@ -383,6 +367,8 @@ def verify_invoice(invoice_id):
             "item_qty": it["item_qty"],
             "item_price": it["item_price"],
             "item_discount": it.get("item_discount", 0),
+            "item_mrp": it.get("item_mrp", 0),
+            "item_line_total": it.get("item_line_total", 0),
         }
         for it in items
     ]

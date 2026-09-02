@@ -7,7 +7,8 @@ class TestChequeUtils(unittest.TestCase):
     def test_format_large_amount_with_cents(self):
         result = format_cheque_amount_in_words(150000.50)
         self.assertIn("One Hundred Fifty Thousand Rupees", result)
-        self.assertIn("And 50/100 Cents", result)
+        self.assertIn("And Fifty Cents", result)
+        self.assertNotRegex(result, r"\d")
         self.assertTrue(result.endswith("Only ***"))
 
     def test_format_zero(self):
@@ -19,6 +20,12 @@ class TestChequeUtils(unittest.TestCase):
     def test_format_million(self):
         result = format_cheque_amount_in_words(1000000)
         self.assertIn("One Million Rupees", result)
+
+    def test_format_cents_in_words_not_digits(self):
+        result = format_cheque_amount_in_words(1234.56)
+        self.assertIn("One Thousand, Two Hundred Thirty-Four Rupees", result)
+        self.assertIn("And Fifty-Six Cents", result)
+        self.assertNotRegex(result, r"\d")
 
     def test_format_rounding(self):
         result = format_cheque_amount_in_words(10.999)
@@ -36,6 +43,10 @@ class TestChequeUtils(unittest.TestCase):
 
     def test_resolve_sampath(self):
         self.assertEqual(resolve_bank_code("Sampath Bank"), "SAMPATH")
+
+    def test_resolve_ndb(self):
+        self.assertEqual(resolve_bank_code("NDB Bank"), "NDB")
+        self.assertEqual(resolve_bank_code("National Development Bank PLC"), "NDB")
 
     def test_resolve_unknown(self):
         self.assertIsNone(resolve_bank_code("Unknown Bank PLC"))

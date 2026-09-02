@@ -16,6 +16,10 @@ BANK_NAME_TO_CODE: dict[str, str] = {
     "boc": "BOC",
     "seylan bank": "SEYLAN",
     "seylan": "SEYLAN",
+    "national development bank": "NDB",
+    "national development bank plc": "NDB",
+    "ndb bank": "NDB",
+    "ndb": "NDB",
 }
 
 BANK_CODE_ALIASES: dict[str, tuple[str, ...]] = {
@@ -24,6 +28,7 @@ BANK_CODE_ALIASES: dict[str, tuple[str, ...]] = {
     "SAMPATH": ("sampath",),
     "BOC": ("bank of ceylon", "boc"),
     "SEYLAN": ("seylan",),
+    "NDB": ("national development", "ndb"),
 }
 
 
@@ -61,5 +66,6 @@ def format_cheque_amount_in_words(amount: float) -> str:
 
     result = f"{words} Rupees"
     if cents > 0:
-        result += f" And {cents}/100 Cents"
+        cent_words = num2words(cents, lang="en").title().replace(" And ", " ")
+        result += f" And {cent_words} Cents"
     return result + " Only ***"

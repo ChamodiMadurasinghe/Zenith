@@ -13,7 +13,10 @@ invoiced_date, and use an empty string for invoice_no if none is visible.
 Return JSON with keys: invoice_no, supplier_name, supplier_email, supplier_phone, supplier_address,
 supplier_bank_name, supplier_account_name, supplier_branch, invoiced_date (YYYY-MM-DD if visible else null),
 total_amount (number), credit_period_days (integer, default 30), line_items (array of
-{item_code, item_name, item_qty, item_price, item_discount})."""
+{item_code, item_name, item_qty, item_mrp, item_price, item_discount, item_line_total}).
+item_mrp is printed MRP / list price per unit. item_price is the single (unit) selling price.
+item_discount is percent off that unit price if shown, else 0. item_line_total is the line amount
+(qty × single price after discount) if printed, else omit and leave null."""
 
 
 def extract_invoice(image_path: str) -> dict:
@@ -35,8 +38,10 @@ def extract_invoice(image_path: str) -> dict:
                     "item_code": "",
                     "item_name": "Mock goods",
                     "item_qty": 1,
+                    "item_mrp": 125000.0,
                     "item_price": 125000.0,
                     "item_discount": 0,
+                    "item_line_total": 125000.0,
                 }
             ],
         }

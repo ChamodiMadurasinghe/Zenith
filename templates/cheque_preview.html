@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ t('page_cheque_preview') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<h1>{{ t('page_cheque_preview') }}</h1>
+<div class="page-title-row">
+  <h1>{{ t('page_cheque_preview') }}</h1>
+</div>
 <p>{{ t('dealer_label') }}: <strong>{{ dealer.dealer_name }}</strong></p>
 
 {% if validation_issues %}
