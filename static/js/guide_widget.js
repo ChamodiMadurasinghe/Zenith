@@ -1,5 +1,4 @@
 ﻿(function () {
-  const POS_KEY = "zenith_guide_pos";
   const COLLAPSED_KEY = "zenith_guide_collapsed";
   const DRAG_THRESHOLD = 6;
 
@@ -107,6 +106,16 @@
 
   const VIEWPORT_PAD = 12;
 
+  function placeDefaultBottomRight() {
+    const { root } = els();
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const left = window.innerWidth - rect.width - VIEWPORT_PAD;
+    const top = window.innerHeight - rect.height - VIEWPORT_PAD;
+    applyPosition(left, top);
+    fabCollapsedPos = { left, top };
+  }
+
   function clampPosition() {
     const { root } = els();
     if (!root) return;
@@ -149,26 +158,11 @@
     });
   }
 
-  function loadPosition() {
-    try {
-      const raw = localStorage.getItem(POS_KEY);
-      if (!raw) return;
-      const pos = JSON.parse(raw);
-      if (typeof pos.left === "number" && typeof pos.top === "number") {
-        fabCollapsedPos = { left: pos.left, top: pos.top };
-        applyPosition(pos.left, pos.top);
-      }
-    } catch (e) {}
-  }
-
   function saveFabPosition() {
     const { root } = els();
     if (!root || !root.classList.contains("guide-collapsed")) return;
     const rect = root.getBoundingClientRect();
     fabCollapsedPos = { left: rect.left, top: rect.top };
-    try {
-      localStorage.setItem(POS_KEY, JSON.stringify(fabCollapsedPos));
-    } catch (e) {}
   }
 
   const ACTION_DELAY_MS = 800;
@@ -401,10 +395,12 @@
     const { root, fab, send, input, reset, minimize, mute } = els();
     if (!root) return;
     setCollapsed(loadCollapsed());
-    loadPosition();
-    if (!root.classList.contains("guide-collapsed")) {
-      afterExpandLayout(null);
-    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        placeDefaultBottomRight();
+        clampPosition();
+      });
+    });
     fab?.addEventListener("click", (e) => {
       if (fabWasDragged) {
         e.preventDefault();

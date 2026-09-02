@@ -2,7 +2,7 @@
 
 <div class="layout-split" id="cheques-layout">
   <div class="card" id="bundle-workspace" data-dealer="{{ dealer.dealer_id }}">
-    <button type="button" id="chat-expand-btn" class="btn btn-secondary btn-sm chat-expand-fab" hidden>
+    <button type="button" id="chat-expand-btn" class="btn btn-secondary btn-lg chat-expand-fab" hidden>
       {{ t('chat_show') }}
     </button>
 
@@ -74,21 +74,24 @@
     <div id="bundle-proposals"></div>
   </div>
 
-  <div class="card chat-panel">
-    <div class="chat-header">
-      <h3>{{ t('assistant') }}
+  <aside class="card chat-panel" aria-labelledby="chat-panel-title">
+    <header class="chat-panel-head">
+      <div class="chat-panel-title-row">
+        <h2 id="chat-panel-title" class="chat-panel-title">{{ t('assistant') }}</h2>
         {% if use_fake_ai %}
-        <span class="badge badge-demo">{{ t('badge_demo_mode') }}</span>
+        <span class="chat-mode-badge chat-mode-demo">{{ t('badge_demo_mode') }}</span>
         {% else %}
-        <span class="badge badge-live">{{ t('badge_live_ai') }}</span>
+        <span class="chat-mode-badge chat-mode-live">{{ t('badge_live_ai') }}</span>
         {% endif %}
-      </h3>
-      <div class="chat-header-actions">
-        <button type="button" id="chat-reset" class="btn btn-secondary btn-sm">{{ t('reset_chat') }}</button>
-        <button type="button" id="chat-collapse-btn" class="btn btn-secondary btn-sm">{{ t('chat_hide') }}</button>
       </div>
-    </div>
-    <div id="chat-messages" class="chat-messages">
+      <p class="chat-panel-intro">{{ t('chat_panel_intro') }}</p>
+      <div class="chat-toolbar">
+        <button type="button" id="chat-reset" class="btn btn-secondary btn-lg chat-toolbar-btn">{{ t('reset_chat') }}</button>
+        <button type="button" id="chat-collapse-btn" class="btn btn-secondary btn-lg chat-toolbar-btn">{{ t('chat_hide') }}</button>
+      </div>
+    </header>
+
+    <div id="chat-messages" class="chat-messages" aria-live="polite">
       {% if not chat_history %}
       <p class="chat-welcome">{{ t('chat_welcome') }}</p>
       {% endif %}
@@ -99,35 +102,51 @@
         <div class="chat-reviewer-body">{{ m.content }}</div>
         {% if m.verdict == 'suggest_changes' and not m.applied %}
         <div class="chat-reviewer-actions">
-          <button type="button" class="btn btn-secondary btn-sm apply-reviewer-btn" data-review-index="{{ loop.index0 }}">{{ t('apply_reviewer_suggestions') }}</button>
+          <button type="button" class="btn btn-secondary btn-lg apply-reviewer-btn" data-review-index="{{ loop.index0 }}">{{ t('apply_reviewer_suggestions') }}</button>
         </div>
         {% elif m.applied %}
         <div class="chat-reviewer-applied">{{ t('reviewer_applied') }}</div>
         {% endif %}
+        {% elif m.role == 'user' %}
+        <div class="chat-msg-label">{{ t('chat_label_you') }}</div>
+        <div class="chat-msg-body">{{ m.content }}</div>
         {% else %}
-        {{ m.content }}
+        <div class="chat-msg-label">{{ t('chat_label_assistant') }}</div>
+        <div class="chat-msg-body">{{ m.content }}</div>
         {% endif %}
       </div>
       {% endfor %}
     </div>
-    <div class="chat-controls">
-      <label class="chat-speak-toggle">
-        <input type="checkbox" id="chat-speak-toggle">
-        {{ t('ai_speak') }}
-      </label>
-      <button type="button" id="chat-mute-btn" class="btn btn-secondary btn-sm chat-mute-btn" title="{{ t('mute_chat_hint') }}" hidden>
-        {{ t('mute_chat') }}
-      </button>
-    </div>
-    <div class="chat-input">
-      <textarea id="chat-input" rows="1" placeholder="{{ t('chat_placeholder') }}"></textarea>
-      <div class="chat-input-actions">
-        <button type="button" id="chat-mic" class="btn btn-secondary" title="{{ t('voice_input') }}">🎤</button>
-        <button type="button" id="chat-send" class="btn btn-secondary btn-lg" data-dealer="{{ dealer.dealer_id }}">{{ t('send') }}</button>
-        <button type="button" id="chat-stop-btn" class="btn btn-danger btn-lg" title="{{ t('mute_chat_hint') }}" hidden>
-          {{ t('stop_chat') }}
+
+    <footer class="chat-panel-foot">
+      <div class="chat-controls">
+        <label class="chat-speak-toggle">
+          <input type="checkbox" id="chat-speak-toggle">
+          <span>{{ t('ai_speak') }}</span>
+        </label>
+        <button type="button" id="chat-mute-btn" class="btn btn-danger btn-lg chat-action-btn chat-stop-voice-btn" title="{{ t('stop_speaking_hint') }}" hidden>
+          <span class="chat-btn-icon chat-btn-icon-voice" aria-hidden="true">🔇</span>
+          <span id="chat-mute-btn-label">{{ t('stop_speaking') }}</span>
         </button>
       </div>
-    </div>
-  </div>
+      <label class="chat-input-label" for="chat-input">{{ t('chat_input_label') }}</label>
+      <div class="chat-input">
+        <textarea id="chat-input" rows="3" placeholder="{{ t('chat_placeholder') }}"></textarea>
+        <div class="chat-input-actions">
+          <button type="button" id="chat-mic" class="btn btn-secondary btn-lg chat-action-btn chat-voice-btn" title="{{ t('voice_input') }}">
+            <span class="chat-btn-icon" aria-hidden="true">🎤</span>
+            <span>{{ t('chat_voice_btn') }}</span>
+          </button>
+          <button type="button" id="chat-send" class="btn btn-primary btn-lg chat-action-btn chat-send-btn" data-dealer="{{ dealer.dealer_id }}">
+            <span class="chat-btn-icon" aria-hidden="true">➤</span>
+            <span>{{ t('send') }}</span>
+          </button>
+          <button type="button" id="chat-stop-btn" class="btn btn-danger btn-lg chat-action-btn chat-stop-reply-btn" title="{{ t('stop_reply_hint') }}" hidden>
+            <span class="chat-btn-icon" aria-hidden="true">⏹</span>
+            <span>{{ t('stop_reply') }}</span>
+          </button>
+        </div>
+      </div>
+    </footer>
+  </aside>
 </div>

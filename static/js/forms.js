@@ -236,6 +236,10 @@
     document.querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
   }
 
+  window.zenithBindForms = function (root) {
+    (root || document).querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
+  };
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {

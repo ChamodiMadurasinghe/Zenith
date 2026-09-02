@@ -48,13 +48,30 @@ function stopMic() {
 }
 
 function syncMuteButtons() {
-  const { muteBtn, stopBtn, sendBtn } = chatEls();
-  const active = chatBusy || isSpeaking || isListening;
-  if (muteBtn) muteBtn.hidden = !active;
-  if (stopBtn) {
-    stopBtn.hidden = !chatBusy;
-    if (sendBtn) sendBtn.hidden = chatBusy;
+  const { muteBtn, stopBtn, sendBtn, micBtn } = chatEls();
+  const muteLabel = document.getElementById("chat-mute-btn-label");
+  const voiceActive = isSpeaking || isListening;
+  const actions = document.querySelector(".chat-input-actions");
+
+  if (muteBtn) {
+    muteBtn.hidden = !voiceActive || chatBusy;
+    if (muteLabel) {
+      muteLabel.textContent = isListening ? i18n("stop_listening") : i18n("stop_speaking");
+    }
+    const icon = muteBtn.querySelector(".chat-btn-icon-voice");
+    if (icon) icon.textContent = isListening ? "🎤" : "🔇";
+    muteBtn.title = isListening ? i18n("stop_listening_hint") : i18n("stop_speaking_hint");
   }
+  if (stopBtn) stopBtn.hidden = !chatBusy;
+  if (sendBtn) sendBtn.hidden = chatBusy;
+  if (micBtn) micBtn.hidden = chatBusy;
+  if (actions) actions.classList.toggle("is-busy", chatBusy);
+}
+
+function stopVoiceOnly() {
+  stopSpeech();
+  stopMic();
+  syncMuteButtons();
 }
 
 /** Mute speech and/or abort an in-flight chatbot reply. */
@@ -102,7 +119,7 @@ function appendReviewerActions(el, m, reviewIndex) {
   actions.className = "chat-reviewer-actions";
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "btn btn-secondary btn-sm apply-reviewer-btn";
+  btn.className = "btn btn-secondary btn-lg apply-reviewer-btn";
   btn.textContent = i18n("apply_reviewer_suggestions");
   btn.dataset.reviewIndex = String(reviewIndex);
   btn.addEventListener("click", () => applyReviewerSuggestions(reviewIndex));
@@ -129,7 +146,14 @@ function appendChatMsg(role, text, meta) {
       appendReviewerActions(el, meta, meta.reviewIndex ?? -1);
     }
   } else {
-    el.textContent = text || "";
+    const label = document.createElement("div");
+    label.className = "chat-msg-label";
+    label.textContent = role === "user" ? i18n("chat_label_you") : i18n("chat_label_assistant");
+    el.appendChild(label);
+    const body = document.createElement("div");
+    body.className = "chat-msg-body";
+    body.textContent = text || "";
+    el.appendChild(body);
   }
   messages.appendChild(el);
   messages.scrollTop = messages.scrollHeight;
@@ -434,12 +458,15 @@ function bindChatControls() {
     muteChatbot({ announce: false });
     resetChat();
   });
-  const onMute = (e) => {
+  const onStopReply = (e) => {
     e.preventDefault();
     muteChatbot({ announce: true });
   };
-  muteBtn?.addEventListener("click", onMute);
-  stopBtn?.addEventListener("click", onMute);
+  muteBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    stopVoiceOnly();
+  });
+  stopBtn?.addEventListener("click", onStopReply);
   syncMuteButtons();
 }
 
@@ -473,9 +500,13 @@ function initChatCollapse() {
   document.getElementById("chat-collapse-btn")?.addEventListener("click", () => {
     setChatCollapsed(true);
   });
-  document.getElementById("chat-expand-btn")?.addEventListener("click", () => {
-    setChatCollapsed(false);
-  });
+  const expandBtn = document.getElementById("chat-expand-btn");
+  if (expandBtn && !expandBtn.dataset.bound) {
+    expandBtn.dataset.bound = "1";
+    expandBtn.addEventListener("click", () => {
+      setChatCollapsed(false);
+    });
+  }
 }
 
 function bindApplyReviewerButtons() {

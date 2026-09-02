@@ -18,6 +18,20 @@ def _account_from_form(form) -> dict:
     }
 
 
+def _account_panel_context(account_id: int) -> dict | None:
+    selected = repo.get_bank_account(account_id)
+    if not selected:
+        return None
+    return {
+        "report": build_cash_flow_projection(account_id),
+        "selected_account": selected,
+        "selected_account_id": account_id,
+        "planned_deposits": repo.get_planned_deposits(account_id),
+        "upcoming_cheques": repo.get_upcoming_cheques(account_id),
+        "default_bank_acc_id": int(repo.get_setting("default_bank_acc_id", "1") or 1),
+    }
+
+
 @cash_flow_bp.route("/cash-flow")
 @cash_flow_bp.route("/cash-flow/account/<int:account_id>")
 @login_required
@@ -48,20 +62,30 @@ def cash_flow(account_id=None):
         flash_t("flash_bank_account_missing", "error")
         return redirect(url_for("cash_flow.cash_flow"))
 
-    report = build_cash_flow_projection(account_id)
-    planned = repo.get_planned_deposits(account_id)
-    cheques = repo.get_upcoming_cheques(account_id)
+    ctx = _account_panel_context(account_id)
     return render_template(
         "cash_flow.html",
         accounts=accounts,
-        report=report,
-        selected_account=selected,
+        report=ctx["report"],
+        selected_account=ctx["selected_account"],
         selected_account_id=account_id,
-        planned_deposits=planned,
-        upcoming_cheques=cheques,
-        default_bank_acc_id=default_id,
+        planned_deposits=ctx["planned_deposits"],
+        upcoming_cheques=ctx["upcoming_cheques"],
+        default_bank_acc_id=ctx["default_bank_acc_id"],
         show_add_form=request.args.get("add") == "1",
     )
+
+
+@cash_flow_bp.route("/api/cash-flow/<int:account_id>/panel")
+@login_required
+def cash_flow_panel(account_id):
+    from flask import jsonify
+
+    ctx = _account_panel_context(account_id)
+    if not ctx:
+        return jsonify({"error": "not_found"}), 404
+    html = render_template("_cash_flow_account_panel.html", **ctx)
+    return jsonify({"html": html, "account_id": account_id})
 
 
 @cash_flow_bp.route("/api/cash-flow/<int:account_id>/liquidity-schedule")
