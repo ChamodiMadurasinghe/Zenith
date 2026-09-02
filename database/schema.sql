@@ -82,6 +82,8 @@ CREATE TABLE item (
     item_qty        INTEGER NOT NULL,
     item_price      REAL    NOT NULL,
     item_discount   REAL    NOT NULL DEFAULT 0,
+    item_mrp        REAL    NOT NULL DEFAULT 0,
+    item_line_total REAL    NOT NULL DEFAULT 0,
     FOREIGN KEY (invoices_id) REFERENCES invoices(invoices_id)
 );
 

@@ -8,6 +8,7 @@ from core.auth import login_required
 from core.bundle_session import load_bundle_state
 from core.dates import format_date, parse_date
 from core.i18n import flash_t
+from core.ingestion_helpers import parse_items_from_form
 from db import repositories as repo
 
 dealers_bp = Blueprint("dealers", __name__)
@@ -44,25 +45,7 @@ def _parse_invoice_form(location_path=None) -> dict:
 
 
 def _parse_items_from_form() -> list:
-    codes = request.form.getlist("item_code")
-    names = request.form.getlist("item_name")
-    qtys = request.form.getlist("item_qty")
-    prices = request.form.getlist("item_price")
-    items = []
-    for i in range(len(names)):
-        name = (names[i] or "").strip()
-        if not name:
-            continue
-        items.append(
-            {
-                "item_code": (codes[i] if i < len(codes) else "") or "",
-                "item_name": name,
-                "item_qty": int(qtys[i] if i < len(qtys) and qtys[i] else 1),
-                "item_price": float(prices[i] if i < len(prices) and prices[i] else 0),
-                "item_discount": 0,
-            }
-        )
-    return items
+    return parse_items_from_form(request.form)
 
 
 def _dealer_from_form(form) -> dict:

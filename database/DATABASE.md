@@ -146,6 +146,8 @@ erDiagram
         int item_qty
         real item_price
         real item_discount
+        real item_mrp
+        real item_line_total
     }
 
     cheque {
@@ -499,8 +501,10 @@ Invoice line items.
 | item_code | TEXT | |
 | item_name | TEXT | |
 | item_qty | INTEGER | |
-| item_price | REAL | |
-| item_discount | REAL | Default 0 |
+| item_price | REAL | Single / unit selling price |
+| item_discount | REAL | Percent off unit price, default 0 |
+| item_mrp | REAL | Printed MRP / list price, default 0 |
+| item_line_total | REAL | Line total after discount, default 0 |
 
 ---
 

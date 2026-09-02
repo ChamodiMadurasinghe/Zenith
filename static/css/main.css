@@ -464,6 +464,9 @@ input:focus, select:focus, textarea:focus {
 .data-table tr.clickable-row:focus-visible td { background: var(--surface-hover); }
 .data-table-lg th, .data-table-lg td { padding: 1rem; font-size: 1.08rem; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
+.items-table-wrap { margin: 0.5rem 0 0.75rem; }
+#items-table .item-template { display: none; }
+#items-table input[type="number"] { min-width: 5.5rem; }
 .list-filter-stack {
   margin: 0.5rem 0 1rem;
   border: 2px solid var(--border);

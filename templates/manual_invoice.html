@@ -24,23 +24,9 @@
   </div>
 
   <h3>{{ t('line_items') }}</h3>
-  <table class="data-table" id="items-table">
-    <thead><tr><th>{{ t('col_code') }}</th><th>{{ t('col_name') }}</th><th>{{ t('col_qty') }}</th><th>{{ t('col_price') }}</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><input name="item_code" placeholder="SKU"></td>
-        <td><input name="item_name" placeholder="Item"></td>
-        <td><input type="number" name="item_qty" value="1"></td>
-        <td><input type="number" step="0.01" name="item_price" value="0"></td>
-      </tr>
-      <tr class="item-template">
-        <td><input name="item_code" placeholder="SKU"></td>
-        <td><input name="item_name" placeholder="Item"></td>
-        <td><input type="number" name="item_qty" value="1"></td>
-        <td><input type="number" step="0.01" name="item_price" value="0"></td>
-      </tr>
-    </tbody>
-  </table>
+  {% with line_items=[{}] %}
+  {% include '_invoice_items_table.html' %}
+  {% endwith %}
   <button type="button" class="btn btn-secondary" id="add-item">{{ t('add_row') }}</button>
 
   <div class="actions">

@@ -8,7 +8,7 @@ from core.date_presets import (
     WEEK_MONTH_PRESETS,
     preset_date_strings,
 )
-from core.ingestion_helpers import PENDING_SUPPLIER_NAME
+from core.ingestion_helpers import PENDING_SUPPLIER_NAME, normalize_line_item
 from db.connection import execute, query, query_one, transaction
 
 
@@ -812,6 +812,38 @@ def ensure_invoice_delivery_date_column():
         pass
 
 
+def ensure_item_pricing_columns():
+    """Add MRP and line-total columns on existing DBs without a full migrate."""
+    for sql in (
+        "ALTER TABLE item ADD COLUMN item_mrp REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE item ADD COLUMN item_line_total REAL NOT NULL DEFAULT 0",
+    ):
+        try:
+            execute(sql)
+        except Exception:
+            pass
+
+
+def _insert_invoice_items(conn, invoice_id: int, items: list):
+    for raw in items:
+        item = normalize_line_item(raw)
+        conn.execute(
+            """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price,
+               item_discount, item_mrp, item_line_total)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                invoice_id,
+                item["item_code"],
+                item["item_name"],
+                item["item_qty"],
+                item["item_price"],
+                item["item_discount"],
+                item["item_mrp"],
+                item["item_line_total"],
+            ),
+        )
+
+
 def get_dealer_invoices(
     dealer_id: int,
     *,
@@ -862,6 +894,7 @@ def get_dealer_invoices(
 
 def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id: int):
     ensure_invoice_delivery_date_column()
+    ensure_item_pricing_columns()
     with transaction() as conn:
         conn.execute(
             """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
@@ -880,24 +913,13 @@ def update_verified_invoice(invoice_id: int, data: dict, items: list, dealer_id:
             ),
         )
         conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
-        for item in items:
-            conn.execute(
-                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    invoice_id,
-                    item["item_code"],
-                    item["item_name"],
-                    int(item["item_qty"]),
-                    float(item["item_price"]),
-                    float(item.get("item_discount", 0)),
-                ),
-            )
+        _insert_invoice_items(conn, invoice_id, items)
 
 
 def update_invoice_record(invoice_id: int, data: dict, items: list, dealer_id: int):
     """Update invoice header + line items without changing verification status."""
     ensure_invoice_delivery_date_column()
+    ensure_item_pricing_columns()
     with transaction() as conn:
         conn.execute(
             """UPDATE invoices SET dealer_id = ?, invoice_no = ?, invoiced_date = ?,
@@ -915,19 +937,7 @@ def update_invoice_record(invoice_id: int, data: dict, items: list, dealer_id: i
             ),
         )
         conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
-        for item in items:
-            conn.execute(
-                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    invoice_id,
-                    item["item_code"],
-                    item["item_name"],
-                    int(item["item_qty"]),
-                    float(item["item_price"]),
-                    float(item.get("item_discount", 0)),
-                ),
-            )
+        _insert_invoice_items(conn, invoice_id, items)
 
 
 def get_invoice(invoice_id: int):
@@ -939,6 +949,7 @@ def get_invoice(invoice_id: int):
 
 
 def get_invoice_items(invoice_id: int):
+    ensure_item_pricing_columns()
     return query("SELECT * FROM item WHERE invoices_id = ?", (invoice_id,))
 
 
@@ -1136,6 +1147,7 @@ def find_recent_item_orders(
 
 def save_verified_invoice(data: dict, items: list, dealer_id: int) -> int:
     ensure_invoice_delivery_date_column()
+    ensure_item_pricing_columns()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
@@ -1154,19 +1166,7 @@ def save_verified_invoice(data: dict, items: list, dealer_id: int) -> int:
             ),
         )
         invoice_id = cursor.lastrowid
-        for item in items:
-            conn.execute(
-                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    invoice_id,
-                    item["item_code"],
-                    item["item_name"],
-                    int(item["item_qty"]),
-                    float(item["item_price"]),
-                    float(item.get("item_discount", 0)),
-                ),
-            )
+        _insert_invoice_items(conn, invoice_id, items)
     return invoice_id
 
 
@@ -1177,6 +1177,7 @@ def save_pending_invoice(
     pending_dealer_json: str | None = None,
 ) -> int:
     ensure_invoice_delivery_date_column()
+    ensure_item_pricing_columns()
     with transaction() as conn:
         cursor = conn.execute(
             """INSERT INTO invoices (user_id, dealer_id, invoice_no, invoiced_date,
@@ -1196,19 +1197,7 @@ def save_pending_invoice(
             ),
         )
         invoice_id = cursor.lastrowid
-        for item in items:
-            conn.execute(
-                """INSERT INTO item (invoices_id, item_code, item_name, item_qty, item_price, item_discount)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    invoice_id,
-                    item["item_code"],
-                    item["item_name"],
-                    int(item["item_qty"]),
-                    float(item["item_price"]),
-                    float(item.get("item_discount", 0)),
-                ),
-            )
+        _insert_invoice_items(conn, invoice_id, items)
     return invoice_id
 
 
