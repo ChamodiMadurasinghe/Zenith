@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ t('page_verify') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<h1>{{ t('page_verify') }}</h1>
+<div class="page-title-row">
+  <h1>{{ t('page_verify') }}</h1>
+</div>
 <p class="lead">{{ t('lead_verify') }}</p>
 
 {% if new_dealer and dealer_setup %}

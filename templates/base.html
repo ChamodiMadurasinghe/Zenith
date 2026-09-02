@@ -13,59 +13,50 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu7">
 </head>
 <body class="lang-{{ current_lang }}">
-  {% from '_icons.html' import nav_invoice, nav_cheque, nav_bank, nav_reports, nav_logout, theme_sun, theme_moon %}
-  <header class="app-bar">
-    <div class="app-bar-start">
-      {% for code, label in supported_langs.items() %}
-      <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
-         class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
-      {% endfor %}
-      {% if session.get('user_id') %}
-      <a href="{{ url_for('ingestion.dashboard') }}" class="brand">{{ t('app_name') }}</a>
-      {% endif %}
-    </div>
-    <div class="app-bar-end">
-      {% if session.get('user_id') %}
-      <nav class="nav-links" aria-label="{{ t('app_name') }}">
-        <a href="{{ url_for('ingestion.dashboard') }}"
-           class="nav-link{% if request.endpoint in ('ingestion.dashboard', 'ingestion.upload', 'ingestion.review_invoice', 'ingestion.verify_invoice', 'ingestion.manual_invoice') %} active{% endif %}">
-          <span class="nav-icon">{{ nav_invoice() }}</span>
-          <span class="nav-label">{{ t('nav_upload') }}</span>
-        </a>
-        <a href="{{ url_for('bundling.bundling_home') }}"
-           class="nav-link{% if request.endpoint and request.endpoint.startswith('bundling.') or request.endpoint and request.endpoint.startswith('dealers.') %} active{% endif %}">
-          <span class="nav-icon">{{ nav_cheque() }}</span>
-          <span class="nav-label">{{ t('nav_cheques') }}</span>
-        </a>
-        <a href="{{ url_for('cash_flow.cash_flow') }}"
-           class="nav-link{% if request.endpoint and request.endpoint.startswith('cash_flow.') %} active{% endif %}">
-          <span class="nav-icon">{{ nav_bank() }}</span>
-          <span class="nav-label">{{ t('nav_cash_flow') }}</span>
-        </a>
-        <a href="{{ url_for('analytics.analytics') }}"
-           class="nav-link{% if request.endpoint and request.endpoint.startswith('analytics.') %} active{% endif %}">
-          <span class="nav-icon">{{ nav_reports() }}</span>
-          <span class="nav-label">{{ t('nav_analytics') }}</span>
-        </a>
-        <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="inline nav-logout-form">
-          <button type="submit" class="nav-link nav-link-logout link-btn">
+  {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a href="{{ url_for('ingestion.dashboard') if session.get('user_id') else url_for('auth.login') }}" class="brand">{{ t('app_name') }}</a>
+      <div class="site-header-tools">
+        <div class="settings-menu">
+          <button type="button" id="settings-toggle" class="header-tool-btn" aria-expanded="false" aria-controls="settings-panel" title="{{ t('settings') }}" aria-label="{{ t('settings') }}">
+            <span class="nav-icon">{{ nav_settings() }}</span>
+          </button>
+          <div id="settings-panel" class="settings-panel" hidden>
+            <p class="settings-heading">{{ t('language') }}</p>
+            <div class="settings-langs">
+              {% for code, label in supported_langs.items() %}
+              <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
+                 class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
+              {% endfor %}
+            </div>
+            <p class="settings-heading">{{ t('appearance') }}</p>
+            <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
+                    title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
+              <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
+              <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
+              <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
+            </button>
+          </div>
+        </div>
+        {% if session.get('user_id') %}
+        <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="nav-logout-form">
+          <button type="submit" class="header-tool-btn header-tool-btn--logout" title="{{ t('nav_logout') }}" aria-label="{{ t('nav_logout') }}">
             <span class="nav-icon">{{ nav_logout() }}</span>
-            <span class="nav-label">{{ t('nav_logout') }}</span>
           </button>
         </form>
-      </nav>
-      {% endif %}
-      <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
-              title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
-        <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
-        <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
-        <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
-      </button>
+        {% endif %}
+      </div>
     </div>
   </header>
+  {% if session.get('user_id') %}
+  <div class="main-nav-bar">
+    {% include '_main_nav.html' %}
+  </div>
+  {% endif %}
 
   <main class="container">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -128,8 +119,8 @@
   <script src="{{ url_for('static', filename='js/guide_widget.js') }}"></script>
   {% endif %}
 
-  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/forms.js') }}?v=3"></script>
+  <script src="{{ url_for('static', filename='js/theme.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='js/forms.js') }}?v=4"></script>
   <script src="{{ url_for('static', filename='js/list_filters.js') }}?v=1"></script>
   {% block scripts %}{% endblock %}
 </body>

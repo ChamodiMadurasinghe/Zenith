@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ t('page_analytics') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<div class="page-header-row">
+<div class="page-title-row">
   <h1>{{ t('page_analytics') }}</h1>
-  <form method="post" action="{{ url_for('analytics.generate_analytics_report') }}">
-    <button type="submit" class="btn btn-primary btn-lg">
-      {% if report %}{{ t('refresh_report') }}{% else %}{{ t('generate_report') }}{% endif %}
-    </button>
-  </form>
+  <div class="page-title-actions">
+    <form method="post" action="{{ url_for('analytics.generate_analytics_report') }}">
+      <button type="submit" class="btn btn-primary btn-lg">
+        {% if report %}{{ t('refresh_report') }}{% else %}{{ t('generate_report') }}{% endif %}
+      </button>
+    </form>
+  </div>
 </div>
 
 <div class="summary-grid">

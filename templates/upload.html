@@ -2,13 +2,15 @@
 {% from '_icons.html' import tab_camera, tab_whatsapp %}
 {% block title %}{{ t('page_upload') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<header class="page-header">
-  <h1>{{ t('page_upload') }}</h1>
-  <p class="lead">{{ t('lead_upload') }}</p>
-  <p>
-    <a href="{{ url_for('whatsapp_settings.settings_index') }}" class="btn btn-secondary">{{ t('whatsapp_settings_link') }}</a>
-  </p>
-</header>
+<div class="page-title-row">
+  <div class="page-title-main">
+    <h1>{{ t('page_upload') }}</h1>
+    <p class="lead">{{ t('lead_upload') }}</p>
+  </div>
+</div>
+<p>
+  <a href="{{ url_for('whatsapp_settings.settings_index') }}" class="btn btn-secondary">{{ t('whatsapp_settings_link') }}</a>
+</p>
 
 <div class="intake-tabs">
   <div class="tab-bar tab-bar-lg tab-bar-pane" role="tablist" aria-label="{{ t('page_upload') }}">

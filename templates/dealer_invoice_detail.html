@@ -4,8 +4,12 @@
 <p class="page-back">
   <a href="{{ url_for('dealers.invoices', dealer_id=dealer.dealer_id) }}">&larr; {{ t('back_to_dealer_invoices') }}</a>
 </p>
-<h1>{{ t('invoice_detail_title') }}: {{ invoice.invoice_no }}</h1>
-<p class="lead">{{ dealer.dealer_name }} · {{ t('col_aging') }}: {{ aging_days }}</p>
+<div class="page-title-row">
+  <div class="page-title-main">
+    <h1>{{ t('invoice_detail_title') }}: {{ invoice.invoice_no }}</h1>
+    <p class="lead">{{ dealer.dealer_name }} · {{ t('col_aging') }}: {{ aging_days }}</p>
+  </div>
+</div>
 
 <div class="review-split">
   <div class="card review-image-pane">

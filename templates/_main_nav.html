@@ -1,0 +1,23 @@
+{% from '_icons.html' import nav_invoice, nav_cheque, nav_bank, nav_reports %}
+<nav class="main-nav" aria-label="{{ t('app_name') }}">
+  <a href="{{ url_for('ingestion.dashboard') }}"
+     class="main-nav-link{% if request.endpoint in ('ingestion.dashboard', 'ingestion.upload', 'ingestion.review_invoice', 'ingestion.verify_invoice', 'ingestion.manual_invoice') or (request.endpoint and request.endpoint.startswith('whatsapp_settings.')) %} active{% endif %}">
+    <span class="nav-icon">{{ nav_invoice() }}</span>
+    <span class="nav-label">{{ t('nav_upload') }}</span>
+  </a>
+  <a href="{{ url_for('bundling.bundling_home') }}"
+     class="main-nav-link{% if request.endpoint and request.endpoint.startswith('bundling.') or request.endpoint and request.endpoint.startswith('dealers.') %} active{% endif %}">
+    <span class="nav-icon">{{ nav_cheque() }}</span>
+    <span class="nav-label">{{ t('nav_cheques') }}</span>
+  </a>
+  <a href="{{ url_for('cash_flow.cash_flow') }}"
+     class="main-nav-link{% if request.endpoint and request.endpoint.startswith('cash_flow.') %} active{% endif %}">
+    <span class="nav-icon">{{ nav_bank() }}</span>
+    <span class="nav-label">{{ t('nav_cash_flow') }}</span>
+  </a>
+  <a href="{{ url_for('analytics.analytics') }}"
+     class="main-nav-link{% if request.endpoint and request.endpoint.startswith('analytics.') %} active{% endif %}">
+    <span class="nav-icon">{{ nav_reports() }}</span>
+    <span class="nav-label">{{ t('nav_analytics') }}</span>
+  </a>
+</nav>

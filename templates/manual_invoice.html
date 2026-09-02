@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ t('page_manual') }} — {{ t('app_name') }}{% endblock %}
 {% block content %}
-<h1>{{ t('page_manual') }}</h1>
+<div class="page-title-row">
+  <h1>{{ t('page_manual') }}</h1>
+</div>
 <p class="lead">{{ t('lead_manual') }}</p>
 
 <form class="card" method="post" action="{{ url_for('ingestion.manual_invoice') }}" data-zenith-validate>
