@@ -284,57 +284,152 @@ input:focus, select:focus, textarea:focus {
 .data-table tr.clickable-row:focus-visible td { background: var(--surface-hover); }
 .data-table-lg th, .data-table-lg td { padding: 1rem; font-size: 1.08rem; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
-.list-filter-help { font-size: 1.05rem; margin: 0 0 0.65rem; line-height: 1.45; }
+.list-filter-stack {
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f4f6f9;
+  box-shadow: none;
+}
+.list-filter-panel { margin: 0; }
+.list-filter-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.45);
+}
+.list-filter-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.list-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  flex: 1;
+  min-width: 0;
+}
+.list-filter-chips-label {
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  border: 1px solid var(--border);
+}
 .cheque-filter-bar {
   display: grid;
-  gap: 0.85rem;
-  margin: 0.75rem 0 1rem;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.65rem 0.85rem 0.7rem;
+  background: transparent;
+}
+@media (min-width: 720px) {
+  .cheque-filter-bar {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+  }
+  .list-filter-primary { grid-column: 1; }
+  .list-filter-actions {
+    grid-column: 2;
+    flex-wrap: nowrap;
+    padding-bottom: 0.05rem;
+  }
+  .list-filter-more { grid-column: 1 / -1; }
 }
 .list-filter-primary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.85rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 0.6rem 0.75rem;
 }
 .list-filter-field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.28rem;
   margin: 0;
 }
 .list-filter-label {
-  font-weight: 700;
-  font-size: 1.08rem;
-  line-height: 1.3;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.25;
+  color: var(--muted);
 }
 .list-filter-bar input[type="text"],
 .list-filter-bar input[type="number"],
 .list-filter-bar input[type="date"],
 .list-filter-bar select {
-  min-height: var(--touch-min);
-  font-size: 1.08rem;
+  min-height: 44px;
+  font-size: 1rem;
   width: 100%;
 }
 .list-filter-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem;
+  gap: 0.45rem;
 }
 .list-filter-more {
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.35rem 0.85rem 0.85rem;
-  background: var(--card);
+  border: none;
+  border-top: 1px dashed var(--border);
+  border-radius: 0;
+  padding: 0.55rem 0 0;
+  margin: 0.1rem 0 0;
+  background: transparent;
 }
 .list-filter-more-summary {
   cursor: pointer;
-  font-weight: 700;
-  font-size: 1.08rem;
-  min-height: var(--touch-min);
+  font-weight: 600;
+  font-size: 0.92rem;
+  min-height: 44px;
   display: flex;
   align-items: center;
   list-style: none;
   user-select: none;
+  color: var(--muted);
+  gap: 0.4rem;
 }
+.list-filter-more-summary::before {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  color: var(--text);
+}
+.list-filter-more[open] .list-filter-more-summary::before { content: "−"; }
 .list-filter-more-summary::-webkit-details-marker { display: none; }
 .list-filter-more-body {
   display: grid;
@@ -361,20 +456,25 @@ input:focus, select:focus, textarea:focus {
   min-height: 1.35rem;
 }
 .list-summary-bar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.35rem 0.75rem;
-  padding: 0.75rem 1rem;
-  margin: 0 0 1rem;
-  background: #eef3f9;
+  gap: 0.3rem 0.6rem;
+  padding: 0.5rem 0.85rem;
+  margin: 0;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  font-size: 0.88rem;
+}
+.list-filter-stack .list-summary-bar strong {
   color: var(--text);
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 1.02rem;
+  font-size: 0.92rem;
+}
+.list-filter-stack .list-summary-bar {
+  position: static;
 }
 .list-summary-bar .list-summary-sep { color: var(--muted); }
 .status-paid { color: #1a7f37; font-weight: 700; font-size: 1.15rem; }
@@ -1627,8 +1727,25 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .wa-inbox-icon { background: #222833; }
 [data-theme="dark"] .wa-inbox-icon-thumb { background: #141820; }
 [data-theme="dark"] .empty-state { background: #222833; }
-[data-theme="dark"] .list-summary-bar { background: #222833; }
-[data-theme="dark"] .list-filter-more { background: #1a1f28; border-color: #3a4354; }
+[data-theme="dark"] .list-summary-bar { background: transparent; color: var(--muted); }
+[data-theme="dark"] .list-filter-stack {
+  background: #141820;
+  border-color: #3a4354;
+  border-left-color: var(--primary);
+}
+[data-theme="dark"] .list-filter-top {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: #3a4354;
+}
+[data-theme="dark"] .filter-chip {
+  background: #1e2430;
+  border-color: #4a5568;
+  color: var(--text);
+}
+[data-theme="dark"] .list-filter-more-summary::before {
+  background: #1e2430;
+  border-color: #4a5568;
+}
 [data-theme="dark"] .badge-ready { background: #2d9d5c; color: #fff; border-color: #5ecf8a; }
 [data-theme="dark"] .badge-pending { background: #c17d00; color: #fff; border-color: #ffb020; }
 [data-theme="dark"] .badge-committed { background: #2563eb; color: #fff; border-color: #8bb8ff; }

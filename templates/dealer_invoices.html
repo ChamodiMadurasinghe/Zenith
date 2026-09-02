@@ -1,10 +1,12 @@
 {% set filter_action = url_for('dealers.invoices', dealer_id=dealer.dealer_id) %}
 {% set reset_url = filter_action %}
+<div class="list-filter-stack">
 {% include '_invoice_filter_bar.html' %}
 
 {% set summary_title = t('invoice_list_summary_title') %}
 {% set summary_noun = t('list_summary_invoices') %}
 {% include '_list_summary_bar.html' %}
+</div>
 
 {% if dealer_invoices %}
 <table class="data-table">

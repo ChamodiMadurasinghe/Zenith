@@ -1,0 +1,50 @@
+{# Shared active-filter chips. Set filter_kind to "cheque" or "invoice" before include. #}
+{% set period = period|default('custom') %}
+<div class="list-filter-chips" role="status">
+  <span class="list-filter-chips-label">{{ t('filter_active_label') }}</span>
+  {% if filter_kind == 'invoice' %}
+  {% set payment_status = payment_status|default('without_cheque') %}
+  <span class="filter-chip">
+    {% if payment_status == 'with_cheque' %}{{ t('payment_status_with_cheque') }}
+    {% elif payment_status == 'all' %}{{ t('payment_status_all') }}
+    {% else %}{{ t('payment_status_without_cheque') }}{% endif %}
+  </span>
+  {% endif %}
+  <span class="filter-chip">
+    {% if period == 'this_month' %}{{ t('period_this_month') }}
+    {% elif period == 'last_month' %}{{ t('period_last_month') }}
+    {% elif period == 'this_week' %}{{ t('period_this_week') }}
+    {% elif period == 'last_week' %}{{ t('period_last_week') }}
+    {% elif period == 'all' %}{{ t('period_all_time') }}
+    {% else %}{{ t('period_recent') }}{% endif %}
+  </span>
+  {% if filter_kind == 'cheque' and cheque_filter.cheque_no %}
+  <span class="filter-chip">{{ t('cheque_filter_no') }}: {{ cheque_filter.cheque_no }}</span>
+  {% elif filter_kind == 'invoice' and invoice_filter.invoice_no %}
+  <span class="filter-chip">{{ t('invoice_filter_no') }}: {{ invoice_filter.invoice_no }}</span>
+  {% endif %}
+  {% if filter_kind == 'cheque' %}
+    {% if cheque_filter.min_amount is not none %}
+    <span class="filter-chip">{{ t('filter_min_amount') }} {{ cheque_filter.min_amount }}</span>
+    {% endif %}
+    {% if cheque_filter.max_amount is not none %}
+    <span class="filter-chip">{{ t('filter_max_amount') }} {{ cheque_filter.max_amount }}</span>
+    {% endif %}
+    {% if cheque_filter.start_date or cheque_filter.end_date %}
+    <span class="filter-chip">{{ cheque_filter.start_date or '…' }} – {{ cheque_filter.end_date or '…' }}</span>
+    {% endif %}
+    {% if cheque_filter.show_all %}
+    <span class="filter-chip">{{ t('cheque_filter_show_all') }}</span>
+    {% endif %}
+  {% else %}
+    {% if invoice_filter.min_amount is not none %}
+    <span class="filter-chip">{{ t('filter_min_amount') }} {{ invoice_filter.min_amount }}</span>
+    {% endif %}
+    {% if invoice_filter.max_amount is not none %}
+    <span class="filter-chip">{{ t('filter_max_amount') }} {{ invoice_filter.max_amount }}</span>
+    {% endif %}
+    {% if invoice_filter.start_date or invoice_filter.end_date %}
+    <span class="filter-chip">{{ invoice_filter.start_date or '…' }} – {{ invoice_filter.end_date or '…' }}</span>
+    {% endif %}
+  {% endif %}
+</div>
