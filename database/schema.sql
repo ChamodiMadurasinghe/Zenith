@@ -10,6 +10,7 @@ CREATE TABLE user (
 CREATE TABLE user_bank_account (
     user_bank_acc_id    INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id             INTEGER NOT NULL,
+    account_number      TEXT,
     account_name        TEXT    NOT NULL,
     nickname            TEXT,
     available_balance   REAL    NOT NULL DEFAULT 0.00,
@@ -35,6 +36,7 @@ CREATE TABLE dealers (
 CREATE TABLE dealers_bank_account (
     dealer_bank_acc_id  INTEGER PRIMARY KEY AUTOINCREMENT,
     dealer_id           INTEGER NOT NULL,
+    account_number      TEXT,
     account_name        TEXT    NOT NULL,
     branch_name         TEXT,
     bank_name           TEXT    NOT NULL,
