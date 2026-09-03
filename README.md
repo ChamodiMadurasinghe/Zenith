@@ -6,10 +6,6 @@ Local cheque and invoice management for Sri Lankan SMBs: invoice photos in (web 
 
 **Solution.** Zenith keeps that loop in one Flask + SQLite app, with a human in the loop before any invoice is accepted, and Python guardrails after the AI proposes bundles.
 
-## Demo video
-
-<!-- Paste the YouTube URL after you upload [Team Name]_Video_Pitch -->
-_Add the public or unlisted YouTube link here._
 
 ## Features
 
@@ -169,11 +165,13 @@ python -m pytest agentic/tests core/tests agents/tests routes/tests -q
 
 | Name | GitHub |
 |------|--------|
-| Chamodi Madurasinghe | [ChamodiMadurasinghe](https://github.com/ChamodiMadurasinghe) |
-| Sithil | [sithilyapa717](https://github.com/sithilyapa717) |
-| Yohan Ruchitha | [yohanruchitha](https://github.com/yohanruchitha) |
 
-_Adjust names/roles to match the Idealize registration form._
+| Sithil Yapa | [sithilyapa717](https://github.com/sithilyapa717) |
+| Yohan Ruchitha | [yohanruchitha2-star](https://github.com/yohanruchitha2-star) |
+| Nithika Senanayake | [senanayakenithikas-ux](https://github.com/senanayakenithikas-ux) |
+| Vinudi Sanaya | [VinudiSanaya](https://github.com/VinudiSanaya) |
+| Chamodi Madurasinghe | [ChamodiMadurasinghe](https://github.com/ChamodiMadurasinghe) |
+
 
 ## License
 
