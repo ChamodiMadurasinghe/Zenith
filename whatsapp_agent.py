@@ -1,4 +1,28 @@
-﻿"""Headless WhatsApp webhook for invoice/cheque intake (Meta Cloud API default)."""
+﻿"""Headless WhatsApp webhook for invoice/cheque intake (Meta Cloud API default).
+
+GET  /webhook/whatsapp  — Meta subscription verification (hub.mode / challenge / token)
+POST /webhook/whatsapp  — inbound messages; images go to inbox-v2 (Agent 1 via Send to AI)
+
+Meta Cloud API webhook JSON shape (simplified)::
+
+    {
+      "object": "whatsapp_business_account",
+      "entry": [{
+        "changes": [{
+          "value": {
+            "messages": [{
+              "from": "9477xxxxxxx",          # sender digits (no +)
+              "id": "wamid....",
+              "type": "image" | "text" | ...,
+              "image": {"id": "<media_id>"},  # when type=image
+              "text": {"body": "..."}         # when type=text
+            }],
+            "statuses": [...]                 # delivery receipts — no messages
+          }
+        }]
+      }]
+    }
+"""
 
 from __future__ import annotations
 
@@ -9,7 +33,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
-from flask import Blueprint, Request, request
+from flask import Blueprint, Request, jsonify, request
 
 from config import BASE_DIR, Config
 from core.dates import format_date
@@ -18,6 +42,10 @@ from core.meta_whatsapp import (
     extract_inbound_messages,
     validate_meta_signature,
     verify_webhook_challenge,
+)
+from core.whatsapp_guardrails import (
+    is_approved_sender,
+    log_unauthorized_sender,
 )
 from core.whatsapp_utils import normalize_whatsapp_phone
 from core.whatsapp_conversation import handle_text_reply
@@ -35,6 +63,9 @@ MOCK_PAYLOAD = {
 }
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# inbox-v2: webhook saves media only; Gemini Agent 1 runs after "Send to AI" in the UI.
+WHATSAPP_INTAKE_VERSION = "inbox-v2"
 
 
 def _relative_location_path(filename: str) -> str:
@@ -165,7 +196,7 @@ def build_liquidity_reply(
             f"You safely gain {days_gained} extra {day_word} of free cash holding."
         ),
         "",
-        "Saved as pending verification ÔÇö open web app to confirm details.",
+        "Saved as pending verification — open web app to confirm details.",
     ]
     if anomalies:
         lines.append("")
@@ -229,20 +260,25 @@ def _save_whatsapp_pending(
     return invoice_id, bool(dealer)
 
 
-def process_whatsapp_document(
+def queue_agent1_from_whatsapp_media(
     sender_phone: str,
     *,
     media_id: str | None = None,
     media_url: str | None = None,
 ) -> str:
-    """Save WhatsApp image to web portal inbox; user triggers Gemini from the dashboard."""
+    """Download image and queue Agent 1 (Vision) via WhatsApp inbox.
+
+    inbox-v2 policy: do **not** call Gemini here. The shop opens
+    Invoices → WhatsApp photos → **Send to AI**, which runs Agent 1 OCR.
+    """
     from core.whatsapp_intake import WHATSAPP_INBOX_REPLY
 
     try:
         _, location_path = resolve_image_path(media_id=media_id, media_url=media_url)
         repo.save_whatsapp_inbox(sender_phone, location_path)
         print(
-            f"[whatsapp] {WHATSAPP_INTAKE_VERSION} saved inbox from {sender_phone}: {location_path}",
+            f"[whatsapp] {WHATSAPP_INTAKE_VERSION} queued Agent 1 inbox "
+            f"from {sender_phone}: {location_path}",
             flush=True,
         )
         return WHATSAPP_INBOX_REPLY
@@ -254,25 +290,19 @@ def process_whatsapp_document(
         )
 
 
+# Back-compat alias used by mocks / agentic bridges
+process_whatsapp_document = queue_agent1_from_whatsapp_media
+
+
 def _sender_allowed(sender: str) -> bool:
-    active_db = [
-        row for row in repo.list_allowed_senders() if int(row.get("is_active") or 0)
-    ]
-    if active_db:
-        return repo.is_sender_allowed(sender)
-    allowed = Config.whatsapp_allowed_numbers()
-    if not allowed:
-        return True
-    normalized = normalize_whatsapp_phone(sender)
-    allowed_norm = {normalize_whatsapp_phone(n) for n in allowed}
-    return normalized in allowed_norm
+    """Delegate to SQLite + env approved-sender guardrail."""
+    return is_approved_sender(sender)
 
 
 def _reply(to_phone: str, body: str):
     try:
         send_whatsapp_message(to_phone, body)
     except Exception as exc:
-        # Still ack webhook; log-style print for local debugging
         print(f"WhatsApp reply failed for {to_phone}: {exc}")
 
 
@@ -291,14 +321,37 @@ def validate_twilio_request(req: Request) -> bool:
     return validator.validate(req.url, req.form, signature)
 
 
-WHATSAPP_INTAKE_VERSION = "inbox-v2"
+def _handle_approved_inbound(msg: dict) -> str:
+    """Process one normalized inbound message from an approved sender."""
+    sender = msg["from"]
+    msg_type = msg.get("type")
+    media_id = msg.get("media_id")
+    use_agentic = Config.use_agentic_orchestrator()
+
+    # Image (or invoice PDF/document normalized to media_id by extract_inbound_messages)
+    if media_id and msg_type in ("image", "document", None):
+        return queue_agent1_from_whatsapp_media(sender, media_id=media_id)
+
+    if media_id:
+        return queue_agent1_from_whatsapp_media(sender, media_id=media_id)
+
+    if use_agentic:
+        from agentic.adapters.whatsapp_bridge import process_whatsapp_text_via_agentic
+
+        return process_whatsapp_text_via_agentic(sender, msg.get("text") or "")
+
+    if msg.get("text"):
+        return (
+            handle_text_reply(sender, msg["text"])
+            or "Please send a photo of an invoice or cheque."
+        )
+
+    return "Please send a photo of an invoice or cheque."
 
 
 @whatsapp_bp.route("/webhook/whatsapp/health", methods=["GET"])
 def whatsapp_webhook_health():
     """Verify public webhook is running inbox-first intake (not Gemini-on-receive)."""
-    from flask import jsonify
-
     return jsonify(
         {
             "ok": True,
@@ -318,7 +371,11 @@ def whatsapp_webhook_health():
 
 @whatsapp_bp.route("/webhook/whatsapp", methods=["GET"])
 def whatsapp_webhook_verify():
-    """Meta Cloud API subscription verification handshake."""
+    """Meta webhook verification (subscribe handshake).
+
+    Meta sends: hub.mode=subscribe, hub.verify_token=<token>, hub.challenge=<nonce>.
+    We compare hub.verify_token to META_VERIFY_TOKEN and echo hub.challenge on success.
+    """
     mode = request.args.get("hub.mode", "")
     token = request.args.get("hub.verify_token", "")
     challenge = request.args.get("hub.challenge", "")
@@ -330,75 +387,26 @@ def whatsapp_webhook_verify():
 
 @whatsapp_bp.route("/webhook/whatsapp", methods=["POST"])
 def whatsapp_webhook():
+    """Inbound WhatsApp webhook (Meta Cloud API or legacy Twilio)."""
     provider = Config.whatsapp_provider()
 
-    # --- Meta Cloud API ---
     if provider == "meta":
-        raw = request.get_data()
-        if not validate_meta_signature(raw, request.headers.get("X-Hub-Signature-256")):
-            return "Invalid signature", 403
-        payload = request.get_json(silent=True) or {}
-        print(
-            f"[whatsapp] META POST keys={list(payload.keys())} raw_len={len(raw)}",
-            flush=True,
-        )
-        try:
-            log_path = Config.UPLOAD_FOLDER.parent / "webhook_meta.jsonl"
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            with log_path.open("a", encoding="utf-8") as fh:
-                fh.write(raw.decode("utf-8", errors="replace") + "\n")
-        except Exception as log_exc:
-            print(f"[whatsapp] log write failed: {log_exc}", flush=True)
-        inbound = extract_inbound_messages(payload)
-        print(f"[whatsapp] parsed {len(inbound)} inbound message(s)", flush=True)
-        if not inbound:
-            # statuses / other change types still POST with empty messages
-            print(f"[whatsapp] non-message payload preview={str(payload)[:400]}", flush=True)
-        use_agentic = Config.use_agentic_orchestrator()
-        for msg in inbound:
-            sender = msg["from"]
-            if not _sender_allowed(sender):
-                continue
-            try:
-                if msg.get("media_id"):
-                    # Always store photo first; Gemini runs only from web "Send to AI"
-                    reply_text = process_whatsapp_document(sender, media_id=msg["media_id"])
-                elif use_agentic:
-                    from agentic.adapters.whatsapp_bridge import (
-                        process_whatsapp_text_via_agentic,
-                    )
+        return _meta_webhook_post()
 
-                    reply_text = process_whatsapp_text_via_agentic(
-                        sender, msg.get("text") or ""
-                    )
-                elif msg.get("text"):
-                    reply_text = (
-                        handle_text_reply(sender, msg["text"])
-                        or "Please send a photo of an invoice or cheque."
-                    )
-                else:
-                    reply_text = "Please send a photo of an invoice or cheque."
-            except Exception as exc:
-                reply_text = f"Processing failed: {exc}"
-            _reply(sender, reply_text)
-        return "", 200
-
-    # --- Legacy Twilio form webhook ---
     if not validate_twilio_request(request):
         return "Unauthorized", 403
     sender = normalize_whatsapp_phone(request.form.get("From", ""))
     if not _sender_allowed(sender):
-        return "", 403
+        log_unauthorized_sender(sender, message_type="twilio")
+        return jsonify({"status": "ignored", "reason": "unauthorized_number"}), 200
     media_url = request.form.get("MediaUrl0")
     body = (request.form.get("Body") or "").strip()
     use_agentic = Config.use_agentic_orchestrator()
     try:
         if media_url:
-            reply_text = process_whatsapp_document(sender, media_url=media_url)
+            reply_text = queue_agent1_from_whatsapp_media(sender, media_url=media_url)
         elif use_agentic:
-            from agentic.adapters.whatsapp_bridge import (
-                process_whatsapp_text_via_agentic,
-            )
+            from agentic.adapters.whatsapp_bridge import process_whatsapp_text_via_agentic
 
             reply_text = process_whatsapp_text_via_agentic(sender, body)
         else:
@@ -408,7 +416,61 @@ def whatsapp_webhook():
     except Exception as exc:
         reply_text = f"Processing failed: {exc}"
     _reply(sender, reply_text)
-    # Twilio also accepts empty 200 when using the REST API to reply
+    return "", 200
+
+
+def _meta_webhook_post():
+    """POST body from Meta Graph WhatsApp webhooks."""
+    raw = request.get_data()
+    # Optional HMAC: only enforced when META_APP_SECRET is set
+    if not validate_meta_signature(raw, request.headers.get("X-Hub-Signature-256")):
+        return "Invalid signature", 403
+
+    payload = request.get_json(silent=True) or {}
+    print(
+        f"[whatsapp] META POST keys={list(payload.keys())} raw_len={len(raw)}",
+        flush=True,
+    )
+    try:
+        log_path = Config.UPLOAD_FOLDER.parent / "webhook_meta.jsonl"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(raw.decode("utf-8", errors="replace") + "\n")
+    except Exception as log_exc:
+        print(f"[whatsapp] log write failed: {log_exc}", flush=True)
+
+    # Flatten entry[].changes[].value.messages[] → {from, type, text, media_id}
+    inbound = extract_inbound_messages(payload)
+    print(f"[whatsapp] parsed {len(inbound)} inbound message(s)", flush=True)
+    if not inbound:
+        # statuses / other change types still POST with empty messages — ACK 200
+        print(f"[whatsapp] non-message payload preview={str(payload)[:400]}", flush=True)
+        return "", 200
+
+    processed = 0
+    ignored_unauthorized = 0
+    for msg in inbound:
+        sender = msg["from"]
+        msg_type = msg.get("type")
+
+        # SQLite approved-sender guardrail (whatsapp_allowed_senders + env fallback)
+        if not is_approved_sender(sender):
+            log_unauthorized_sender(sender, message_type=msg_type)
+            ignored_unauthorized += 1
+            continue
+
+        try:
+            reply_text = _handle_approved_inbound(msg)
+        except Exception as exc:
+            reply_text = f"Processing failed: {exc}"
+        _reply(sender, reply_text)
+        processed += 1
+
+    # If *every* message was blocked, return explicit JSON so Meta stops retrying
+    # and operators can see the reason in webhook debugger / logs.
+    if processed == 0 and ignored_unauthorized > 0:
+        return jsonify({"status": "ignored", "reason": "unauthorized_number"}), 200
+
     return "", 200
 
 
@@ -427,7 +489,7 @@ def run_mock():
     else:
         print(f"MediaUrl0: {MOCK_PAYLOAD['MediaUrl0']}")
     try:
-        reply_text = process_whatsapp_document(sender, media_url=media_url)
+        reply_text = queue_agent1_from_whatsapp_media(sender, media_url=media_url)
     except Exception as exc:
         reply_text = f"Processing failed: {exc}"
     print("\n--- Reply ---\n")

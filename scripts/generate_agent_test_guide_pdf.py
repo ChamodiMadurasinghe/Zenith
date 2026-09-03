@@ -50,6 +50,7 @@ def _draw_invoice(
     lines: list[tuple[str, str, float, float, float]],
     total: float,
     note: str = "",
+    footer: str = "",
 ):
     """lines: (code, name, qty, unit_price, discount_pct)"""
     img = Image.new("RGB", (900, 1200), "white")
@@ -92,6 +93,10 @@ def _draw_invoice(
     if note:
         y += 60
         d.text((40, y), note, fill=(120, 40, 40), font=f_sm)
+    if footer:
+        y += 40
+        for i, line in enumerate(footer.split("\n")):
+            d.text((40, y + i * 26), line, fill=(40, 40, 40), font=f_sm)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
@@ -246,6 +251,76 @@ def make_sample_images() -> dict[str, Path]:
         d.text((40, y), line, fill=(30, 30, 30), font=_font(17))
         y += 32
     img.save(files["bundle_sheet"])
+
+    files["mrp"] = SAMPLES / "11_mrp_vs_sell.png"
+    _draw_invoice(
+        files["mrp"],
+        title="TAX INVOICE — MRP vs SELLING PRICE",
+        supplier="City Mart Suppliers",
+        invoice_no="CM-TEST-1011",
+        inv_date="2026-09-01",
+        lines=[("RICE-10", "Nadu Rice 10kg", 4, 1850.0, 0)],
+        total=7400.0,
+        note="Printed MRP 2,200 | Sell 1,850 — OCR should fill item_mrp and item_price.",
+        footer="MRP Rs. 2,200.00   Unit sell Rs. 1,850.00   Line total Rs. 7,400.00",
+    )
+
+    files["bank"] = SAMPLES / "12_supplier_bank_footer.png"
+    _draw_invoice(
+        files["bank"],
+        title="TAX INVOICE — SUPPLIER BANK",
+        supplier="Lanka Hardware Traders",
+        invoice_no="LH-4412",
+        inv_date="2026-08-15",
+        lines=[("BOLT-M8", "Hex Bolt M8", 100, 25.0, 0)],
+        total=2500.0,
+        note="OCR should pick bank fields from footer.",
+        footer="Acc: LANKA HARDWARE TRADERS\nBank: Commercial Bank of Ceylon  Branch: Pettah\nA/C 1234567890  Tel 011-2345678  email sales@lankahw.lk",
+    )
+
+    files["credit"] = SAMPLES / "13_credit_period.png"
+    _draw_invoice(
+        files["credit"],
+        title="TAX INVOICE — CREDIT 45 DAYS",
+        supplier="City Mart Suppliers",
+        invoice_no="CM-TEST-1013",
+        inv_date="2026-09-01",
+        lines=[("TEA-02", "Ceylon Tea 200g", 8, 450.0, 0)],
+        total=3600.0,
+        note="Payment terms: Net 45 days → credit_period_days ≈ 45.",
+        footer="Payment: Net 45 days from invoice date. Cheques payable to City Mart Suppliers.",
+    )
+
+    files["twodisc"] = SAMPLES / "14_two_discount_lines.png"
+    _draw_invoice(
+        files["twodisc"],
+        title="TAX INVOICE — TWO DISCOUNTED LINES",
+        supplier="City Mart Suppliers",
+        invoice_no="CM-TEST-1014",
+        inv_date="2026-09-01",
+        lines=[
+            ("SKU-A", "Carton A", 5, 200.0, 5),
+            ("SKU-B", "Carton B", 2, 500.0, 10),
+        ],
+        total=1850.0,
+        note="5×200×0.95 + 2×500×0.90 = 950+900 = 1850. Header must match.",
+    )
+
+    files["phone_photo"] = SAMPLES / "15_phone_photo_glare.png"
+    img = Image.new("RGB", (900, 1100), (35, 32, 28))
+    d = ImageDraw.Draw(img)
+    d.rectangle((80, 70, 820, 980), fill=(245, 242, 230))
+    d.ellipse((620, 90, 780, 220), fill=(255, 255, 240))
+    f = _font(20)
+    d.text((110, 120), "SOFTLOGIC RETAIL", fill=(30, 30, 30), font=_font(26))
+    d.text((110, 170), "Inv SL-9901    12 Aug 2026", fill=(40, 40, 40), font=f)
+    d.text((110, 230), "Mouse wireless x 2  @ 3,450", fill=(20, 20, 20), font=f)
+    d.text((110, 270), "USB hub x 1         @ 1,890", fill=(20, 20, 20), font=f)
+    d.text((110, 340), "TOTAL  Rs. 8,790.00", fill=(0, 0, 0), font=_font(24))
+    d.text((110, 420), "(Simulate phone photo + glare for OCR)", fill=(90, 90, 90), font=_font(16))
+    files["phone_photo"].parent.mkdir(parents=True, exist_ok=True)
+    img.save(files["phone_photo"])
+
     return files
 
 
@@ -306,8 +381,22 @@ def _styles():
             leftIndent=8,
         ),
         "center": ParagraphStyle("C", parent=base["Normal"], alignment=TA_CENTER, fontSize=9),
+        "ex": ParagraphStyle(
+            "EX",
+            parent=base["BodyText"],
+            fontSize=8.5,
+            leading=11.5,
+            leftIndent=6,
+            backColor=colors.HexColor("#eef3f8"),
+            borderPadding=4,
+            spaceAfter=6,
+        ),
     }
     return styles
+
+
+def _cell(text, styles, key="small"):
+    return Paragraph(str(text).replace("\n", "<br/>"), styles[key])
 
 
 def _table(data, col_widths=None):
@@ -337,18 +426,38 @@ def build_pdf(sample_files: dict[str, Path]):
     styles = _styles()
     story = []
     W = A4[0] - 36 * mm
+    s = styles
+
+    def header_row(cells):
+        hdr = ParagraphStyle(
+            "TH",
+            parent=s["small"],
+            textColor=colors.white,
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=10,
+        )
+        return [Paragraph(str(c), hdr) for c in cells]
+
+    def T(headers, rows, widths):
+        data = [header_row(headers)]
+        for r in rows:
+            data.append([_cell(c, s) for c in r])
+        return _table(data, col_widths=widths)
 
     story.append(Paragraph("Zenith / ChequeMate — Agent Testing Guide", styles["title"]))
     story.append(
         Paragraph(
-            "For teammates: concrete examples to confirm Agents 1–4 work in the running app. "
-            "Soft-warn only for Agent 2 — you can still verify after reading warnings.",
+            "Hands-on QA book for teammates. Each case has a <b>setup</b>, <b>exact numbers</b>, "
+            "<b>what the screen should show</b>, and a pass/fail line. "
+            "Agent 2 is soft-warn only — you can still verify after reading warnings.",
             styles["body"],
         )
     )
     story.append(
         Paragraph(
-            "Generated for local QA. App: http://127.0.0.1:5000 · Sample images: docs/agent_test_samples/",
+            "App: http://127.0.0.1:5000 · Samples: docs/agent_test_samples/ (01–15) · "
+            "Regenerate: python scripts/generate_agent_test_guide_pdf.py",
             styles["small"],
         )
     )
@@ -357,44 +466,41 @@ def build_pdf(sample_files: dict[str, Path]):
     story.append(
         ListFlowable(
             [
-                ListItem(Paragraph("Start app: <font face='Courier'>python app.py</font>", styles["body"])),
-                ListItem(
-                    Paragraph(
-                        "Log in with the password from <font face='Courier'>.env</font> (<font face='Courier'>APP_PASSWORD</font>).",
-                        styles["body"],
-                    )
-                ),
-                ListItem(
-                    Paragraph(
-                        "Confirm <font face='Courier'>USE_FAKE_AI=false</font> and <font face='Courier'>GEMINI_API_KEY</font> is set "
-                        "(Agents 1, 3, 4). Agent 2 is SQLite/rules only — no Gemini.",
-                        styles["body"],
-                    )
-                ),
-                ListItem(
-                    Paragraph(
-                        "Optional seed history (helps Agent 2 qty/reorder tests): "
-                        "<font face='Courier'>python scripts/seed_sample_invoices.py</font>",
-                        styles["body"],
-                    )
-                ),
+                ListItem(Paragraph("Start app: <font face='Courier'>python app.py</font> then log in with <font face='Courier'>APP_PASSWORD</font> from .env.", styles["body"])),
+                ListItem(Paragraph("<b>Real OCR / Agents 3–4:</b> USE_FAKE_AI=false and a working GEMINI_API_KEY. If you see 403 PERMISSION_DENIED, Gemini is blocked — fix the key/project; code is fine.", styles["body"])),
+                ListItem(Paragraph("<b>Bundling chat</b> (the chat box on Bundling) uses OPENAI_API_KEY. It can work even when Gemini OCR fails.", styles["body"])),
+                ListItem(Paragraph("<b>Agent 2</b> is Python + SQLite only — no API key.", styles["body"])),
+                ListItem(Paragraph("Optional history seed: <font face='Courier'>python scripts/seed_sample_invoices.py</font> (helps qty/price/reorder tests).", styles["body"])),
+                ListItem(Paragraph("Use a throwaway local DB for verify/commit tests. Do not commit real cheques on production data.", styles["body"])),
             ],
             bulletType="bullet",
             leftIndent=12,
         )
     )
 
-    story.append(Paragraph("1. Quick map — which screen tests which agent?", styles["h1"]))
+    story.append(Paragraph("1. Quick map — what to click", styles["h1"]))
     story.append(
-        _table(
+        T(
+            ["Piece", "Job", "Where", "Needs"],
             [
-                ["Agent", "What it does", "Where to look", "AI?"],
-                ["1 Vision", "OCR invoice fields from photo/PDF", "Upload → Review draft", "Gemini"],
-                ["2 Anomaly", "Math, discount, qty, reorder, chat panel", "Review / Verify page (top card)", "Rules/DB"],
-                ["3 Strategist", "Propose cheque splits & dates", "Bundling → Compute / AI plan", "Gemini"],
-                ["4 Reviewer", "Plain-language teacher explanation", "Bundling chat / review panel", "Gemini"],
+                ["Agent 1 Vision", "OCR fields from photo/PDF", "Invoices → Upload → Review draft", "Gemini"],
+                ["WhatsApp inbox", "Photo wait, then same OCR", "Invoices → WhatsApp photos → Send to AI", "Meta webhook + Gemini"],
+                ["Agent 2 Anomaly", "Math, dates, qty, price, reorder", "Review / Verify (top chat card)", "Rules/DB only"],
+                ["Agent 3 Strategist", "Propose cheque splits & dates", "Bundling → dealer → Compute", "Gemini (Python fallback)"],
+                ["Agent 4 Reviewer", "Plain-language plan explanation", "Bundling review after compute", "Gemini"],
+                ["Bundling assistant", "Chat: split / date / ceiling", "Bundling page chat", "OpenAI"],
+                ["App Guide", "How-to helper (not bundling)", "Floating widget (non-cheque pages)", "OpenAI/text"],
             ],
-            col_widths=[W * 0.16, W * 0.32, W * 0.32, W * 0.2],
+            [W * 0.18, W * 0.30, W * 0.32, W * 0.20],
+        )
+    )
+
+    story.append(Paragraph("Lifecycle reminder", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Intake (upload or WhatsApp) → Agent 1 OCR → Agent 2 audit → <b>human Verify</b> → "
+            "Agent 3 plan → guardrails (holidays, ceiling) → Agent 4 review → optional Commit cheques.",
+            styles["body"],
         )
     )
 
@@ -402,426 +508,427 @@ def build_pdf(sample_files: dict[str, Path]):
     story.append(Paragraph("2. Agent 1 — Vision (OCR)", styles["h1"]))
     story.append(
         Paragraph(
-            "<b>How:</b> Invoices → Upload → choose a sample PNG from <font face='Courier'>docs/agent_test_samples/</font> "
-            "→ open the review draft.",
+            "<b>How:</b> Invoices → Upload → pick a PNG from docs/agent_test_samples/ → wait for review. "
+            "On WhatsApp: photo lands in <b>WhatsApp photos</b> first; click <b>Send to AI</b> (OCR does not run on webhook receive).",
             styles["body"],
         )
     )
-    story.append(Paragraph("Test cases", styles["h2"]))
-    story.append(
-        _table(
-            [
-                ["ID", "Upload this", "Expect on review form", "Pass if…"],
-                [
-                    "A1-1",
-                    "01_clean_invoice.png",
-                    "Supplier ≈ City Mart; Inv CM-TEST-1001; date 2026-09-01; "
-                    "lines TOFFEE-01 qty 10 @ 100, TEA-02 qty 5 @ 450; total ≈ 3250",
-                    "Key fields filled; total within ~Rs. 1–50 of 3250",
-                ],
-                [
-                    "A1-2",
-                    "05_messy_handwritten_style.png",
-                    "Abans; AB-77821; total ≈ 13950; two line items roughly correct",
-                    "Invoice no + total captured; lines mostly usable",
-                ],
-                [
-                    "A1-3",
-                    "Any non-invoice photo (selfie / random)",
-                    "Reject or weak extraction + warning",
-                    "App does not silently invent a perfect invoice",
-                ],
-            ],
-            col_widths=[W * 0.08, W * 0.22, W * 0.42, W * 0.28],
-        )
-    )
-    story.append(Paragraph("PASS: Fields editable and close to sample. FAIL: Blank form or wildly wrong total.", styles["pass"]))
 
-    story.append(Spacer(1, 6))
+    story.append(Paragraph("2.1 Worked example — clean invoice (01_clean_invoice.png)", styles["h2"]))
     story.append(
         Paragraph(
-            "Sample PNGs in <font face='Courier'>docs/agent_test_samples/</font> "
-            "(01–09 invoices + 10 bundling setup sheet).",
-            styles["small"],
+            "<b>Printed:</b> City Mart Suppliers · CM-TEST-1001 · 2026-09-01 · "
+            "TOFFEE-01 qty 10 @ Rs.100 · TEA-02 qty 5 @ Rs.450 · TOTAL Rs. 3,250.00",
+            styles["body"],
         )
     )
+    story.append(
+        Paragraph(
+            "<b>Arithmetic:</b> 10 × 100 = 1,000; 5 × 450 = 2,250; 1,000 + 2,250 = <b>3,250</b>. "
+            "Review form should be within about Rs. 50 of that total. Line names/codes may vary slightly (OCR).",
+            styles["body"],
+        )
+    )
+    story.append(
+        Paragraph(
+            "<b>PASS:</b> Supplier contains City Mart; invoice no contains 1001; two lines; total near 3250. "
+            "<b>FAIL:</b> Blank form, total 0, or a totally different supplier invented.",
+            styles["pass"],
+        )
+    )
+
+    story.append(Paragraph("2.2 Worked example — math trap (02_math_mismatch.png)", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Line: WIRE-01 qty 2 @ Rs.400 → line amount <b>800</b>. Header TOTAL is printed as <b>1,000</b>. "
+            "Agent 1 should still extract both numbers. Agent 2 (next section) then flags math_mismatch. "
+            "Do not “fix” the total in your head — leave OCR as-is so Agent 2 can fire.",
+            styles["body"],
+        )
+    )
+
+    story.append(Paragraph("2.3 Worked example — MRP vs sell (11_mrp_vs_sell.png)", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Rice 10kg × 4. Footer says MRP 2,200 and sell 1,850. Line total 4 × 1,850 = <b>7,400</b>. "
+            "On review, <b>MRP</b> ≈ 2200, <b>Single price</b> ≈ 1850, <b>Total price</b> ≈ 7400. "
+            "PASS if selling price is not overwritten with MRP.",
+            styles["body"],
+        )
+    )
+
+    story.append(Paragraph("2.4 Upload / photo test cases", styles["h2"]))
+    story.append(
+        T(
+            ["ID", "File", "Expect on review", "Pass if"],
+            [
+                ["A1-1", "01_clean_invoice.png", "City Mart; CM-TEST-1001; 2026-09-01; TOFFEE qty10 @100; TEA qty5 @450; total ≈3250", "Key fields filled; total within ~Rs.50 of 3250"],
+                ["A1-2", "05_messy_handwritten_style.png", "Abans / AB-77821; two items (bulb ~12×850, cord ~3×1250); total ≈13950", "Invoice no + total captured; lines usable"],
+                ["A1-3", "15_phone_photo_glare.png", "Softlogic; SL-9901; total ≈8790; mouse ×2 and USB hub", "Reads through glare; does not invent extra SKUs"],
+                ["A1-4", "11_mrp_vs_sell.png", "item_mrp ≈2200; item_price ≈1850; qty 4; total ≈7400", "MRP and sell not swapped"],
+                ["A1-5", "12_supplier_bank_footer.png", "Lanka Hardware; LH-4412; bank Commercial / Pettah; phone/email if visible", "At least bank name or account name filled"],
+                ["A1-6", "13_credit_period.png", "credit_period_days ≈45 (Net 45)", "Not stuck at default 30 if 45 is visible"],
+                ["A1-7", "14_two_discount_lines.png", "Two lines with 5% and 10% disc; total ≈1850", "Discounts on rows; header total matches"],
+                ["A1-8", "Any selfie / screenshot of a website", "Reject, empty, or obvious garbage + warning", "Does not invent a perfect fake invoice"],
+                ["A1-9", "PDF scan of 01 (print to PDF then upload if UI allows)", "Same as A1-1", "PDF path works or clear error"],
+            ],
+            [W * 0.08, W * 0.22, W * 0.40, W * 0.30],
+        )
+    )
+
+    story.append(Paragraph("2.5 WhatsApp path (same Agent 1)", styles["h2"]))
+    story.append(
+        T(
+            ["ID", "Action", "Expect", "Pass if"],
+            [
+                ["A1-W1", "Send 01_clean to the shop WhatsApp (local tunnel or Render webhook)", "Row on Invoices → WhatsApp photos, not auto-verified", "Photo visible before Send to AI"],
+                ["A1-W2", "Click Send to AI on that row", "Same review draft as upload OCR", "Fields comparable to A1-1"],
+                ["A1-W3", "Send a non-invoice photo", "Inbox row; OCR weak or user types details", "No crash; 403 Gemini shows flash error"],
+            ],
+            [W * 0.10, W * 0.36, W * 0.28, W * 0.26],
+        )
+    )
+    story.append(
+        Paragraph(
+            "<b>Gemini 403:</b> “Could not read photo (PERMISSION_DENIED…)”. Unlock GEMINI_API_KEY / AI Studio project. "
+            "Bundling chat can still work (OpenAI). Type details manually to continue Agent 2+.",
+            styles["fail"],
+        )
+    )
+
+    story.append(Spacer(1, 6))
     preview_row = []
-    for key in ("clean", "math", "qty"):
+    for key in ("clean", "math", "mrp", "phone_photo"):
         p = sample_files.get(key)
         if p and p.exists():
-            preview_row.append(RLImage(str(p), width=48 * mm, height=64 * mm, kind="proportional"))
+            preview_row.append(RLImage(str(p), width=40 * mm, height=54 * mm, kind="proportional"))
     if preview_row:
-        story.append(Spacer(1, 4))
-        story.append(Table([preview_row], colWidths=[W / 3.0] * len(preview_row)))
+        story.append(Table([preview_row], colWidths=[W / max(len(preview_row), 1)] * len(preview_row)))
+    story.append(Paragraph("Previews: 01 clean · 02 math · 11 MRP · 15 glare. Full set 01–15 in docs/agent_test_samples/.", styles["small"]))
 
     # --- Agent 2 ---
     story.append(PageBreak())
-    story.append(Paragraph("3. Agent 2 — Anomaly audit (chat panel) — expanded", styles["h1"]))
+    story.append(Paragraph("3. Agent 2 — Anomaly audit (chat panel)", styles["h1"]))
     story.append(
         Paragraph(
-            "<b>How:</b> After Agent 1, stay on <b>Review</b> or open <b>Verify</b>. Agent 2 card shows "
-            "status badge + chat bubbles + findings. Soft warn only — confirm-matches checkbox still saves.",
+            "<b>How:</b> After Agent 1, stay on Review or open Verify. Top card = status + chat bubbles + finding codes. "
+            "Soft warn: tick “confirm matches” and save anyway.",
             styles["body"],
         )
     )
     story.append(
         Paragraph(
-            "Automated check (dev): <font face='Courier'>python -m unittest agents.tests.test_anomaly_audit -q</font>",
+            "Unit tests: <font face='Courier'>python -m unittest agents.tests.test_anomaly_audit -q</font>",
             styles["small"],
         )
     )
 
-    story.append(Paragraph("3.1 Always-on (no / little history)", styles["h2"]))
+    story.append(Paragraph("3.1 Worked example — discount not in total (03)", styles["h2"]))
     story.append(
-        _table(
-            [
-                ["ID", "Setup", "Expect code / status", "Pass if…"],
-                [
-                    "A2-1",
-                    "Upload 02_math_mismatch.png (or qty2×400 total1000)",
-                    "math_mismatch · ISSUE_DETECTED · HIGH",
-                    "Chat mentions line vs header total",
-                ],
-                [
-                    "A2-2",
-                    "Upload 03_missing_discount.png",
-                    "possible_missing_discount",
-                    "Warns discount may not be in total",
-                ],
-                [
-                    "A2-3",
-                    "Upload 06_future_date.png (or date = today+60d)",
-                    "future_date · HIGH",
-                    "Flags date &gt; 30 days ahead",
-                ],
-                [
-                    "A2-4",
-                    "On review set invoiced_date to today−400 days",
-                    "stale_date · MEDIUM",
-                    "Warns invoice older than 1 year",
-                ],
-                [
-                    "A2-5",
-                    "Upload 09_missing_amount.png (total 0 + supplier name)",
-                    "missing_amount · HIGH",
-                    "Blocks silent zero-amount approve cue",
-                ],
-                [
-                    "A2-6",
-                    "Unknown supplier name, dealer not matched (dealer_id empty)",
-                    "unknown_dealer · LOW",
-                    "Asks to pick correct dealer",
-                ],
-                [
-                    "A2-7",
-                    "Verify CM-TEST-1001; re-upload same invoice no + dealer",
-                    "duplicate_invoice_no · HIGH",
-                    "Warns number already exists",
-                ],
-                [
-                    "A2-8",
-                    "New dealer; clean math; no item history",
-                    "INSUFFICIENT_DATA or GOOD_TO_GO; chat still present",
-                    "Panel does not crash / blank forever",
-                ],
-            ],
-            col_widths=[W * 0.1, W * 0.34, W * 0.28, W * 0.28],
+        Paragraph(
+            "Qty 10 × Rs.100 with <b>10% discount</b> → discounted lines = 10 × 100 × 0.90 = <b>900</b>. "
+            "Printed TOTAL is <b>1,000</b> (undiscounted). Agent 2 code <b>possible_missing_discount</b>. "
+            "Chat should say discounts exist but the header looks like they were ignored.",
+            styles["body"],
         )
     )
 
-    story.append(Paragraph("3.2 History-dependent (seed City Mart + TOFFEE-01 ≈ qty 10 @ 100)", styles["h2"]))
+    story.append(Paragraph("3.2 Worked example — qty spike (04) after history", styles["h2"]))
     story.append(
         Paragraph(
-            "Seed: verify 3–8 invoices for <b>City Mart Suppliers</b> with <font face='Courier'>TOFFEE-01</font> "
-            "qty≈10 price≈100. Optional: <font face='Courier'>python scripts/seed_sample_invoices.py</font> then adjust.",
+            "First verify 3–8 City Mart invoices with TOFFEE-01 qty about <b>10</b> @ Rs.100. "
+            "Then upload 04 (qty <b>20</b> @ 100, total 2000). Expect <b>qty_unusual</b> MEDIUM. "
+            "Chat ≈ “usually ~10, this invoice has 20”.",
+            styles["body"],
+        )
+    )
+
+    story.append(Paragraph("3.3 Always-on cases (little history needed)", styles["h2"]))
+    story.append(
+        T(
+            ["ID", "Setup", "Code / severity", "Pass if"],
+            [
+                ["A2-1", "Upload 02 (2×400=800, header 1000)", "math_mismatch · HIGH", "Chat: lines vs header total"],
+                ["A2-2", "Upload 03 (10% disc, total 1000)", "possible_missing_discount", "Warns discount missing from total"],
+                ["A2-3", "Upload 06 (date today+60d)", "future_date · HIGH", "Flags date > 30 days ahead"],
+                ["A2-4", "On review set date to today−400 days", "stale_date · MEDIUM", "Warns older than ~1 year"],
+                ["A2-5", "Upload 09 (total 0)", "missing_amount · HIGH", "Zero amount called out"],
+                ["A2-6", "Unknown supplier, no dealer match", "unknown_dealer · LOW", "Asks to pick dealer"],
+                ["A2-7", "Verify CM-TEST-1001; upload same no again for that dealer", "duplicate_invoice_no · HIGH", "Existing number mentioned"],
+                ["A2-8", "14_two_discount_lines with header 1850 (correct)", "No math_mismatch", "Good math stays quiet"],
+                ["A2-8b", "14 but you edit header total to 2000 before save", "math_mismatch", "Edit-in-form still audited"],
+                ["A2-9", "New dealer; clean 10×100=1000", "INSUFFICIENT_DATA or GOOD_TO_GO", "Panel does not crash"],
+            ],
+            [W * 0.10, W * 0.34, W * 0.28, W * 0.28],
+        )
+    )
+
+    story.append(Paragraph("3.4 History-dependent cases", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Seed City Mart + TOFFEE-01 qty≈10 price≈100, then:",
             styles["body"],
         )
     )
     story.append(
-        _table(
+        T(
+            ["ID", "Action", "Expect", "Pass if"],
             [
-                ["ID", "Action", "Expect", "Pass if…"],
-                [
-                    "A2-9",
-                    "Upload 04_qty_unusual_toffees.png (qty 20)",
-                    "qty_unusual · MEDIUM · needs_confirmation",
-                    "Chat ≈ usually ~10, this has 20",
-                ],
-                [
-                    "A2-10",
-                    "Upload 07_price_spike.png (price 250 after avg 100)",
-                    "item_price_spike",
-                    "Mentions unusual unit price",
-                ],
-                [
-                    "A2-11",
-                    "Upload 08_amount_outlier.png if dealer avg ≪ 50k (≥3 prior invoices)",
-                    "amount_outlier",
-                    "Total much higher than dealer average",
-                ],
-                [
-                    "A2-12",
-                    "Verify invoice with TOFFEE-01; within 30 days upload another with TOFFEE-01",
-                    "item_reordered_soon · LOW",
-                    "Mentions prior invoice # / date",
-                ],
-                [
-                    "A2-13",
-                    "Combine: qty 20 + recent reorder on same item",
-                    "Both qty_unusual and item_reordered_soon",
-                    "Multiple chat bubbles / findings listed",
-                ],
-                [
-                    "A2-14 Soft warn",
-                    "Any ISSUE_DETECTED → tick confirm matches → verify",
-                    "Save OK — no per-finding hard block",
-                    "Invoice verified=1",
-                ],
-                [
-                    "A2-15 UI",
-                    "Open review when status ≠ GOOD_TO_GO",
-                    "Chat auto-expands (agent2_review.js)",
-                    "Bubbles visible without hunting",
-                ],
+                ["A2-10", "Upload 04 qty 20 toffees", "qty_unusual · needs_confirmation", "Chat usual ~10 vs 20"],
+                ["A2-11", "Upload 07 price 250 after avg 100", "item_price_spike", "Unusual unit price mentioned"],
+                ["A2-12", "Upload 08 total 50k if dealer avg ≪ 50k (≥3 invoices)", "amount_outlier", "Total vs dealer average"],
+                ["A2-13", "Second TOFFEE-01 within 30 days", "item_reordered_soon · LOW", "Prior invoice # / date"],
+                ["A2-14", "Qty 20 + reorder same week", "qty_unusual AND item_reordered_soon", "Two bubbles / two codes"],
+                ["A2-15", "ISSUE_DETECTED → confirm matches → verify", "Saves; is_invoice_verified=1", "No hard block per finding"],
+                ["A2-16", "Open review when not GOOD_TO_GO", "Chat auto-expands", "Bubbles visible"],
             ],
-            col_widths=[W * 0.12, W * 0.34, W * 0.28, W * 0.26],
+            [W * 0.10, W * 0.34, W * 0.28, W * 0.28],
         )
     )
 
-    story.append(Paragraph("3.3 Quick type-in matrix (no photo)", styles["h2"]))
+    story.append(Paragraph("3.5 Type-in matrix (no photo — paste on Review)", styles["h2"]))
     story.append(
-        _table(
+        T(
+            ["Scenario", "Type these values", "Expected code"],
             [
-                ["Scenario", "Line / header values", "Expected code"],
-                ["Math", "qty2 price400 disc0 · total 1000", "math_mismatch"],
-                ["Discount", "qty10 price100 disc10 · total 1000", "possible_missing_discount"],
-                ["Qty*", "TOFFEE-01 qty20 price100 · total 2000", "qty_unusual"],
-                ["Price*", "TOFFEE-01 qty10 price250 · total 2500", "item_price_spike"],
-                ["Future", "date = today+60 · total matches lines", "future_date"],
-                ["Stale", "date = today−400 · total matches lines", "stale_date"],
-                ["Zero amt", "supplier set · total 0", "missing_amount"],
-                ["Clean", "qty10 price100 · total 1000", "GOOD_TO_GO / INSUFFICIENT_DATA"],
+                ["Math", "1 line: qty 2, price 400, disc 0, header total 1000", "math_mismatch"],
+                ["Discount", "qty 10, price 100, disc 10, header 1000", "possible_missing_discount"],
+                ["Qty*", "item_code TOFFEE-01, qty 20, price 100, total 2000", "qty_unusual"],
+                ["Price*", "TOFFEE-01 qty 10 price 250 total 2500", "item_price_spike"],
+                ["Future", "date today+60, lines match total", "future_date"],
+                ["Stale", "date today−400, lines match total", "stale_date"],
+                ["Zero", "supplier filled, total 0", "missing_amount"],
+                ["Clean", "qty 10 price 100 disc 0 total 1000", "GOOD_TO_GO / INSUFFICIENT_DATA"],
+                ["Two-line OK", "5×200×5% + 2×500×10% = 1850 header 1850", "(no math flag)"],
             ],
-            col_widths=[W * 0.18, W * 0.52, W * 0.3],
+            [W * 0.18, W * 0.52, W * 0.30],
         )
     )
+    story.append(Paragraph("* Qty/price need City Mart TOFFEE-01 history first.", styles["small"]))
 
     # --- Agent 3 ---
     story.append(PageBreak())
-    story.append(Paragraph("4. Agent 3 — Strategist (cheque plan) — expanded", styles["h1"]))
+    story.append(Paragraph("4. Agent 3 — Strategist (cheque plan)", styles["h1"]))
     story.append(
         Paragraph(
-            "<b>How:</b> Verify invoices → <b>Bundling</b> → pick dealer → set ceiling → <b>Compute</b> "
-            "(<font face='Courier'>POST /bundling/&lt;dealer_id&gt;/compute</font>). "
-            "Uses Gemini strategist; on failure falls back to Python <font face='Courier'>compute_bundles</font>. "
-            "Setup sheet: <font face='Courier'>10_bundling_setup_sheet.png</font>.",
+            "<b>How:</b> Verify invoices → Bundling → pick dealer → set ceiling → Compute. "
+            "Gemini strategist; on failure Python compute_bundles. Setup sheet: 10_bundling_setup_sheet.png.",
             styles["body"],
         )
     )
     story.append(
         Paragraph(
-            "Automated check: <font face='Courier'>python -m unittest agents.tests.test_strategist agents.tests.test_strategist_dates -q</font>",
+            "Tests: <font face='Courier'>python -m unittest agents.tests.test_strategist agents.tests.test_strategist_dates -q</font>",
             styles["small"],
         )
     )
+
+    story.append(Paragraph("4.1 Worked example — three invoices, one dealer", styles["h2"]))
     story.append(
-        _table(
+        Paragraph(
+            "Create and <b>verify</b> for City Mart (or one dealer):<br/>"
+            "• CM-B1 Rs. <b>180,000</b> invoiced today−40d credit 30d<br/>"
+            "• CM-B2 Rs. <b>220,000</b> invoiced today−20d credit 30d<br/>"
+            "• CM-B3 Rs. <b>160,000</b> invoiced today−5d credit 30d<br/>"
+            "Sum = <b>560,000</b>. Shop cash/OD enough to plan (e.g. balance ≥ 100,000).",
+            styles["body"],
+        )
+    )
+    story.append(
+        Paragraph(
+            "<b>Ceiling 500,000:</b> plan may be 2 cheques (e.g. 180+220 and 160, or other split) — all under 500k. "
+            "<b>Ceiling 200,000:</b> 220k invoice must split or sit on its own cheque with a warning; expect <b>at least 3</b> cheques. "
+            "PASS: every rupee of 560k appears on some cheque (within rounding).",
+            styles["body"],
+        )
+    )
+
+    story.append(Paragraph("4.2 Strategist test cases", styles["h2"]))
+    story.append(
+        T(
+            ["ID", "Setup", "Expect", "Pass if"],
             [
-                ["ID", "Setup", "Expect", "Pass if…"],
-                [
-                    "A3-1 Happy",
-                    "3 verified invoices (CM-B1/B2/B3 from setup sheet); ceiling 500k; balance OK",
-                    "proposed_cheques with amounts, dates, account ids; strategy_summary",
-                    "UI shows cheque groups covering all selected invoices",
-                ],
-                [
-                    "A3-2 Ceiling split",
-                    "Same 3 invoices (~560k) with ceiling <b>200,000</b>",
-                    "Multiple cheques under ceiling OR clear split reasoning",
-                    "No single cheque casually above ceiling without warning",
-                ],
-                [
-                    "A3-3 Guardrail exceed",
-                    "Force one group above ceiling (drag / edit) then validate",
-                    "Guardrail issue: exceeds ceiling",
-                    "Warning visible before commit",
-                ],
-                [
-                    "A3-4 Interbank",
-                    "Dealer bank ≠ paying account bank",
-                    "clearing_type INTERBANK on relevant cheque(s)",
-                    "Interbank / float note in plan or liquidity enrichment",
-                ],
-                [
-                    "A3-5 Intrabank",
-                    "Dealer preferred bank = paying account bank",
-                    "INTRABANK (or not marked interbank)",
-                    "No false interbank flag",
-                ],
-                [
-                    "A3-6 Holiday / weekend float",
-                    "Target date on Sunday or CBSL holiday (see Cash flow holidays)",
-                    "Date shifted to business day / float suggestion",
-                    "Not left on a known holiday without note",
-                ],
-                [
-                    "A3-7 Empty selection",
-                    "Compute with no invoices selected",
-                    "Friendly empty plan / no crash",
-                    "Clear message, page usable",
-                ],
-                [
-                    "A3-8 Fallback",
-                    "Optional: bad GEMINI key or USE_FAKE_AI=true",
-                    "Mock or Python fallback still returns cheques",
-                    "Bundling page does not 500",
-                ],
-                [
-                    "A3-9 Amount conservation",
-                    "After compute, sum cheque amounts ≈ sum invoice amounts",
-                    "Within small rounding",
-                    "No silent drop of an invoice amount",
-                ],
-                [
-                    "A3-10 Account pick",
-                    "≥2 shop bank accounts; compute",
-                    "selected_shop_account_id present on cheques",
-                    "Uses a real account id from Cash flow",
-                ],
+                ["A3-1 Happy", "CM-B1/B2/B3; ceiling 500k; cash OK", "proposed_cheques + strategy_summary", "Groups cover all three invoices"],
+                ["A3-2 Ceiling split", "Same invoices; ceiling 200,000", "Multiple cheques / split of 220k", "No silent 220k cheque above ceiling"],
+                ["A3-3 Guardrail", "Drag/edit one group above ceiling then validate", "Exceeds ceiling warning", "Visible before commit"],
+                ["A3-4 Interbank", "Dealer bank Commercial; pay from Sampath", "clearing_type INTERBANK", "Float/interbank mentioned"],
+                ["A3-5 Intrabank", "Dealer bank = paying bank", "INTRABANK (not false interbank)", "No wrong interbank flag"],
+                ["A3-6 Holiday", "Aim a cheque date on Sunday or CBSL holiday", "Shift to next business day / note", "Not left on holiday with no note"],
+                ["A3-7 Empty", "Compute with nothing selected", "Friendly empty / no crash", "Page still usable"],
+                ["A3-8 Fallback", "USE_FAKE_AI=true or bad Gemini", "Python/mock cheques still returned", "No HTTP 500"],
+                ["A3-9 Conservation", "Sum cheque amounts vs 560,000", "Match within rounding", "No dropped invoice"],
+                ["A3-10 Account", "≥2 shop accounts", "selected_shop_account_id on cheques", "Real Cash-flow account id"],
+                ["A3-11 Overdue vs fresh", "B1 due earlier than B3", "Older/due-sooner invoices not ignored", "Dates respect credit periods roughly"],
+                ["A3-12 Drag-drop", "After compute, move an invoice to another cheque in UI", "Totals update; still under ceiling or warn", "DnD does not zero amounts"],
             ],
-            col_widths=[W * 0.12, W * 0.34, W * 0.28, W * 0.26],
+            [W * 0.12, W * 0.32, W * 0.28, W * 0.28],
         )
     )
 
     # --- Agent 4 ---
-    story.append(Paragraph("5. Agent 4 — Reviewer (teacher tone) — expanded", styles["h1"]))
+    story.append(Paragraph("5. Agent 4 — Reviewer (teacher tone)", styles["h1"]))
     story.append(
         Paragraph(
-            "<b>How:</b> After Agent 3 compute, open bundling <b>review / chat</b> panel (Agent 4 runs on compute/preview). "
-            "First line of model output is <font face='Courier'>VERDICT: approve</font> or "
-            "<font face='Courier'>VERDICT: suggest_changes</font>; UI shows plain-language teacher explanation.",
+            "Runs after Agent 3 compute. First model line is VERDICT: approve or VERDICT: suggest_changes, then informal explanation.",
+            styles["body"],
+        )
+    )
+    story.append(Paragraph("5.1 Example wording (English, healthy 200k-ceiling split)", styles["h2"]))
+    story.append(
+        Paragraph(
+            "You might see something like: “VERDICT: approve — We split City Mart’s Rs. 560,000 across several cheques "
+            "so none go over your Rs. 200,000 ceiling. The 220,000 bill cannot sit on one cheque. Dates avoid Sunday. "
+            "Check the Sampath account has cash on those days.” PASS if a shop owner could act on it (counts, ceiling, dates).",
             styles["body"],
         )
     )
     story.append(
-        _table(
+        T(
+            ["ID", "Action", "Expect", "Pass if"],
             [
-                ["ID", "Action", "Expect", "Pass if…"],
-                [
-                    "A4-1 EN approve path",
-                    "Healthy plan, UI English, trigger compute",
-                    "Verdict approve (or suggest_changes with reasons); informal EN prose",
-                    "Shop owner can understand dates/amounts",
-                ],
-                [
-                    "A4-2 Suggest changes",
-                    "Tight cash / ceiling issues in validation_issues",
-                    "VERDICT suggest_changes + concrete advice",
-                    "Does not blindly approve a broken plan",
-                ],
-                [
-                    "A4-3 Sinhala",
-                    "Set UI lang <b>si</b> → re-run review",
-                    "Review text in Sinhala (or mostly SI)",
-                    "Not pure English when UI is SI",
-                ],
-                [
-                    "A4-4 Tamil",
-                    "Set UI lang <b>ta</b> → re-run review",
-                    "Review text in Tamil (or mostly TA)",
-                    "Not pure English when UI is TA",
-                ],
-                [
-                    "A4-5 Mentions plan facts",
-                    "Note cheque dates & totals from Agent 3",
-                    "Review references those numbers / counts",
-                    "Not a generic unrelated essay",
-                ],
-                [
-                    "A4-6 Preview trigger",
-                    "If UI has preview review without commit",
-                    "Review still returns; no crash",
-                    "trigger=preview path works",
-                ],
-                [
-                    "A4-7 Apply suggestions (optional)",
-                    "If Apply suggestions button exists after suggest_changes",
-                    "proposed_actions / updated groups",
-                    "Actions applied or clear failure message",
-                ],
-                [
-                    "A4-8 Gemini required",
-                    "USE_FAKE_AI=false + valid GEMINI_API_KEY",
-                    "Real Gemini text (not empty)",
-                    "Provider gemini; no silent blank panel",
-                ],
+                ["A4-1 EN approve", "Healthy plan, UI English, compute", "Verdict + informal EN", "Dates/amounts understandable"],
+                ["A4-2 Suggest", "Tight cash or ceiling violations", "suggest_changes + concrete fix", "Does not approve a broken plan"],
+                ["A4-3 Sinhala", "UI lang si → re-run review", "Mostly Sinhala", "Not pure English"],
+                ["A4-4 Tamil", "UI lang ta → re-run review", "Mostly Tamil", "Not pure English"],
+                ["A4-5 Facts", "Note cheque count & totals from A3", "Review cites those numbers", "Not a generic essay"],
+                ["A4-6 Preview", "Preview review without commit", "Text returns", "trigger=preview OK"],
+                ["A4-7 Apply", "Apply suggestions if button exists", "Groups update or clear error", "No silent no-op"],
+                ["A4-8 Gemini", "USE_FAKE_AI=false + valid key", "Non-empty Gemini text", "Panel not blank"],
             ],
-            col_widths=[W * 0.14, W * 0.32, W * 0.28, W * 0.26],
+            [W * 0.12, W * 0.32, W * 0.28, W * 0.28],
         )
     )
 
-    # --- E2E ---
-    story.append(Paragraph("6. End-to-end smoke (45 minutes)", styles["h1"]))
+    # --- Bundling chat ---
+    story.append(Paragraph("6. Bundling chat assistant (OpenAI — not Agent 1)", styles["h1"]))
+    story.append(
+        Paragraph(
+            "On the Bundling page, the chat box can split cheques / change dates. It must <b>not</b> be confused with App Guide. "
+            "Needs OPENAI_API_KEY.",
+            styles["body"],
+        )
+    )
+    story.append(
+        T(
+            ["ID", "You type (example)", "Expect", "Pass if"],
+            [
+                ["BA-1", "Split the 220,000 invoice into two cheques under 200k", "Plan/groups change or a clear tool result", "Does not only say “ask Agent 3”"],
+                ["BA-2", "Move all cheques one week later", "Dates shift or explanation why not", "No crash"],
+                ["BA-3", "What is my ceiling?", "Mentions current ceiling number", "Uses dealer context"],
+                ["BA-4", "Empty OpenAI key", "Friendly error", "Page does not 500"],
+            ],
+            [W * 0.10, W * 0.38, W * 0.28, W * 0.24],
+        )
+    )
+
+    story.append(Paragraph("7. App Guide widget (not bundling)", styles["h1"]))
+    story.append(
+        Paragraph(
+            "Floating helper on Invoices / Cash flow / etc. Must refuse to bundle cheques (that is Bundling chat / Agent 3).",
+            styles["body"],
+        )
+    )
+    story.append(
+        T(
+            ["ID", "Where / prompt", "Expect", "Pass if"],
+            [
+                ["G-1", "Invoices: “How do I upload?”", "Steps for Upload / WhatsApp photos", "Correct page, not bundling JSON"],
+                ["G-2", "“Make three cheques for City Mart”", "Redirects you to Bundling / Agent 3", "Does not emit proposed_cheques JSON"],
+                ["G-3", "Cash flow: “What is a holiday?”", "CBSL / deposit timing in plain language", "No crash"],
+                ["G-4", "Switch UI si/ta", "Guide replies follow language if supported", "Not stuck in English only"],
+            ],
+            [W * 0.10, W * 0.32, W * 0.32, W * 0.26],
+        )
+    )
+
+    story.append(PageBreak())
+    story.append(Paragraph("8. End-to-end smokes", styles["h1"]))
+    story.append(Paragraph("8.1 Core path (~45 min)", styles["h2"]))
     story.append(
         ListFlowable(
             [
-                ListItem(Paragraph("A1: Upload 01_clean → fields OK.", styles["body"])),
-                ListItem(Paragraph("A2: Upload 02_math → math_mismatch chat; still verify with confirm.", styles["body"])),
-                ListItem(Paragraph("A2: Seed toffees → upload 04_qty → qty_unusual.", styles["body"])),
-                ListItem(Paragraph("Create CM-B1/B2/B3 (sheet 10) → verify all three.", styles["body"])),
-                ListItem(Paragraph("A3: Bundling compute ceiling 200k → multi-cheque plan.", styles["body"])),
-                ListItem(Paragraph("A4: Read EN review; switch SI or TA; confirm language shift.", styles["body"])),
-                ListItem(Paragraph("Optional commit only on a disposable test DB.", styles["body"])),
+                ListItem(Paragraph("A1: Upload 01_clean → fields ~3250.", styles["body"])),
+                ListItem(Paragraph("A1: Upload 11_mrp → MRP vs sell.", styles["body"])),
+                ListItem(Paragraph("A2: Upload 02_math → math_mismatch; verify with confirm.", styles["body"])),
+                ListItem(Paragraph("A2: Seed toffees → 04_qty → qty_unusual.", styles["body"])),
+                ListItem(Paragraph("Verify CM-B1/B2/B3 (sheet 10).", styles["body"])),
+                ListItem(Paragraph("A3: Ceiling 200k compute → multi-cheque, sum 560k.", styles["body"])),
+                ListItem(Paragraph("A4: EN review; switch SI or TA.", styles["body"])),
+                ListItem(Paragraph("Optional commit only on a disposable DB.", styles["body"])),
+            ],
+            bulletType="1",
+            leftIndent=14,
+        )
+    )
+    story.append(Paragraph("8.2 WhatsApp path (~15 min, if webhook live)", styles["h2"]))
+    story.append(
+        ListFlowable(
+            [
+                ListItem(Paragraph("Send 01_clean via WhatsApp → appears in WhatsApp photos.", styles["body"])),
+                ListItem(Paragraph("Send to AI → review like A1-1.", styles["body"])),
+                ListItem(Paragraph("If Render logs stay empty on send, Meta is not posting (messages field / unpublished app / wrong number) — not Agent 1.", styles["body"])),
             ],
             bulletType="1",
             leftIndent=14,
         )
     )
 
-    story.append(Paragraph("7. Sign-off checklist", styles["h1"]))
+    story.append(Paragraph("9. Troubleshooting cheatsheet", styles["h1"]))
     story.append(
-        _table(
+        T(
+            ["Symptom", "Likely cause", "What to do"],
             [
-                ["#", "Check", "Tester", "Pass?"],
-                ["1", "A1 OCR 01_clean", "", "☐"],
-                ["2", "A2 math_mismatch 02", "", "☐"],
-                ["3", "A2 missing discount 03", "", "☐"],
-                ["4", "A2 future_date 06", "", "☐"],
-                ["5", "A2 qty_unusual 04 (history)", "", "☐"],
-                ["6", "A2 price_spike 07 (history)", "", "☐"],
-                ["7", "A2 reorder within 30d", "", "☐"],
-                ["8", "A2 soft-warn verify allowed", "", "☐"],
-                ["9", "A3 happy compute", "", "☐"],
-                ["10", "A3 ceiling split 200k", "", "☐"],
-                ["11", "A3 interbank when banks differ", "", "☐"],
-                ["12", "A3 amount conservation", "", "☐"],
-                ["13", "A4 EN review + verdict", "", "☐"],
-                ["14", "A4 suggest_changes on risky plan", "", "☐"],
-                ["15", "A4 SI or TA language", "", "☐"],
-                ["16", "Unit tests green (anomaly+strategist)", "", "☐"],
+                ["Could not read photo 403 PERMISSION_DENIED", "Gemini project/key denied", "New key in AI Studio; same key on Render; USE_FAKE_AI only for demos"],
+                ["OCR blank but bundling chat works", "OpenAI OK, Gemini not", "Fix GEMINI_API_KEY only"],
+                ["WhatsApp photos empty, Render logs empty", "Meta never POSTed", "Callback …/webhook/whatsapp; subscribe messages; tester number or Live app"],
+                ["Webhook verify fails", "Wrong path or token", "URL must end /webhook/whatsapp; token = META_VERIFY_TOKEN"],
+                ["Agent 2 never flags qty 20", "No TOFFEE-01 history", "Verify several qty-10 invoices first"],
+                ["Agent 3 500", "Gemini down and fallback bug", "Note traceback; retry USE_FAKE_AI=true"],
+                ["Agent 4 English on SI UI", "Lang not passed / model ignored lang", "Set language in header, recompute"],
             ],
-            col_widths=[W * 0.08, W * 0.52, W * 0.2, W * 0.2],
+            [W * 0.32, W * 0.28, W * 0.40],
         )
     )
 
-    story.append(Spacer(1, 12))
+    story.append(Paragraph("10. Sign-off checklist", styles["h1"]))
     story.append(
-        Paragraph(
-            "Notes / bugs found: ________________________________________________________________",
-            styles["body"],
+        T(
+            ["#", "Check", "Tester", "Pass?"],
+            [
+                ["1", "A1 OCR 01_clean (~3250)", "", "☐"],
+                ["2", "A1 OCR 05 messy / 15 glare", "", "☐"],
+                ["3", "A1 MRP vs sell (11)", "", "☐"],
+                ["4", "A1 bank footer (12) or credit 45d (13)", "", "☐"],
+                ["5", "A2 math_mismatch (02)", "", "☐"],
+                ["6", "A2 missing discount (03)", "", "☐"],
+                ["7", "A2 future_date (06)", "", "☐"],
+                ["8", "A2 qty_unusual (04) with history", "", "☐"],
+                ["9", "A2 price_spike (07) with history", "", "☐"],
+                ["10", "A2 reorder within 30d", "", "☐"],
+                ["11", "A2 soft-warn still verifies", "", "☐"],
+                ["12", "A3 happy compute 500k ceiling", "", "☐"],
+                ["13", "A3 ceiling split 200k + sum 560k", "", "☐"],
+                ["14", "A3 interbank when banks differ", "", "☐"],
+                ["15", "A4 EN review + verdict", "", "☐"],
+                ["16", "A4 suggest_changes on risky plan", "", "☐"],
+                ["17", "A4 SI or TA", "", "☐"],
+                ["18", "Bundling chat example BA-1", "", "☐"],
+                ["19", "Guide refuses cheque bundling", "", "☐"],
+                ["20", "WhatsApp inbox → Send to AI (if Meta live)", "", "☐"],
+                ["21", "Unit tests anomaly + strategist", "", "☐"],
+            ],
+            [W * 0.08, W * 0.52, W * 0.20, W * 0.20],
         )
     )
-    story.append(
-        Paragraph(
-            "________________________________________________________________________________",
-            styles["body"],
-        )
-    )
+
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Notes / bugs found:", styles["body"]))
+    story.append(Paragraph("________________________________________________________________", styles["body"]))
+    story.append(Paragraph("________________________________________________________________", styles["body"]))
     story.append(Spacer(1, 8))
     story.append(
         Paragraph(
-            "WhatsApp inbox-v2 unchanged: Inbox → Send to AI → same Verify + Agent 2 panel. "
-            "Regenerate this PDF: <font face='Courier'>python scripts/generate_agent_test_guide_pdf.py</font>",
+            "Regenerate: <font face='Courier'>python scripts/generate_agent_test_guide_pdf.py</font>",
             styles["small"],
         )
     )
