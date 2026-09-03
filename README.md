@@ -165,7 +165,6 @@ python -m pytest agentic/tests core/tests agents/tests routes/tests -q
 
 | Name | GitHub |
 |------|--------|
-
 | Sithil Yapa | [sithilyapa717](https://github.com/sithilyapa717) |
 | Yohan Ruchitha | [yohanruchitha2-star](https://github.com/yohanruchitha2-star) |
 | Nithika Senanayake | [senanayakenithikas-ux](https://github.com/senanayakenithikas-ux) |
