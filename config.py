@@ -33,6 +33,16 @@ class Config:
     MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
 
     @staticmethod
+    def location_path_for(filename: str) -> str:
+        """Path stored in DB for an upload. Relative under the project; absolute on PaaS disks."""
+        name = Path(filename).name
+        try:
+            upload_rel = Config.UPLOAD_FOLDER.relative_to(BASE_DIR).as_posix()
+            return f"{upload_rel}/{name}"
+        except ValueError:
+            return f"{Config.UPLOAD_FOLDER.resolve().as_posix().rstrip('/')}/{name}"
+
+    @staticmethod
     def gemini_api_key() -> str:
         return _env("GEMINI_API_KEY", "")
 
@@ -208,7 +218,7 @@ class Config:
 
     @staticmethod
     def chroma_persist_dir() -> str:
-        return _env("CHROMA_PERSIST_DIR", "database/chroma")
+        return str(_data_path("CHROMA_PERSIST_DIR", "database/chroma"))
 
     @staticmethod
     def openai_embedding_model() -> str:

@@ -4,7 +4,7 @@ from flask import Blueprint, redirect, render_template, url_for
 from agents.analyst import build_report_markdown
 from config import Config
 from core.auth import login_required
-from core.i18n import flash_t
+from core.i18n import flash_t, flash_user_error
 from db import repositories as repo
 
 analytics_bp = Blueprint("analytics", __name__)
@@ -41,6 +41,6 @@ def generate_analytics_report():
         repo.save_analyst_report(report)
         flash_t("flash_analytics_generated", "success")
     except Exception as exc:
-        flash_t("flash_analytics_failed", "error", error=str(exc)[:160])
+        flash_user_error(exc, default_key="err_analytics_failed")
 
     return redirect(url_for("analytics.analytics"))

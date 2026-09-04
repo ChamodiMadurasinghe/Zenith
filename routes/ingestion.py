@@ -237,7 +237,7 @@ def upload():
             **extracted,
             "delivery_date": extracted.get("delivery_date") or format_date(date.today()),
         },
-        "location_path": f"storage/invoices/{filename}",
+        "location_path": Config.location_path_for(filename),
         "dealer_id": dealer["dealer_id"] if dealer else None,
         "dealer_setup": dealer_setup,
         "new_dealer": dealer is None and bool(supplier),

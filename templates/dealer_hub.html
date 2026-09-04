@@ -66,8 +66,8 @@
   {% if pending_review %}window.__pendingReview = {{ pending_review | tojson }};{% endif %}
   {% if chat_history %}window.__chatHistory = {{ chat_history | tojson }};{% endif %}
 </script>
-<script src="{{ url_for('static', filename='js/bundling.js') }}?v=18"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}?v=17"></script>
+<script src="{{ url_for('static', filename='js/bundling.js') }}?v=19"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v=18"></script>
 <script src="{{ url_for('static', filename='js/cheque_detail.js') }}?v=1"></script>
 {% endif %}
 {% endblock %}

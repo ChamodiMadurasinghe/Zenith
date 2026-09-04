@@ -69,6 +69,10 @@ def create_app():
         start_alert_scheduler(app)
 
     print(
+        f"[zenith] data: db={Config.DATABASE_PATH} uploads={Config.UPLOAD_FOLDER}",
+        flush=True,
+    )
+    print(
         f"[zenith] WhatsApp: {Config.whatsapp_provider()} webhook (/webhook/whatsapp)",
         flush=True,
     )

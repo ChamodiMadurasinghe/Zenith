@@ -7,33 +7,11 @@ from core.guide_actions import (
     normalize_guide_actions,
     resolve_guide_actions,
 )
-from core.i18n import get_lang
+from core.i18n import get_lang, friendly_error_message
 
 guide_bp = Blueprint("guide", __name__)
 
 HISTORY_LIMIT = 10
-
-
-def _chat_error_hint(err: str) -> str:
-    if "OPENAI_API_KEY not set" in err:
-        return "Guide unavailable. Set OPENAI_API_KEY in .env and restart the app."
-    if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
-        return "Invalid OpenAI API key. Replace OPENAI_API_KEY in .env and restart."
-    err_l = err.lower()
-    if (
-        "insufficient_quota" in err_l
-        or "credit_balance_exhausted" in err_l
-        or "no credits remaining" in err_l
-    ):
-        return (
-            "OpenAI API billing for this key's organization has no credits left "
-            "(ChatGPT Plus ≠ API credits). Add funds at "
-            "https://platform.openai.com/settings/organization/billing/ "
-            "or set USE_FAKE_AI=true for UI testing."
-        )
-    if "429" in err or "rate_limit" in err_l or "resourceexhausted" in err_l:
-        return "Rate limit exceeded. Try USE_FAKE_AI=true for UI testing, or reset the guide chat."
-    return f"Guide unavailable: {err[:200]}"
 
 
 def _get_history() -> list:
@@ -82,8 +60,8 @@ def guide_chat_route():
 
                 result = guide_chat(message, history, page_path, lang)
         except Exception as e:
-            err = str(e)
-            return jsonify({"error": err, "reply": _chat_error_hint(err), "actions": []}), 500
+            msg = friendly_error_message(e, default_key="err_guide_unavailable")
+            return jsonify({"error": msg, "reply": msg, "actions": []}), 500
 
         reply = (result.get("reply") or "").strip()
         actions = _finalize_actions(page_path, result.get("guide_actions") or [])
@@ -94,8 +72,8 @@ def guide_chat_route():
 
         return jsonify({"reply": reply, "actions": actions})
     except Exception as e:
-        err = str(e)
-        return jsonify({"error": err, "reply": _chat_error_hint(err), "actions": []}), 500
+        msg = friendly_error_message(e, default_key="err_guide_unavailable")
+        return jsonify({"error": msg, "reply": msg, "actions": []}), 500
 
 
 @guide_bp.route("/api/guide/chat/reset", methods=["POST"])

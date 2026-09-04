@@ -69,8 +69,7 @@ WHATSAPP_INTAKE_VERSION = "inbox-v2"
 
 
 def _relative_location_path(filename: str) -> str:
-    upload_rel = Config.UPLOAD_FOLDER.relative_to(BASE_DIR).as_posix()
-    return f"{upload_rel}/{filename}"
+    return Config.location_path_for(filename)
 
 
 def _extension_from_response(url: str, content_type: str | None) -> str:

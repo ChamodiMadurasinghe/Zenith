@@ -6,7 +6,7 @@ from config import Config
 from core.amounts import amount_to_words
 from core.auth import login_required
 from core.cash_flow import simulate_extra_cheques
-from core.i18n import flash_t, get_lang, translate
+from core.i18n import flash_t, friendly_error_message, get_lang, translate
 from core.bundle_session import hydrate_bundles, load_bundle_state, save_bundle_state, slim_bundles
 from core.bundling import build_bundles_from_assignments
 from core.bundling_intent import infer_bundling_actions, normalize_proposed_actions
@@ -15,40 +15,6 @@ from core.bundle_orchestrator import auto_review_until_approved
 from db import repositories as repo
 
 bundling_bp = Blueprint("bundling", __name__)
-
-
-def _chat_error_hint(err: str) -> str:
-    if "GEMINI_API_KEY not set" in err:
-        return "Agent unavailable. Set GEMINI_API_KEY in .env and restart the app."
-    if "OPENAI_API_KEY not set" in err:
-        return "Bundling chat unavailable. Set OPENAI_API_KEY in .env for the assistant."
-    if "401" in err or "invalid_api_key" in err.lower() or "incorrect api key" in err.lower():
-        return "Invalid API key. Check GEMINI_API_KEY (and OPENAI_API_KEY for chat) in .env and restart."
-    err_l = err.lower()
-    # Billing / prepaid balance (often confused with ChatGPT Plus credits).
-    if (
-        "insufficient_quota" in err_l
-        or "credit_balance_exhausted" in err_l
-        or "no credits remaining" in err_l
-    ):
-        return (
-            "OpenAI API billing for this key's organization has no credits left "
-            "(ChatGPT Plus ≠ API credits). Add funds at "
-            "https://platform.openai.com/settings/organization/billing/ "
-            "or set USE_FAKE_AI=true for UI testing."
-        )
-    # Match real API rate-limit errors — avoid false positives from other exception text.
-    if (
-        "429" in err
-        or "rate_limit" in err_l
-        or "rate limit" in err_l
-        or "resourceexhausted" in err_l
-    ) and "chatprompttemplate" not in err_l:
-        return (
-            "Rate limit exceeded. Try USE_FAKE_AI=true for UI testing, rotate API keys, "
-            "or use Reset Chat to shorten the prompt."
-        )
-    return f"Agent unavailable: {err[:200]}"
 
 
 def _bundle_session():
@@ -249,8 +215,8 @@ def chat(dealer_id):
                     message, dealer_id, bundles, dealer, history, ceiling, lang
                 )
         except Exception as e:
-            err = str(e)
-            return jsonify({"error": err, "reply": _chat_error_hint(err)}), 500
+            msg = friendly_error_message(e, default_key="err_chat_unavailable")
+            return jsonify({"error": msg, "reply": msg}), 500
 
         allow_exceed = state.get("allow_exceed_ceiling", False)
         bundling_complete = False
@@ -341,7 +307,8 @@ def chat(dealer_id):
             payload["tool_trace"] = tool_trace
         return jsonify(payload)
     except Exception as e:
-        return jsonify({"error": str(e), "reply": f"Server error: {str(e)[:200]}"}), 500
+        msg = friendly_error_message(e, default_key="err_chat_unavailable")
+        return jsonify({"error": msg, "reply": msg}), 500
 
 
 @bundling_bp.route("/api/chat/bundling/<int:dealer_id>/reset", methods=["POST"])
@@ -405,8 +372,8 @@ def bundle_review(dealer_id):
                     strategist_context=strategist_context,
                 )
         except Exception as e:
-            err = str(e)
-            return jsonify({"error": err, "review": _chat_error_hint(err)}), 500
+            msg = friendly_error_message(e, default_key="err_chat_unavailable")
+            return jsonify({"error": msg, "review": msg}), 500
 
         review_text = (result.get("review") or "").strip()
         if not review_text:
@@ -442,7 +409,8 @@ def bundle_review(dealer_id):
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e), "review": f"Server error: {str(e)[:200]}"}), 500
+        msg = friendly_error_message(e, default_key="err_chat_unavailable")
+        return jsonify({"error": msg, "review": msg}), 500
 
 
 def _find_reviewer_message(history: list, review_index: int | None) -> tuple[int, dict] | tuple[None, None]:
@@ -507,8 +475,8 @@ def apply_bundle_review(dealer_id):
                     dealer_id, bundles, ceiling, validation_issues, review_text, lang
                 )
         except Exception as e:
-            err = str(e)
-            return jsonify({"error": err, "summary": _chat_error_hint(err)}), 500
+            msg = friendly_error_message(e, default_key="err_chat_unavailable")
+            return jsonify({"error": msg, "summary": msg}), 500
 
         proposed_actions = normalize_proposed_actions(result.get("proposed_actions"))
         if not proposed_actions:
@@ -556,7 +524,8 @@ def apply_bundle_review(dealer_id):
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e), "summary": f"Server error: {str(e)[:200]}"}), 500
+        msg = friendly_error_message(e, default_key="err_chat_unavailable")
+        return jsonify({"error": msg, "summary": msg}), 500
 
 
 @bundling_bp.route("/bundling/<int:dealer_id>/manual", methods=["POST"])

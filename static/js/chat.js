@@ -93,6 +93,7 @@ function muteChatbot(opts) {
   const { sendBtn } = chatEls();
   if (sendBtn) sendBtn.disabled = false;
   syncMuteButtons();
+  window.zenithAgentBusy?.hide();
   if (announce && (wasBusy || opts?.forceAnnounce)) {
     appendChatMsg("assistant", i18n("js_chat_stopped"));
   }
@@ -188,6 +189,7 @@ async function applyReviewerSuggestions(reviewIndex) {
   if (!dealerId) return;
 
   applyBusy = true;
+  window.zenithAgentBusy?.show(i18n("js_reviewer_applying"));
   const thinking = appendChatMsg("assistant", i18n("js_reviewer_applying"));
   thinking?.classList.add("chat-thinking");
 
@@ -221,6 +223,7 @@ async function applyReviewerSuggestions(reviewIndex) {
     appendChatMsg("assistant", i18n("js_unreachable"));
   } finally {
     applyBusy = false;
+    window.zenithAgentBusy?.hide();
   }
 }
 
@@ -252,6 +255,7 @@ async function sendChat() {
   userStoppedChat = false;
   stopSpeech();
   chatBusy = true;
+  window.zenithAgentBusy?.show(i18n("js_agent_busy"));
   appendChatMsg("user", text);
   if (input) {
     input.value = "";
@@ -310,6 +314,7 @@ async function sendChat() {
   } finally {
     chatAbortController = null;
     chatBusy = false;
+    window.zenithAgentBusy?.hide();
     if (sendBtn) sendBtn.disabled = false;
     syncMuteButtons();
   }

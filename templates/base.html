@@ -10,10 +10,14 @@
         if (localStorage.getItem("zenith_theme") === "dark") {
           document.documentElement.setAttribute("data-theme", "dark");
         }
+        var fontSize = localStorage.getItem("zenith_font_size") || "normal";
+        if (fontSize === "large" || fontSize === "xlarge") {
+          document.documentElement.setAttribute("data-font-size", fontSize);
+        }
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu15">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu19">
 </head>
 <body class="lang-{{ current_lang }}">
   {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
@@ -27,20 +31,46 @@
               <span class="nav-icon">{{ nav_settings() }}</span>
             </button>
             <div id="settings-panel" class="settings-panel" hidden>
-              <p class="settings-heading">{{ t('language') }}</p>
-              <div class="settings-langs">
-                {% for code, label in supported_langs.items() %}
-                <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
-                   class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
-                {% endfor %}
-              </div>
-              <p class="settings-heading">{{ t('appearance') }}</p>
-              <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
-                      title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
-                <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
-                <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
-                <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
-              </button>
+              <ul class="settings-list" role="menu">
+                <li class="settings-item settings-item--flyout" role="none">
+                  <button type="button" class="settings-row" id="settings-lang-toggle"
+                          aria-expanded="false" aria-controls="settings-lang-flyout"
+                          role="menuitem">
+                    <span class="settings-row-label">{{ t('language') }}</span>
+                  </button>
+                  <div id="settings-lang-flyout" class="settings-flyout" hidden role="menu">
+                    {% for code, label in supported_langs.items() %}
+                    <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
+                       class="settings-flyout-item {{ 'active' if code == current_lang }}"
+                       role="menuitem"
+                       {% if code == current_lang %}aria-current="true"{% endif %}>{{ label }}</a>
+                    {% endfor %}
+                  </div>
+                </li>
+                <li class="settings-item settings-item--flyout" role="none">
+                  <button type="button" class="settings-row" id="settings-font-toggle"
+                          aria-expanded="false" aria-controls="settings-font-flyout"
+                          role="menuitem">
+                    <span class="settings-row-label">{{ t('font_size') }}</span>
+                  </button>
+                  <div id="settings-font-flyout" class="settings-flyout" hidden role="menu">
+                    <button type="button" class="settings-flyout-item" data-font-size="normal" role="menuitem">{{ t('font_size_normal') }}</button>
+                    <button type="button" class="settings-flyout-item" data-font-size="large" role="menuitem">{{ t('font_size_large') }}</button>
+                    <button type="button" class="settings-flyout-item" data-font-size="xlarge" role="menuitem">{{ t('font_size_xlarge') }}</button>
+                  </div>
+                </li>
+                <li class="settings-item" role="none">
+                  <button type="button" id="theme-toggle" class="settings-row" role="menuitem"
+                          aria-pressed="false"
+                          title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
+                    <span class="settings-row-label settings-row-label--theme">
+                      <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
+                      <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
+                      <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
             </div>
           </div>
           {% if session.get('user_id') %}
@@ -118,7 +148,7 @@
       </div>
     </div>
   </div>
-  <script src="{{ url_for('static', filename='js/guide_widget.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/guide_widget.js') }}?v=2"></script>
   {% endif %}
 
   <script>
@@ -131,6 +161,7 @@
           chrome.offsetHeight + "px"
         );
       }
+      window.__zenithSyncChromeOffset = syncChromeOffset;
       syncChromeOffset();
       if (window.ResizeObserver) {
         new ResizeObserver(syncChromeOffset).observe(chrome);
@@ -139,7 +170,8 @@
       }
     })();
   </script>
-  <script src="{{ url_for('static', filename='js/theme.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='js/agent_busy.js') }}?v=1"></script>
+  <script src="{{ url_for('static', filename='js/theme.js') }}?v=4"></script>
   <script src="{{ url_for('static', filename='js/forms.js') }}?v=5"></script>
   <script src="{{ url_for('static', filename='js/list_filters.js') }}?v=1"></script>
   {% block scripts %}{% endblock %}

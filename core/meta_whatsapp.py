@@ -101,10 +101,7 @@ def download_media(media_id: str) -> tuple[Path, str]:
     path = Config.UPLOAD_FOLDER / filename
     path.write_bytes(binary.content)
 
-    from config import BASE_DIR
-
-    upload_rel = Config.UPLOAD_FOLDER.relative_to(BASE_DIR).as_posix()
-    return path, f"{upload_rel}/{filename}"
+    return path, Config.location_path_for(filename)
 
 
 def send_text_message(to_phone: str, body: str) -> dict:

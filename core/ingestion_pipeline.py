@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from config import BASE_DIR, Config
+from config import Config
 from core.dates import format_date
 from core.ingestion_helpers import dealer_setup_from_extraction
 from core.whatsapp_utils import normalize_whatsapp_phone
@@ -40,14 +40,6 @@ class PipelineResult:
         return payload
 
 
-def _relative_location_path(filename: str) -> str:
-    try:
-        upload_rel = Config.UPLOAD_FOLDER.relative_to(BASE_DIR).as_posix()
-    except ValueError:
-        upload_rel = Path(Config.UPLOAD_FOLDER).as_posix()
-    return f"{upload_rel}/{filename}"
-
-
 def _copy_to_upload_folder(source: Path) -> tuple[Path, str]:
     ext = source.suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -56,7 +48,7 @@ def _copy_to_upload_folder(source: Path) -> tuple[Path, str]:
     filename = f"{uuid.uuid4()}{ext}"
     dest = Config.UPLOAD_FOLDER / filename
     shutil.copy2(source, dest)
-    return dest, _relative_location_path(filename)
+    return dest, Config.location_path_for(filename)
 
 
 def _normalize_extracted(extracted: dict) -> dict:

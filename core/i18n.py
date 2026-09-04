@@ -24,6 +24,10 @@ MESSAGES = {
         "theme_toggle": "Dark mode",
         "theme_light": "Light mode",
         "theme_dark": "Dark mode",
+        "font_size": "Text size",
+        "font_size_normal": "Normal",
+        "font_size_large": "Large",
+        "font_size_xlarge": "Extra large",
         "password": "Password",
         "password_placeholder": "Enter your password",
         "show_password": "Show password",
@@ -202,12 +206,12 @@ MESSAGES = {
         "chat_show": "Show assistant",
         "reviewer_label": "SME liquidity review",
         "reviewer_empty": "Could not generate a liquidity review. Try again.",
-        "js_reviewer_thinking": "Checking holidays and cash timing…",
+        "js_reviewer_thinking": "Agent is busy… Checking holidays and cash timing.",
         "mock_review_approve": "Python grouped your {count} cheque(s) well for cash flow. Total holiday lag gained: {lag} day(s); longest funding window from today: {max_days} day(s).{holiday_note} Your money stays in the bank until each target funding date — a solid plan for an SME.",
         "mock_review_suggest": "Review these {count} proposed cheque(s). Holiday lag so far: {lag} day(s); max funding window: {max_days} day(s).{holiday_note} You may gain more days by aligning stated dates with nearby CBSL holidays or splitting a heavy cheque if the supplier allows.",
         "mock_review_preview_intro": "Final liquidity check before preview:",
         "apply_reviewer_suggestions": "Apply SME suggestions",
-        "js_reviewer_applying": "Applying liquidity improvements…",
+        "js_reviewer_applying": "Agent is busy… Applying liquidity improvements.",
         "reviewer_applied": "Suggestions applied",
         "reviewer_apply_done": "SME liquidity suggestions have been applied to your cheque groups.",
         "reviewer_apply_failed": "Could not apply suggestions. Try adjusting manually or ask the assistant.",
@@ -283,7 +287,19 @@ MESSAGES = {
         "analytics_need_openai_hint": "Set OPENAI_API_KEY in .env (or USE_FAKE_AI=true for a demo summary), then click Generate report.",
         "flash_analytics_need_openai": "Set OPENAI_API_KEY in .env, or enable USE_FAKE_AI=true for a demo report.",
         "flash_analytics_generated": "Business summary report created.",
-        "flash_analytics_failed": "Could not generate report: {error}",
+        "flash_analytics_failed": "Could not generate the business summary. Please try again.",
+        "err_generic": "Something went wrong. Please try again.",
+        "err_data_format": "Some numbers in your records could not be read. Check deposits and invoice totals, then try again.",
+        "err_openai_missing": "AI chat needs OPENAI_API_KEY in .env. Add it and restart, or set USE_FAKE_AI=true for demo mode.",
+        "err_gemini_missing": "This feature needs GEMINI_API_KEY in .env. Add it and restart, or set USE_FAKE_AI=true for demo mode.",
+        "err_api_key_invalid": "The AI API key looks invalid. Check GEMINI_API_KEY / OPENAI_API_KEY in .env and restart.",
+        "err_api_quota": "AI billing has no credits left for this API key (ChatGPT Plus is separate). Add funds at platform.openai.com, or set USE_FAKE_AI=true for testing.",
+        "err_api_rate_limit": "The AI service is rate-limited right now. Wait a minute and try again, or set USE_FAKE_AI=true for testing.",
+        "err_api_busy": "The AI service is busy right now. Please try again in a minute.",
+        "err_chat_unavailable": "The assistant is unavailable right now. Please try again in a moment.",
+        "err_analytics_failed": "Could not generate the business summary. Please try again.",
+        "err_guide_unavailable": "Help is unavailable right now. Please try again in a moment.",
+        "err_whatsapp_ingest": "Could not process that WhatsApp photo. Please try again.",
         "report_generated": "Report created",
         "page_manual": "Enter invoice by hand",
         "lead_manual": "Type invoice details. Saved as checked and ready for cheques.",
@@ -381,7 +397,11 @@ MESSAGES = {
         "flash_deposit_complete": "Deposit marked done and balance updated.",
         "flash_deposit_not_found": "Planned deposit not found.",
         "js_select_invoice": "Please tick at least one invoice.",
-        "js_thinking": "Working…",
+        "js_thinking": "Agent is busy… Please wait.",
+        "js_agent_busy": "Agent is busy… Please wait.",
+        "js_agent_busy_vision": "Reading invoice… Agent is busy.",
+        "js_agent_busy_strategist": "Grouping cheques… Agent is busy.",
+        "js_agent_busy_report": "Writing report… Agent is busy.",
         "js_session_expired": "Please sign in again.",
         "js_server_error": "Something went wrong ({status}). Refresh and try again.",
         "js_timeout": "Taking too long. Try a shorter message.",
@@ -504,7 +524,7 @@ MESSAGES = {
         "guide_minimize": "Minimize",
         "guide_expand": "App guide",
         "guide_reset": "New chat",
-        "guide_thinking": "Thinking…",
+        "guide_thinking": "Agent is busy… Please wait.",
         "guide_page_tip_upload": "You're on Invoices. Upload a photo or enter one manually, then check the details.",
         "guide_page_tip_cheques": "You're on Cheques. Pick a supplier first. To group invoices into cheques, use the Cheque Assistant on the right — not this guide.",
         "guide_page_tip_cash": "You're on Bank Balance. Update your balance and plan deposits here.",
@@ -589,6 +609,10 @@ MESSAGES = {
         "theme_toggle": "අඳුරු පෙනුම",
         "theme_light": "සුදු පෙනුම",
         "theme_dark": "අඳුරු පෙනුම",
+        "font_size": "අකුරු ප්‍රමාණය",
+        "font_size_normal": "සාමාන්‍ය",
+        "font_size_large": "විශාල",
+        "font_size_xlarge": "ඉතා විශාල",
         "password": "මුරපදය",
         "password_placeholder": "ඔබේ මුරපදය ඇතුළත් කරන්න",
         "show_password": "මුරපදය පෙන්වන්න",
@@ -768,12 +792,12 @@ MESSAGES = {
         "chat_show": "සහායක පෙන්වන්න",
         "reviewer_label": "SME ත්‍යාග ජලය review",
         "reviewer_empty": "ත්‍යාග ජලය review එක සාදා ගත නොහැක. නැවත උත්සාහ කරන්න.",
-        "js_reviewer_thinking": "නිවාඩු දින සහ මුදල් කාලය පරීක්ෂා කරමින්…",
+        "js_reviewer_thinking": "Agent කාර්යබහුලයි… නිවාඩු දින සහ මුදල් කාලය පරීක්ෂා කරමින්.",
         "mock_review_approve": "Python ඔබේ චෙක්පත් {count} ක්ණ්ඩායම් කළේ නිවැරදිවයි. නිවාඩු දින lag: {lag}; අද සිට funding දක්වා දින: {max_days}.{holiday_note} මුදල් target funding date දක්වා බැංකුවේ තබා ගනී.",
         "mock_review_suggest": "චෙක්පත් {count} ක් යෝජනාව පරීක්ෂා කරන්න. Holiday lag: {lag}; max funding: {max_days} දින.{holiday_note} CBSL නිවාඩු දිනවලට dates ගැලපීමෙන් තව දින ලබා ගත හැක.",
         "mock_review_preview_intro": "Preview පෙර අවසාන liquidity පරීක්ෂාව:",
         "apply_reviewer_suggestions": "SME යෝජනා යොදන්න",
-        "js_reviewer_applying": "ත්‍යාග ජලය වැඩිදියුණු කරමින්…",
+        "js_reviewer_applying": "Agent කාර්යබහුලයි… ත්‍යාග ජලය වැඩිදියුණු කරමින්.",
         "reviewer_applied": "යෝජනා යොදා ඇත",
         "reviewer_apply_done": "SME යෝජනා ඔබේ චෙක්පත් කණ්ඩායම් වලට යොදා ඇත.",
         "reviewer_apply_failed": "යෝජනා යොදා ගත නොහැක. අතින් හෝ assistant හරහා සකසන්න.",
@@ -849,7 +873,19 @@ MESSAGES = {
         "analytics_need_openai_hint": ".env හි OPENAI_API_KEY දමන්න (හෝ USE_FAKE_AI=true), ඉන්පසු Generate report ඔබන්න.",
         "flash_analytics_need_openai": ".env හි OPENAI_API_KEY දමන්න, හෝ USE_FAKE_AI=true කරන්න.",
         "flash_analytics_generated": "ව්‍යාපාර සාරාංශ වාර්තාව සාදන ලදී.",
-        "flash_analytics_failed": "වාර්තාව සෑදීම අසාර්ථකයි: {error}",
+        "flash_analytics_failed": "ව්‍යාපාර සාරාංශය සෑදීමට නොහැකි විය. නැවත උත්සාහ කරන්න.",
+        "err_generic": "දෝෂයක් ඇති විය. නැවත උත්සාහ කරන්න.",
+        "err_data_format": "ඔබේ වාර්තාවල සමහර අගයන් කියවිය නොහැක. තැන්පතු සහ ඉන්වොයිස් මුදල් පරීක්ෂා කර නැවත උත්සාහ කරන්න.",
+        "err_openai_missing": "AI chat සඳහා .env හි OPENAI_API_KEY අවශ්‍යයි. එකතු කර restart කරන්න, හෝ USE_FAKE_AI=true කරන්න.",
+        "err_gemini_missing": "මෙම විශේෂාංගයට .env හි GEMINI_API_KEY අවශ්‍යයි. එකතු කර restart කරන්න, හෝ USE_FAKE_AI=true කරන්න.",
+        "err_api_key_invalid": "AI API යතුර වලංගු නොවන බව පෙනේ. .env හි GEMINI_API_KEY / OPENAI_API_KEY පරීක්ෂා කර restart කරන්න.",
+        "err_api_quota": "මෙම API යතුරට AI credit නැත (ChatGPT Plus වෙනස්ය). platform.openai.com හි මුදල් එකතු කරන්න, හෝ USE_FAKE_AI=true කරන්න.",
+        "err_api_rate_limit": "AI සේවාව දැන් සීමා වී ඇත. මිනිත්තුවකින් නැවත උත්සාහ කරන්න, හෝ USE_FAKE_AI=true කරන්න.",
+        "err_api_busy": "AI සේවාව දැන් කාර්යබහුලයි. මිනිත්තුවකින් නැවත උත්සාහ කරන්න.",
+        "err_chat_unavailable": "සහායක දැන් ලබා ගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.",
+        "err_analytics_failed": "ව්‍යාපාර සාරාංශය සෑදීමට නොහැකි විය. නැවත උත්සාහ කරන්න.",
+        "err_guide_unavailable": "උදව් දැන් ලබා ගත නොහැක. මඳ වේලාවකින් නැවත උත්සාහ කරන්න.",
+        "err_whatsapp_ingest": "එම WhatsApp ඡායාරූපය සැකසීමට නොහැකි විය. නැවත උත්සාහ කරන්න.",
         "report_generated": "වාර්තාව සාදන ලදී",
         "page_manual": "අතින් ඉන්වොයිස් ඇතුළත් කරන්න",
         "lead_manual": "විස්තර ටයිප් කරන්න. පරීක්ෂා කළ ලෙස සුරකිනු ලැබේ.",
@@ -947,7 +983,11 @@ MESSAGES = {
         "flash_deposit_complete": "තැන්පතුව අවසන් ලෙස සලකුණු කර ශේෂය යාවත්කාලීන කළා.",
         "flash_deposit_not_found": "සැලසුම් තැන්පතුව හමු නොවීය.",
         "js_select_invoice": "අවම වශයෙන් ඉන්වොයිස් එකක් tick කරන්න.",
-        "js_thinking": "ක්‍රියාත්මක වෙමින්…",
+        "js_thinking": "Agent කාර්යබහුලයි… කරුණාකර රැඳී සිටින්න.",
+        "js_agent_busy": "Agent කාර්යබහුලයි… කරුණාකර රැඳී සිටින්න.",
+        "js_agent_busy_vision": "ඉන්වොයිස් කියවමින්… Agent කාර්යබහුලයි.",
+        "js_agent_busy_strategist": "චෙක්පත් කණ්ඩායම් කරමින්… Agent කාර්යබහුලයි.",
+        "js_agent_busy_report": "වාර්තාව ලියමින්… Agent කාර්යබහුලයි.",
         "js_session_expired": "නැවත පිවිසෙන්න.",
         "js_server_error": "දෝෂයක් ({status}). refresh කර නැවත උත්සාහ කරන්න.",
         "js_timeout": "වැඩි වේලාව. කෙටi පණිවිඩයක් යවන්න.",
@@ -1070,7 +1110,7 @@ MESSAGES = {
         "guide_minimize": "කුඩා කරන්න",
         "guide_expand": "යෙදුම් මාර්ගෝපදේශක",
         "guide_reset": "නව සංවාදය",
-        "guide_thinking": "සිතමින්…",
+        "guide_thinking": "Agent කාර්යබහුලයි… කරුණාකර රැඳී සිටින්න.",
         "guide_page_tip_upload": "ඔබ ඉන්වොයිස් පිටුවේ සිටී. ඡායාරූපයක් උඩුගත කරන්න හෝ අතින් ඇතුළත් කරන්න.",
         "guide_page_tip_cheques": "ඔබ චෙක්පත් පිටුවේ සිටී. සැපයුම්කරු තෝරන්න. ඉන්වොයිස් කණ්ඩායම් කිරීමට දකුණු Cheque Assistant භාවිතා කරන්න.",
         "guide_page_tip_cash": "ඔබ බැංකු ශේෂ පිටුවේ සිටී. ශේෂය මෙතැන update කරන්න.",
@@ -1155,6 +1195,10 @@ MESSAGES = {
         "theme_toggle": "இருள் பயன்முறை",
         "theme_light": "வெளிச்ச பயன்முறை",
         "theme_dark": "இருள் பயன்முறை",
+        "font_size": "எழுத்து அளவு",
+        "font_size_normal": "சாதாரணம்",
+        "font_size_large": "பெரியது",
+        "font_size_xlarge": "மிகப் பெரியது",
         "password": "கடவுச்சொல்",
         "password_placeholder": "உங்கள் கடவுச்சொல்லை உள்ளிடவும்",
         "show_password": "கடவுச்சொல்லைக் காட்டு",
@@ -1333,12 +1377,12 @@ MESSAGES = {
         "chat_show": "Assistant காட்டு",
         "reviewer_label": "SME நிதி review",
         "reviewer_empty": "நிதி review உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
-        "js_reviewer_thinking": "விடுமுறை நாட்கள் மற்றும் பண நேரம் சரிபார்க்கிறது…",
+        "js_reviewer_thinking": "Agent பிஸியாக உள்ளது… விடுமுறை நாட்கள் மற்றும் பண நேரம் சரிபார்க்கிறது.",
         "mock_review_approve": "Python {count} காசோலை(களை) நன்றாக குழுவாக்கியுள்ளது. Holiday lag: {lag} நாள்; இன்றிலிருந்து funding வரை: {max_days} நாள்.{holiday_note} பணம் target funding date வரை வங்கியில் இருக்கும்.",
         "mock_review_suggest": "{count} காசோலை(களை) review செய்யுங்கள். Holiday lag: {lag}; max funding: {max_days} நாள்.{holiday_note} CBSL விடுமுறைகளுக்கு அருகில் தேதிகளை சீரமைத்தால் மேலும் நாட்கள் கிடைக்கும்.",
         "mock_review_preview_intro": "Preview-க்கு முன் இறுதி liquidity சரிபார்ப்பு:",
         "apply_reviewer_suggestions": "SME ஆலோசனைகளை பயன்படுத்து",
-        "js_reviewer_applying": "நிதி மேம்பாடுகள் பயன்படுத்தப்படுகின்றன…",
+        "js_reviewer_applying": "Agent பிஸியாக உள்ளது… நிதி மேம்பாடுகள் பயன்படுத்தப்படுகின்றன.",
         "reviewer_applied": "ஆலோசனைகள் பயன்படுத்தப்பட்டன",
         "reviewer_apply_done": "SME ஆலோசனைகள் உங்கள் காசோலை குழுக்களுக்கு பயன்படுத்தப்பட்டன.",
         "reviewer_apply_failed": "ஆலோசனைகளை பயன்படுத்த முடியவில்லை. கையால் அல்லது assistant மூலம் மாற்றவும்.",
@@ -1414,7 +1458,19 @@ MESSAGES = {
         "analytics_need_openai_hint": ".env இல் OPENAI_API_KEY அமைக்கவும் (அல்லது USE_FAKE_AI=true), பின்னர் Generate report அழுத்தவும்.",
         "flash_analytics_need_openai": ".env இல் OPENAI_API_KEY அமைக்கவும், அல்லது USE_FAKE_AI=true செய்யவும்.",
         "flash_analytics_generated": "வணிக சுருக்க அறிக்கை உருவாக்கப்பட்டது.",
-        "flash_analytics_failed": "அறிக்கை உருவாக்க முடியவில்லை: {error}",
+        "flash_analytics_failed": "வணிக சுருக்கத்தை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
+        "err_generic": "ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.",
+        "err_data_format": "உங்கள் பதிவுகளில் சில எண்களை படிக்க முடியவில்லை. deposits மற்றும் invoice தொகைகளை சரிபார்த்து மீண்டும் முயல்க.",
+        "err_openai_missing": "AI chat-க்கு .env இல் OPENAI_API_KEY தேவை. சேர்த்து restart செய்யவும், அல்லது USE_FAKE_AI=true அமைக்கவும்.",
+        "err_gemini_missing": "இந்த அம்சத்திற்கு .env இல் GEMINI_API_KEY தேவை. சேர்த்து restart செய்யவும், அல்லது USE_FAKE_AI=true அமைக்கவும்.",
+        "err_api_key_invalid": "AI API key தவறாகத் தெரிகிறது. .env இல் GEMINI_API_KEY / OPENAI_API_KEY சரிபார்த்து restart செய்யவும்.",
+        "err_api_quota": "இந்த API key-க்கு AI credit இல்லை (ChatGPT Plus தனியானது). platform.openai.com இல் நிதியைச் சேர்க்கவும், அல்லது USE_FAKE_AI=true அமைக்கவும்.",
+        "err_api_rate_limit": "AI சேவை இப்போது வரம்பில் உள்ளது. ஒரு நிமிடம் காத்திருந்து மீண்டும் முயல்க, அல்லது USE_FAKE_AI=true அமைக்கவும்.",
+        "err_api_busy": "AI சேவை இப்போது பிஸியாக உள்ளது. ஒரு நிமிடத்தில் மீண்டும் முயற்சிக்கவும்.",
+        "err_chat_unavailable": "உதவியாளர் இப்போது கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயல்க.",
+        "err_analytics_failed": "வணிக சுருக்கத்தை உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
+        "err_guide_unavailable": "உதவி இப்போது கிடைக்கவில்லை. சிறிது நேரம் கழித்து மீண்டும் முயல்க.",
+        "err_whatsapp_ingest": "அந்த WhatsApp புகைப்படத்தை செயலாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
         "report_generated": "அறிக்கை உருவாக்கப்பட்டது",
         "page_manual": "கையால் invoice உள்ளிடு",
         "lead_manual": "விவரங்களை typing. சரிபார்க்கப்பட்டதாக சேமிக்கப்படும்.",
@@ -1512,7 +1568,11 @@ MESSAGES = {
         "flash_deposit_complete": "deposit முடிந்தது, இருப்பு புதுப்பிக்கப்பட்டது.",
         "flash_deposit_not_found": "திட்ட deposit கிடைக்கவில்லை.",
         "js_select_invoice": "குறைந்தது ஒரு invoice tick செய்யவும்.",
-        "js_thinking": "செயல்படுகிறது…",
+        "js_thinking": "Agent பிஸியாக உள்ளது… காத்திருக்கவும்.",
+        "js_agent_busy": "Agent பிஸியாக உள்ளது… காத்திருக்கவும்.",
+        "js_agent_busy_vision": "Invoice படிக்கிறது… Agent பிஸியாக உள்ளது.",
+        "js_agent_busy_strategist": "காசோலைகளை குழுவாக்குகிறது… Agent பிஸியாக உள்ளது.",
+        "js_agent_busy_report": "அறிக்கை எழுதுகிறது… Agent பிஸியாக உள்ளது.",
         "js_session_expired": "மீண்டும் உள்நுழையவும்.",
         "js_server_error": "பிழை ({status}). refresh செய்து மீண்டும் முயற்சிக்கவும்.",
         "js_timeout": "நேரம் அதிகம். குறுகிய செய்தி அனுப்பவும்.",
@@ -1635,7 +1695,7 @@ MESSAGES = {
         "guide_minimize": "சுருக்கு",
         "guide_expand": "App guide",
         "guide_reset": "புதிய உரையாடல்",
-        "guide_thinking": "யோசிக்கிறேன்…",
+        "guide_thinking": "Agent பிஸியாக உள்ளது… காத்திருக்கவும்.",
         "guide_page_tip_upload": "நீங்கள் Invoices பக்கத்தில் உள்ளீர்கள். புகைப்படம் பதிவேற்றவும் அல்லது கையால் உள்ளிடவும்.",
         "guide_page_tip_cheques": "நீங்கள் Cheques பக்கத்தில் உள்ளீர்கள். சப்ளையரை தேர்வு செய்யுங்கள். குழுவாக்க வலது Cheque Assistant பயன்படுத்துங்கள்.",
         "guide_page_tip_cash": "நீங்கள் Bank Balance பக்கத்தில் உள்ளீர்கள். இருப்பை இங்கே புதுப்பிக்கவும்.",
@@ -1711,6 +1771,10 @@ MESSAGES = {
 JS_KEYS = [
     "js_select_invoice",
     "js_thinking",
+    "js_agent_busy",
+    "js_agent_busy_vision",
+    "js_agent_busy_strategist",
+    "js_agent_busy_report",
     "js_session_expired",
     "js_server_error",
     "js_timeout",
@@ -1851,6 +1915,75 @@ def flash_t(key: str, category: str = "message", **kwargs) -> None:
     from flask import flash
 
     flash(translate(key, **kwargs), category)
+
+
+def friendly_error_message(
+    exc: BaseException | str,
+    *,
+    default_key: str = "err_generic",
+) -> str:
+    """Map technical exceptions to plain-language, translated user messages."""
+    text = str(exc or "")
+    text_u = text.upper()
+    text_l = text.lower()
+
+    if "OPENAI_API_KEY NOT SET" in text_u or (
+        "OPENAI_API_KEY" in text_u and "NOT SET" in text_u
+    ):
+        return translate("err_openai_missing")
+    if "GEMINI_API_KEY NOT SET" in text_u or (
+        "GEMINI_API_KEY" in text_u and "NOT SET" in text_u
+    ):
+        return translate("err_gemini_missing")
+    if (
+        "401" in text
+        or "INVALID_API_KEY" in text_u
+        or "INCORRECT API KEY" in text_u
+        or "API_KEY_INVALID" in text_u
+        or "UNAUTHENTICATED" in text_u
+        or "PERMISSION_DENIED" in text_u
+    ):
+        return translate("err_api_key_invalid")
+    if (
+        "INSUFFICIENT_QUOTA" in text_u
+        or "CREDIT_BALANCE_EXHAUSTED" in text_u
+        or "NO CREDITS REMAINING" in text_u
+    ):
+        return translate("err_api_quota")
+    if (
+        ("429" in text or "RATE_LIMIT" in text_u or "RATE LIMIT" in text_u or "RESOURCEEXHAUSTED" in text_u)
+        and "CHATPROMPTTEMPLATE" not in text_u
+    ):
+        return translate("err_api_rate_limit")
+    if any(
+        token in text_u
+        for token in ("503", "UNAVAILABLE", "HIGH DEMAND", "OVERLOADED", "RESOURCE_EXHAUSTED", "QUOTA")
+    ):
+        return translate("err_api_busy")
+    if (
+        "FLOAT()" in text_u
+        or "MUST BE A STRING OR A REAL NUMBER" in text_u
+        or ("NOT 'LIST'" in text_u and "FLOAT" in text_u)
+        or (
+            isinstance(exc, TypeError)
+            and any(token in text_l for token in ("float", "int(", "unsupported operand", "format"))
+        )
+    ):
+        return translate("err_data_format")
+
+    return translate(default_key)
+
+
+def flash_user_error(
+    exc: BaseException | str,
+    category: str = "error",
+    *,
+    default_key: str = "err_generic",
+) -> None:
+    """Flash a plain-language error (never raw Python/API traceback text)."""
+    from flask import flash
+
+    flash(friendly_error_message(exc, default_key=default_key), category)
 
 
 def flash_vision_error(exc: BaseException | str, category: str = "error") -> None:

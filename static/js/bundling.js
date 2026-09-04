@@ -82,6 +82,7 @@ async function requestBundleReview(trigger) {
   const dealerId = getDealerId();
   if (!dealerId) return null;
 
+  window.zenithAgentBusy?.show(i18n("js_reviewer_thinking"));
   const thinking = window.appendChatMsg?.("assistant", i18n("js_reviewer_thinking"));
   thinking?.classList.add("chat-thinking");
 
@@ -116,6 +117,8 @@ async function requestBundleReview(trigger) {
     thinking?.remove();
     window.appendChatMsg?.("assistant", i18n("js_unreachable"));
     return null;
+  } finally {
+    window.zenithAgentBusy?.hide();
   }
 }
 
@@ -589,6 +592,7 @@ async function runAutoReview() {
     btn.disabled = true;
     btn.textContent = "Reviewer round 1/3...";
   }
+  window.zenithAgentBusy?.show(i18n("js_agent_busy"));
   try {
     const res = await fetch(`/api/bundling/${dealerId}/auto-review`, {
       method: "POST",
@@ -608,6 +612,7 @@ async function runAutoReview() {
       renderBundles(data.bundles, data.validation_issues || []);
     }
   } finally {
+    window.zenithAgentBusy?.hide();
     if (btn) {
       btn.disabled = false;
       btn.textContent = "Auto-optimize bundles";

@@ -111,7 +111,25 @@ Use a Python host and submit that HTTPS URL:
 4. First boot creates the SQLite database and sample invoices if the DB file is missing.
 5. Open `https://YOUR-SERVICE.onrender.com` — you should see login. Health check: `/health`.
 
-Free-tier disks are often ephemeral: the database resets when the instance sleeps or redeploys. That is enough for a live demo link. For WhatsApp webhooks, set `WEBHOOK_PUBLIC_URL` to the same HTTPS origin.
+### Keep SQLite + photos across redeploys (important)
+
+Render’s **free** filesystem is wiped on every redeploy/restart — that leaves broken rows with missing invoice photos. To keep data with SQLite:
+
+1. Use a **paid** web service (Starter or higher) — persistent disks are not available on Free.
+2. Attach a disk mounted at `/var/data` (Blueprint `render.yaml` already does this).
+3. Set these env vars (also in `render.yaml`):
+
+   | Variable | Value |
+   |----------|--------|
+   | `DATABASE_PATH` | `/var/data/invoice_cheque.db` |
+   | `UPLOAD_FOLDER` | `/var/data/invoices` |
+   | `INBOUND_QUEUE_DIR` | `/var/data/inbound_queue` |
+   | `CHROMA_PERSIST_DIR` | `/var/data/chroma` |
+
+4. Set `APP_PASSWORD` yourself in the Render dashboard (do not leave it auto-generated if you care about a stable login).
+5. Redeploy. Startup logs should show `db=/var/data/invoice_cheque.db` and `uploads=/var/data/invoices`.
+
+If you are already on Free: upgrade the service → add Disk → set the env vars above → redeploy. Data lost on previous Free redeploys cannot be recovered.
 
 Local `python app.py` is unchanged (`HOST=127.0.0.1` in `.env`).
 

@@ -1741,6 +1741,17 @@ def get_outstanding_liabilities():
 
 
 def get_recent_deposits_total(weeks=4):
+    """Return total deposit amount over the last `weeks` week buckets."""
+    rows = query(
+        """SELECT strftime('%Y-W%W', deposit_date) AS week, SUM(amount) AS total
+           FROM bank_deposits GROUP BY week ORDER BY week DESC LIMIT ?""",
+        (weeks,),
+    )
+    return sum(float(r["total"] or 0) for r in rows)
+
+
+def get_recent_deposits_by_week(weeks=4):
+    """Return recent deposit totals grouped by week (newest first)."""
     return query(
         """SELECT strftime('%Y-W%W', deposit_date) AS week, SUM(amount) AS total
            FROM bank_deposits GROUP BY week ORDER BY week DESC LIMIT ?""",

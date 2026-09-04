@@ -2,9 +2,15 @@ services:
   - type: web
     name: zenith
     runtime: python
+    # Persistent disks require a paid plan (Starter+). Free tier wipes SQLite + photos on redeploy.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: python -m gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT app:app
     healthCheckPath: /health
+    disk:
+      name: zenith-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: FLASK_ENV
         value: production
@@ -12,10 +18,19 @@ services:
         value: 0.0.0.0
       - key: USE_FAKE_AI
         value: "true"
+      # All durable state lives on the mounted disk (survives redeploys)
+      - key: DATABASE_PATH
+        value: /var/data/invoice_cheque.db
+      - key: UPLOAD_FOLDER
+        value: /var/data/invoices
+      - key: INBOUND_QUEUE_DIR
+        value: /var/data/inbound_queue
+      - key: CHROMA_PERSIST_DIR
+        value: /var/data/chroma
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: APP_PASSWORD
-        generateValue: true
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: OPENAI_API_KEY

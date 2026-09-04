@@ -70,7 +70,7 @@
     </table>
     {% endif %}
 
-    <form method="post" action="{{ url_for('bundling.compute', dealer_id=dealer.dealer_id) }}">
+    <form method="post" action="{{ url_for('bundling.compute', dealer_id=dealer.dealer_id) }}" data-agent-busy="js_agent_busy_strategist">
       <label>{{ t('lkr_ceiling') }} <input type="number" name="ceiling_lkr" value="{{ ceiling_lkr }}" step="1000" required></label>
       <h3>{{ t('ready_to_bundle') }}</h3>
       {% if invoices %}

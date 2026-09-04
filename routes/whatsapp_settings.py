@@ -9,7 +9,7 @@ from flask import Blueprint, abort, jsonify, redirect, render_template, request,
 from config import Config
 from core.auth import login_required
 from core.ingestion_pipeline import run_whatsapp_image_pipeline
-from core.i18n import flash_t
+from core.i18n import flash_t, friendly_error_message
 from core.whatsapp_utils import normalize_whatsapp_phone
 from db import repositories as repo
 
@@ -63,9 +63,9 @@ def ingest_invoice():
         )
         return jsonify(result.to_dict()), result.http_status
     except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": False, "error": friendly_error_message(exc, default_key="err_whatsapp_ingest")}), 400
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": friendly_error_message(exc, default_key="err_whatsapp_ingest")}), 500
 
 
 @whatsapp_settings_bp.route("/settings/whatsapp")

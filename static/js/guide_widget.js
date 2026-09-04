@@ -59,6 +59,7 @@
     }
     const wasBusy = busy;
     busy = false;
+    window.zenithAgentBusy?.hide();
     syncMute();
     if (wasBusy) appendMsg("assistant", i18n("js_chat_stopped"));
   }
@@ -203,6 +204,7 @@
 
     userStopped = false;
     busy = true;
+    window.zenithAgentBusy?.show(i18n("js_agent_busy"));
     appendMsg("user", text);
     if (input) input.value = "";
     if (send) send.disabled = true;
@@ -248,6 +250,7 @@
     } finally {
       abortController = null;
       busy = false;
+      window.zenithAgentBusy?.hide();
       if (send) send.disabled = false;
       syncMute();
     }

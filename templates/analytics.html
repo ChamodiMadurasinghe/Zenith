@@ -4,7 +4,7 @@
 <div class="page-title-row">
   <h1>{{ t('page_analytics') }}</h1>
   <div class="page-title-actions">
-    <form method="post" action="{{ url_for('analytics.generate_analytics_report') }}">
+    <form method="post" action="{{ url_for('analytics.generate_analytics_report') }}" data-agent-busy="js_agent_busy_report">
       <button type="submit" class="btn btn-primary btn-lg">
         {% if report %}{{ t('refresh_report') }}{% else %}{{ t('generate_report') }}{% endif %}
       </button>
@@ -15,11 +15,11 @@
 <div class="summary-grid">
   <div class="stat-card">
     <span class="stat-label">{{ t('outstanding_liabilities') }}</span>
-    <span class="stat-value">Rs. {{ "{:,.2f}".format(metrics.outstanding_liabilities_lkr) }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(metrics.outstanding_liabilities_lkr|float) }}</span>
   </div>
   <div class="stat-card">
     <span class="stat-label">{{ t('committed_cheques') }}</span>
-    <span class="stat-value">{{ metrics.committed_cheques_count }} (Rs. {{ "{:,.2f}".format(metrics.committed_cheques_total_lkr) }})</span>
+    <span class="stat-value">{{ metrics.committed_cheques_count }} (Rs. {{ "{:,.2f}".format(metrics.committed_cheques_total_lkr|float) }})</span>
   </div>
   <div class="stat-card">
     <span class="stat-label">{{ t('unverified_invoices') }}</span>
