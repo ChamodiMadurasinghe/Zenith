@@ -13,50 +13,52 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu11">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu15">
 </head>
 <body class="lang-{{ current_lang }}">
   {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
-  <header class="site-header">
-    <div class="site-header-inner">
-      <a href="{{ url_for('ingestion.dashboard') if session.get('user_id') else url_for('auth.login') }}" class="brand">{{ t('app_name') }}</a>
-      <div class="site-header-tools">
-        <div class="settings-menu">
-          <button type="button" id="settings-toggle" class="header-tool-btn" aria-expanded="false" aria-controls="settings-panel" title="{{ t('settings') }}" aria-label="{{ t('settings') }}">
-            <span class="nav-icon">{{ nav_settings() }}</span>
-          </button>
-          <div id="settings-panel" class="settings-panel" hidden>
-            <p class="settings-heading">{{ t('language') }}</p>
-            <div class="settings-langs">
-              {% for code, label in supported_langs.items() %}
-              <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
-                 class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
-              {% endfor %}
-            </div>
-            <p class="settings-heading">{{ t('appearance') }}</p>
-            <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
-                    title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
-              <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
-              <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
-              <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
+  <div class="app-chrome">
+    <header class="site-header">
+      <div class="site-header-inner">
+        <a href="{{ url_for('ingestion.dashboard') if session.get('user_id') else url_for('auth.login') }}" class="brand">{{ t('app_name') }}</a>
+        <div class="site-header-tools">
+          <div class="settings-menu">
+            <button type="button" id="settings-toggle" class="header-tool-btn" aria-expanded="false" aria-controls="settings-panel" title="{{ t('settings') }}" aria-label="{{ t('settings') }}">
+              <span class="nav-icon">{{ nav_settings() }}</span>
             </button>
+            <div id="settings-panel" class="settings-panel" hidden>
+              <p class="settings-heading">{{ t('language') }}</p>
+              <div class="settings-langs">
+                {% for code, label in supported_langs.items() %}
+                <a href="{{ url_for('i18n.set_language', lang_code=code) }}"
+                   class="lang-btn {{ 'active' if code == current_lang }}">{{ label }}</a>
+                {% endfor %}
+              </div>
+              <p class="settings-heading">{{ t('appearance') }}</p>
+              <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"
+                      title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
+                <span class="theme-icon theme-icon-sun">{{ theme_sun() }}</span>
+                <span class="theme-icon theme-icon-moon">{{ theme_moon() }}</span>
+                <span class="theme-toggle-label">{{ t('theme_toggle') }}</span>
+              </button>
+            </div>
           </div>
+          {% if session.get('user_id') %}
+          <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="nav-logout-form">
+            <button type="submit" class="header-tool-btn header-tool-btn--logout" title="{{ t('nav_logout') }}" aria-label="{{ t('nav_logout') }}">
+              <span class="nav-icon">{{ nav_logout() }}</span>
+            </button>
+          </form>
+          {% endif %}
         </div>
-        {% if session.get('user_id') %}
-        <form id="nav-logout-form" action="{{ url_for('auth.logout') }}" method="post" class="nav-logout-form">
-          <button type="submit" class="header-tool-btn header-tool-btn--logout" title="{{ t('nav_logout') }}" aria-label="{{ t('nav_logout') }}">
-            <span class="nav-icon">{{ nav_logout() }}</span>
-          </button>
-        </form>
-        {% endif %}
       </div>
+    </header>
+    {% if session.get('user_id') %}
+    <div class="main-nav-bar">
+      {% include '_main_nav.html' %}
     </div>
-  </header>
-  {% if session.get('user_id') %}
-  <div class="main-nav-bar">
-    {% include '_main_nav.html' %}
+    {% endif %}
   </div>
-  {% endif %}
 
   <main class="container">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -119,6 +121,24 @@
   <script src="{{ url_for('static', filename='js/guide_widget.js') }}"></script>
   {% endif %}
 
+  <script>
+    (function () {
+      var chrome = document.querySelector(".app-chrome");
+      if (!chrome) return;
+      function syncChromeOffset() {
+        document.documentElement.style.setProperty(
+          "--app-chrome-offset",
+          chrome.offsetHeight + "px"
+        );
+      }
+      syncChromeOffset();
+      if (window.ResizeObserver) {
+        new ResizeObserver(syncChromeOffset).observe(chrome);
+      } else {
+        window.addEventListener("resize", syncChromeOffset);
+      }
+    })();
+  </script>
   <script src="{{ url_for('static', filename='js/theme.js') }}?v=2"></script>
   <script src="{{ url_for('static', filename='js/forms.js') }}?v=5"></script>
   <script src="{{ url_for('static', filename='js/list_filters.js') }}?v=1"></script>

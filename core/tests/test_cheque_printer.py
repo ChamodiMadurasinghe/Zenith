@@ -1,6 +1,6 @@
 import unittest
 
-from core.cheque_printer import generate_cheque_pdf, normalize_cheque_date
+from core.cheque_printer import generate_cheque_pdf, generate_cheques_pdf, normalize_cheque_date
 
 
 SAMPLE_TEMPLATE = {
@@ -69,6 +69,18 @@ class TestChequePrinter(unittest.TestCase):
             crossing=False,
         )
         self.assertTrue(pdf.startswith(b"%PDF"))
+
+    def test_generate_cheques_pdf_multi_page(self):
+        pdf = generate_cheques_pdf(
+            [
+                {"date_str": "2026-08-30", "payee_name": "A", "amount": 1000},
+                {"date_str": "2026-09-01", "payee_name": "B", "amount": 2000},
+            ],
+            SAMPLE_TEMPLATE,
+            {"offset_x_mm": 0, "offset_y_mm": 0, "feed_orientation": "VERTICAL"},
+        )
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertGreater(len(pdf), 200)
 
 
 if __name__ == "__main__":

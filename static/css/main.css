@@ -17,6 +17,8 @@
   --surface-hover-accent: #eef3ff;
   --surface-hover-border: #c5d4ff;
   --surface-hover-muted: #cfd7e3;
+  /* Approximate height of sticky .app-chrome (brand bar + main nav) */
+  --app-chrome-offset: 9.5rem;
   color-scheme: light;
 }
 
@@ -33,6 +35,12 @@ body {
   font-size: 18px;
 }
 
+.app-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--card);
+}
 .site-header {
   background: var(--card);
   border-bottom: 1px solid var(--border);
@@ -514,10 +522,10 @@ input:focus, select:focus, textarea:focus {
 #items-table input[type="number"] { min-width: 5.5rem; }
 .list-filter-stack {
   margin: 0.5rem 0 1rem;
-  border: 2px solid var(--border);
+  border: 2px solid #3d6ec9;
   border-radius: var(--radius);
   overflow: hidden;
-  background: #f4f6f9;
+  background: #e8f0fa;
   box-shadow: none;
 }
 .list-filter-panel { margin: 0; }
@@ -703,6 +711,7 @@ input:focus, select:focus, textarea:focus {
 }
 .list-filter-stack .list-summary-bar {
   position: static;
+  padding: 0.65rem 0.85rem 0.75rem;
 }
 .list-summary-bar .list-summary-sep { color: var(--muted); }
 .status-paid { color: #1a7f37; font-weight: 700; font-size: 1.15rem; }
@@ -744,99 +753,109 @@ body:has(#cheques-layout) #zenith-guide {
   clear: both;
 }
 
-/* Help assistant — plain, high-contrast layout for elderly users */
+/* Help assistant — compact controls, roomy message area */
 .chat-panel {
   display: flex;
   flex-direction: column;
   gap: 0;
-  min-height: min(68vh, 680px);
+  min-height: min(72vh, 720px);
   height: auto;
   padding: 0;
   overflow: hidden;
   border: 2px solid var(--border);
 }
 .chat-panel-head {
-  padding: 1rem 1.1rem 0.85rem;
+  padding: 0.7rem 0.9rem 0.65rem;
   border-bottom: 2px solid var(--border);
   background: var(--card);
+  flex-shrink: 0;
 }
 .chat-panel-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem;
-  margin-bottom: 0.45rem;
+  gap: 0.45rem;
+  margin-bottom: 0.3rem;
 }
 .chat-panel-title {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.25;
   color: var(--text);
 }
 .chat-mode-badge {
   display: inline-block;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  padding: 0.25rem 0.55rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 6px;
   border: 2px solid transparent;
 }
 .chat-mode-demo { background: #e65100; color: #fff; border-color: #bf360c; }
 .chat-mode-live { background: #1b6b3a; color: #fff; border-color: #145229; }
 .chat-panel-intro {
-  margin: 0 0 0.85rem;
-  font-size: 1.05rem;
-  line-height: 1.5;
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
   color: var(--text);
   font-weight: 500;
 }
 .chat-toolbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 .chat-toolbar-btn {
   width: 100%;
   margin: 0;
-  min-height: var(--touch-min);
-  font-size: 1.05rem;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.9rem;
   font-weight: 700;
+}
+.chat-panel .btn-lg,
+.chat-panel .chat-toolbar-btn.btn-lg,
+.chat-panel .chat-action-btn.btn-lg,
+.chat-panel .apply-reviewer-btn.btn-lg {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+  min-height: 2.35rem;
 }
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  min-height: 260px;
-  max-height: min(52vh, 480px);
+  min-height: 280px;
+  max-height: min(58vh, 560px);
   margin: 0;
   border: none;
   border-bottom: 2px solid var(--border);
   border-radius: 0;
-  padding: 0.85rem 1rem;
+  padding: 0.7rem 0.85rem;
   background: #f4f6f9;
 }
 .chat-welcome {
   margin: 0;
   color: var(--text);
-  font-size: 1.05rem;
-  line-height: 1.55;
+  font-size: 0.95rem;
+  line-height: 1.5;
   font-weight: 500;
-  padding: 0.35rem 0;
+  padding: 0.25rem 0;
 }
 .chat-msg {
-  padding: 0.75rem 0.85rem;
-  margin: 0.55rem 0;
+  padding: 0.55rem 0.7rem;
+  margin: 0.4rem 0;
   border-radius: 10px;
-  font-size: 1.05rem;
-  line-height: 1.55;
+  font-size: 0.95rem;
+  line-height: 1.5;
   border: 2px solid var(--border);
 }
 .chat-msg-label {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
   color: var(--text);
 }
 .chat-msg-body { white-space: pre-wrap; }
@@ -857,35 +876,42 @@ body:has(#cheques-layout) #zenith-guide {
   border: 2px solid #8b72d4;
   border-left-width: 6px;
   margin-right: 0;
-  padding: 0.75rem 0.85rem;
+  padding: 0.55rem 0.7rem;
 }
 .chat-reviewer-label {
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #4a2f9e;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.3rem;
 }
-.chat-reviewer-body { white-space: pre-wrap; font-size: 1.05rem; line-height: 1.55; }
-.chat-reviewer-actions { margin-top: 0.75rem; }
-.chat-reviewer-actions .btn { width: 100%; margin: 0; }
+.chat-reviewer-body { white-space: pre-wrap; font-size: 0.95rem; line-height: 1.5; }
+.chat-reviewer-actions { margin-top: 0.5rem; }
+.chat-reviewer-actions .btn {
+  width: 100%;
+  margin: 0;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+}
 .chat-reviewer-applied {
-  margin-top: 0.55rem;
-  font-size: 0.95rem;
+  margin-top: 0.4rem;
+  font-size: 0.88rem;
   color: var(--text);
   font-weight: 600;
 }
 .chat-thinking { opacity: 1; font-style: normal; color: var(--muted); font-weight: 600; }
 .chat-panel-foot {
-  padding: 0.85rem 1rem 1rem;
+  padding: 0.65rem 0.85rem 0.75rem;
   background: var(--card);
+  flex-shrink: 0;
 }
 .chat-controls {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.55rem;
+  gap: 0.4rem;
   align-items: stretch;
 }
 @media (min-width: 340px) {
@@ -897,20 +923,20 @@ body:has(#cheques-layout) #zenith-guide {
 .chat-speak-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  font-size: 1.05rem;
+  gap: 0.45rem;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   user-select: none;
   color: var(--text);
-  min-height: var(--touch-min);
-  padding: 0.15rem 0;
+  min-height: 2rem;
+  padding: 0.1rem 0;
 }
 .chat-speak-toggle input {
-  width: 1.35rem;
-  height: 1.35rem;
-  min-height: 1.35rem;
-  min-width: 1.35rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 1.15rem;
+  min-width: 1.15rem;
   margin: 0;
   accent-color: var(--primary);
 }
@@ -918,16 +944,17 @@ body:has(#cheques-layout) #zenith-guide {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   width: 100%;
   margin: 0;
-  min-height: var(--touch-min);
-  font-size: 1.05rem;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.9rem;
   font-weight: 700;
   text-align: center;
 }
 .chat-btn-icon {
-  font-size: 1.15rem;
+  font-size: 1rem;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -939,29 +966,29 @@ body:has(#cheques-layout) #zenith-guide {
 }
 .chat-input-label {
   display: block;
-  margin-bottom: 0.4rem;
-  font-size: 1.05rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--text);
 }
 .chat-input {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.45rem;
 }
 .chat-input textarea {
   width: 100%;
   margin: 0;
-  min-height: 4.5rem;
-  max-height: 12rem;
+  min-height: 3.25rem;
+  max-height: 9rem;
   resize: vertical;
   overflow-y: auto;
-  line-height: 1.5;
-  padding: 0.85rem 0.9rem;
+  line-height: 1.45;
+  padding: 0.55rem 0.7rem;
   border: 2px solid var(--border);
   border-radius: 10px;
   font: inherit;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   box-sizing: border-box;
   background: #fff;
   color: var(--text);
@@ -969,7 +996,7 @@ body:has(#cheques-layout) #zenith-guide {
 .chat-input-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.55rem;
+  gap: 0.4rem;
   align-items: stretch;
 }
 .chat-input-actions.is-busy {
@@ -1109,13 +1136,40 @@ body:has(#cheques-layout) #zenith-guide {
 
 .layout-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
-  gap: 1.75rem;
+  /* Left grows; chat stays a fixed sidebar — no empty middle gutter */
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 0.85rem;
   align-items: start;
-  column-gap: 2rem;
+  column-gap: 0.85rem;
+  width: 100%;
+}
+.layout-split > :first-child {
+  min-width: 0;
+  width: 100%;
 }
 .layout-split.chat-collapsed { grid-template-columns: 1fr; }
 .layout-split.chat-collapsed .chat-panel { display: none; }
+
+/* Shared: any page with content + AI chat side-by-side */
+.layout-split .chat-panel {
+  position: sticky;
+  top: calc(var(--app-chrome-offset) + 0.65rem);
+  align-self: start;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  max-height: calc(100vh - var(--app-chrome-offset) - 1rem);
+  height: calc(100vh - var(--app-chrome-offset) - 1rem);
+  min-height: 0;
+}
+
+.layout-split .chat-panel .chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
 
 /* Cheques page — same hub width as other dealer tabs; split layout inside */
 #cheques-layout {
@@ -1124,31 +1178,27 @@ body:has(#cheques-layout) #zenith-guide {
 
 #cheques-layout #bundle-workspace {
   min-width: 0;
-}
-
-#cheques-layout .chat-panel {
-  position: sticky;
-  top: 1rem;
-  align-self: start;
-  min-width: 0;
-  max-width: 440px;
   width: 100%;
-  justify-self: end;
-  margin-left: 0.5rem;
 }
 
 @media (max-width: 1100px) {
   .layout-split {
-    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.9fr);
-    gap: 1.35rem;
-    column-gap: 1.35rem;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 0.75rem;
+    column-gap: 0.75rem;
   }
-  #cheques-layout .chat-panel { max-width: none; }
 }
 
 @media (max-width: 900px) {
   .layout-split { grid-template-columns: 1fr; gap: 1.25rem; }
-  .layout-split .chat-panel { order: -1; max-width: none; position: static; justify-self: stretch; }
+  .layout-split .chat-panel {
+    order: -1;
+    max-width: none;
+    position: static;
+    justify-self: stretch;
+    height: auto;
+    max-height: none;
+  }
   .layout-split.chat-collapsed .chat-panel { display: none; }
 }
 
@@ -1172,7 +1222,21 @@ body:has(#cheques-layout) #zenith-guide {
 .bundle-card-total { font-weight: 600; }
 .bundle-card-dates label { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 500; }
 .bundle-card-dates input[type="date"] { width: auto; }
-.bundle-liquidity-meta { display: block; font-size: 0.85rem; color: var(--text-muted, #555); margin-top: 0.25rem; }
+.bundle-liquidity-meta { display: block; font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+.bundle-days-gained {
+  display: inline-block;
+  font-weight: 700;
+  color: #8a5a00;
+  background: #fff3cd;
+  border: 1px solid #e6c86a;
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+}
+[data-theme="dark"] .bundle-days-gained {
+  color: #ffe08a;
+  background: #3a3020;
+  border-color: #6a5020;
+}
 
 .bundle-invoice-list {
   list-style: none;
@@ -1257,13 +1321,22 @@ body:has(#cheques-layout) #zenith-guide {
   width: auto;
   min-width: 7rem;
   max-width: 10rem;
-  padding: 0.2rem 0.4rem;
+  padding: 0.25rem 1.6rem 0.25rem 0.75rem;
   font-size: 0.8rem;
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
-  background: var(--card);
   color: var(--text);
   border: 2px solid var(--border);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239aa3b2' d='M3 4.5L6 8l3-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+}
+[data-theme="dark"] .invoice-chip .move-invoice-select {
+  background-color: #1a1f2a;
+  border-color: #4a5568;
 }
 
 @media (max-width: 600px) {
@@ -1681,6 +1754,9 @@ body:has(#cheques-layout) #zenith-guide {
   }
 }
 @media (max-width: 820px) {
+  :root {
+    --app-chrome-offset: 8.25rem;
+  }
   .main-nav {
     display: flex;
     flex-wrap: nowrap;
@@ -1719,6 +1795,18 @@ body:has(#cheques-layout) #zenith-guide {
 .success-msg { color: var(--success); }
 
 .cheque-print { margin: 1rem 0; border: 2px dashed var(--border); }
+.cheque-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+.cheque-select-row input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: 1.25rem;
+}
 .cheque-header { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.2em; margin-bottom: 1rem; }
 .cheque-row { margin: 0.4rem 0; }
 .cheque-row span { font-weight: 600; display: inline-block; min-width: 80px; width: auto; margin-right: 0.5rem; }
@@ -1840,7 +1928,7 @@ body.modal-open { overflow: hidden; }
 @media (max-width: 900px) {
   .review-split { grid-template-columns: 1fr; }
 }
-.review-image-pane { position: sticky; top: 1rem; }
+.review-image-pane { position: sticky; top: calc(var(--app-chrome-offset) + 0.65rem); }
 .invoice-preview {
   width: 100%;
   max-height: 70vh;
@@ -1873,7 +1961,7 @@ body.modal-open { overflow: hidden; }
 .guardrail-fail { border-left: 3px solid var(--danger); }
 
 @media print {
-  .site-header, .main-nav-bar, .main-nav, .no-print, .flash { display: none !important; }
+  .app-chrome, .site-header, .main-nav-bar, .main-nav, .no-print, .flash { display: none !important; }
   .cheque-print { page-break-inside: avoid; border: 1px solid #000; }
 }
 /* Zenith Guide — floating draggable help widget */
@@ -2001,6 +2089,7 @@ body.modal-open { overflow: hidden; }
   color-scheme: dark;
 }
 
+[data-theme="dark"] .app-chrome,
 [data-theme="dark"] .site-header,
 [data-theme="dark"] .main-nav-bar { background: var(--card); }
 [data-theme="dark"] .main-nav-link {
@@ -2072,8 +2161,8 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .empty-state { background: #222833; }
 [data-theme="dark"] .list-summary-bar { background: transparent; color: var(--text); }
 [data-theme="dark"] .list-filter-stack {
-  background: #141820;
-  border-color: #3a4354;
+  background: #1a2740;
+  border: 2px solid #6ba3ff;
 }
 [data-theme="dark"] .page-back a { color: var(--primary); }
 [data-theme="dark"] .page-back a:hover { color: var(--primary-hover); }

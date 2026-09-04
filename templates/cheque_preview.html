@@ -36,6 +36,10 @@
 
   {% for b in bundles %}
   <div class="cheque-print card" data-cheque-amount="{{ b.total_lkr }}" data-cheque-date="{{ b.cheque_date }}">
+    <label class="cheque-select-row no-print confirm-label">
+      <input type="checkbox" class="cheque-print-select" checked>
+      <span>{{ t('cheque_select_for_print') }}</span>
+    </label>
     <div class="cheque-header">{{ t('cheque_header') }}</div>
     <div class="cheque-row"><span>{{ t('cheque_date') }}:</span> {{ b.cheque_date }}</div>
     <div class="cheque-row"><span>{{ t('cheque_pay') }}:</span> {{ dealer.dealer_name }}</div>
@@ -51,7 +55,8 @@
   {% endfor %}
 
   <div class="actions no-print">
-    <button type="button" onclick="window.print()" class="btn btn-secondary btn-lg">{{ t('print') }}</button>
+    <button type="button" onclick="window.print()" class="btn btn-secondary btn-lg">{{ t('print_records') }}</button>
+    <button type="button" id="print-selected-cheques" class="btn btn-secondary btn-lg" data-payee="{{ dealer.dealer_name }}">{{ t('print_selected_cheques') }}</button>
     <button type="submit" class="btn btn-primary btn-lg">{{ t('commit_db') }}</button>
   </div>
 </form>
@@ -70,13 +75,25 @@
     update();
   }
 
+  function requirePayingAccount() {
+    var accountSel = document.getElementById("paying-account");
+    if (!accountSel || !accountSel.value) {
+      alert({{ t('cheque_select_bank_first')|tojson }});
+      return null;
+    }
+    return accountSel;
+  }
+
+  function openPdfBlob(blob) {
+    var url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+
   document.querySelectorAll(".btn-print-cheque-pdf").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      var accountSel = document.getElementById("paying-account");
-      if (!accountSel || !accountSel.value) {
-        alert("Please select a paying bank account first.");
-        return;
-      }
+      var accountSel = requirePayingAccount();
+      if (!accountSel) return;
       var card = btn.closest(".cheque-print");
       if (!card) return;
       var payload = {
@@ -100,19 +117,66 @@
           }
           return res.blob();
         })
-        .then(function (blob) {
-          var url = URL.createObjectURL(blob);
-          window.open(url, "_blank");
-          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-        })
+        .then(openPdfBlob)
         .catch(function (err) {
-          alert(err.message || "Could not generate cheque PDF.");
+          alert(err.message || {{ t('cheque_print_failed')|tojson }});
         })
         .finally(function () {
           btn.disabled = false;
         });
     });
   });
+
+  var batchBtn = document.getElementById("print-selected-cheques");
+  if (batchBtn) {
+    batchBtn.addEventListener("click", function () {
+      var accountSel = requirePayingAccount();
+      if (!accountSel) return;
+
+      var selected = [];
+      document.querySelectorAll(".cheque-print").forEach(function (card) {
+        var check = card.querySelector(".cheque-print-select");
+        if (!check || !check.checked) return;
+        selected.push({
+          payee_name: batchBtn.getAttribute("data-payee") || "",
+          amount: parseFloat(card.getAttribute("data-cheque-amount") || "0"),
+          date_str: card.getAttribute("data-cheque-date") || "",
+          crossing: true
+        });
+      });
+
+      if (!selected.length) {
+        alert({{ t('cheque_select_one_first')|tojson }});
+        return;
+      }
+
+      batchBtn.disabled = true;
+      fetch("/api/cheque/print-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_bank_acc_id: parseInt(accountSel.value, 10),
+          cheques: selected,
+          crossing: true
+        })
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.json().then(function (data) {
+              throw new Error(data.error || "Print failed");
+            });
+          }
+          return res.blob();
+        })
+        .then(openPdfBlob)
+        .catch(function (err) {
+          alert(err.message || {{ t('cheque_print_failed')|tojson }});
+        })
+        .finally(function () {
+          batchBtn.disabled = false;
+        });
+    });
+  }
 })();
 </script>
 {% endblock %}

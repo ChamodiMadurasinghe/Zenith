@@ -104,30 +104,25 @@ def _draw_wrapped_text(
         c.drawString(x_pt, y_pt - (i * line_height_pt), line)
 
 
-def generate_cheque_pdf(
+def _apply_page_orientation(c: canvas.Canvas, orientation: str, w_mm: float, h_mm: float) -> None:
+    """Re-apply feed orientation after each showPage (state resets)."""
+    if orientation == "VERTICAL":
+        c.translate(h_mm * mm, 0)
+        c.rotate(90)
+
+
+def _draw_cheque_fields(
+    c: canvas.Canvas,
+    *,
     date_str: str,
     payee_name: str,
     amount: float,
     bank_template: dict,
-    printer_settings: dict,
-    *,
-    crossing: bool = True,
-) -> bytes:
-    offset_x = float(printer_settings.get("offset_x_mm", 0.0))
-    offset_y = float(printer_settings.get("offset_y_mm", 0.0))
-    orientation = str(printer_settings.get("feed_orientation", "VERTICAL")).upper()
-
-    w_mm = float(bank_template["cheque_width_mm"])
-    h_mm = float(bank_template["cheque_height_mm"])
-
-    buffer = io.BytesIO()
-    if orientation == "VERTICAL":
-        c = canvas.Canvas(buffer, pagesize=(h_mm * mm, w_mm * mm))
-        c.translate(h_mm * mm, 0)
-        c.rotate(90)
-    else:
-        c = canvas.Canvas(buffer, pagesize=(w_mm * mm, h_mm * mm))
-
+    offset_x: float,
+    offset_y: float,
+    w_mm: float,
+    crossing: bool,
+) -> None:
     def pos(x_key: str, y_key: str) -> tuple[float, float]:
         return _mm_pos(float(bank_template[x_key]), float(bank_template[y_key]), offset_x, offset_y)
 
@@ -192,7 +187,73 @@ def generate_cheque_pdf(
     c.setFont("Helvetica-Bold", 11)
     c.drawString(fx, fy, f"**{amount:,.2f}/=")
 
-    c.showPage()
+
+def generate_cheques_pdf(
+    cheques: list[dict],
+    bank_template: dict,
+    printer_settings: dict,
+    *,
+    crossing: bool = True,
+) -> bytes:
+    """Build a multi-page stationery PDF (one cheque leaf per page)."""
+    if not cheques:
+        raise ValueError("cheques_required")
+
+    offset_x = float(printer_settings.get("offset_x_mm", 0.0))
+    offset_y = float(printer_settings.get("offset_y_mm", 0.0))
+    orientation = str(printer_settings.get("feed_orientation", "VERTICAL")).upper()
+
+    w_mm = float(bank_template["cheque_width_mm"])
+    h_mm = float(bank_template["cheque_height_mm"])
+
+    buffer = io.BytesIO()
+    if orientation == "VERTICAL":
+        c = canvas.Canvas(buffer, pagesize=(h_mm * mm, w_mm * mm))
+    else:
+        c = canvas.Canvas(buffer, pagesize=(w_mm * mm, h_mm * mm))
+
+    for item in cheques:
+        _apply_page_orientation(c, orientation, w_mm, h_mm)
+        item_crossing = item.get("crossing", crossing)
+        if isinstance(item_crossing, str):
+            item_crossing = item_crossing.lower() not in ("0", "false", "no")
+        _draw_cheque_fields(
+            c,
+            date_str=str(item.get("date_str") or ""),
+            payee_name=str(item.get("payee_name") or ""),
+            amount=float(item.get("amount") or 0),
+            bank_template=bank_template,
+            offset_x=offset_x,
+            offset_y=offset_y,
+            w_mm=w_mm,
+            crossing=bool(item_crossing),
+        )
+        c.showPage()
+
     c.save()
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generate_cheque_pdf(
+    date_str: str,
+    payee_name: str,
+    amount: float,
+    bank_template: dict,
+    printer_settings: dict,
+    *,
+    crossing: bool = True,
+) -> bytes:
+    return generate_cheques_pdf(
+        [
+            {
+                "date_str": date_str,
+                "payee_name": payee_name,
+                "amount": amount,
+                "crossing": crossing,
+            }
+        ],
+        bank_template,
+        printer_settings,
+        crossing=crossing,
+    )
