@@ -13,15 +13,23 @@
 <div class="dealer-grid">
   {% for d in dealers %}
   {% set s = dealer_summaries.get(d.dealer_id, {}) %}
-  <a href="{{ url_for('dealers.invoices', dealer_id=d.dealer_id) }}" class="dealer-card">
-    <span class="dealer-icon">{{ d.dealer_name[0] }}</span>
-    <span>{{ d.dealer_name }}</span>
-    <span class="dealer-badges">
-      {% if s.get('ready') %}<span class="badge badge-ready">{{ t('badge_ready', n=s.ready) }}</span>{% endif %}
-      {% if s.get('pending_verification') %}<span class="badge badge-pending">{{ t('badge_pending', n=s.pending_verification) }}</span>{% endif %}
-      {% if s.get('on_cheque') %}<span class="badge badge-committed">{{ t('badge_bundled', n=s.on_cheque) }}</span>{% endif %}
-    </span>
-  </a>
+  <div class="dealer-card-wrap">
+    <a href="{{ url_for('dealers.invoices', dealer_id=d.dealer_id) }}" class="dealer-card">
+      <span class="dealer-icon">{{ d.dealer_name[0] }}</span>
+      <span>{{ d.dealer_name }}</span>
+      <span class="dealer-badges">
+        {% if s.get('ready') %}<span class="badge badge-ready">{{ t('badge_ready', n=s.ready) }}</span>{% endif %}
+        {% if s.get('pending_verification') %}<span class="badge badge-pending">{{ t('badge_pending', n=s.pending_verification) }}</span>{% endif %}
+        {% if s.get('on_cheque') %}<span class="badge badge-committed">{{ t('badge_bundled', n=s.on_cheque) }}</span>{% endif %}
+      </span>
+    </a>
+    {% if d.dealer_name != 'Pending Supplier' %}
+    <form method="post" action="{{ url_for('dealers.delete_dealer', dealer_id=d.dealer_id) }}"
+          onsubmit="return confirm({{ t('confirm_remove_supplier') | tojson }});">
+      <button type="submit" class="btn btn-danger btn-sm btn-block">{{ t('remove_supplier') }}</button>
+    </form>
+    {% endif %}
+  </div>
   {% endfor %}
 </div>
 {% endblock %}

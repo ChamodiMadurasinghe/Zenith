@@ -1,0 +1,38 @@
+{% extends "legal_base.html" %}
+{% block title %}Data Deletion — {{ app_name }}{% endblock %}
+{% block content %}
+<h1>User data deletion</h1>
+<p class="legal-meta">Last updated: 4 September 2026 · {{ app_name }} ({{ site_host }})</p>
+
+<p>
+  This page explains how to request deletion of personal data processed by this {{ app_name }}
+  instance (including WhatsApp-related data).
+</p>
+
+<h2>What can be deleted</h2>
+<ul>
+  <li>WhatsApp inbox photos and sender phone numbers stored for intake.</li>
+  <li>Invoice images and extracted fields tied to those messages, where still retained.</li>
+  <li>Allow-list entries that contain your phone number.</li>
+</ul>
+
+<h2>How to request deletion</h2>
+<ol>
+  <li>Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> with subject
+      <strong>{{ app_name }} data deletion request</strong>.</li>
+  <li>Include the WhatsApp number (with country code) used to send messages, and approximate dates.</li>
+  <li>We will confirm and remove or anonymise matching records from this instance within 30 days,
+      unless we must retain data for legal or security reasons.</li>
+</ol>
+
+<h2>Shop operators</h2>
+<p>
+  If you operate this dashboard, you can also delete WhatsApp inbox items and invoices from the
+  signed-in web app, and remove numbers under WhatsApp settings.
+</p>
+
+<p>
+  Related: <a href="{{ url_for('legal.privacy') }}">Privacy Policy</a> ·
+  <a href="{{ url_for('legal.terms') }}">Terms of Service</a>
+</p>
+{% endblock %}

@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 
 from config import Config
 from core.auth import login_required
-from core.dates import format_date
+from core.dates import format_date, impossible_days_from_form
 from core.i18n import flash_t
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup, parse_items_from_form
 from core.whatsapp_intake import extract_image_to_pending_invoice
@@ -29,6 +29,13 @@ def _image_url(location_path: Optional[str]) -> Optional[str]:
         return None
     filename = Path(location_path).name
     return url_for("ingestion.serve_upload", filename=filename)
+
+
+def _form_dealer_id():
+    raw = (request.form.get("dealer_id") or "").strip()
+    if not raw or raw == "__add__":
+        return None
+    return raw
 
 
 def _parse_items_from_form():
@@ -72,7 +79,7 @@ def _parse_dealer_form_data():
         "dealer_address": request.form.get("dealer_address"),
         "dealer_strictness": request.form.get("dealer_strictness", "Medium"),
         "casual_days": request.form.get("casual_days", 3),
-        "impossible_days": request.form.get("impossible_days", "Sunday"),
+        "impossible_days": impossible_days_from_form(request.form),
         "account_name": request.form.get("account_name", "").strip() or None,
         "bank_name": request.form.get("bank_name", "").strip() or None,
         "branch_name": request.form.get("branch_name", "").strip() or None,
@@ -295,7 +302,7 @@ def review(draft_id):
         "review_invoice.html",
         draft_id=draft_id,
         extracted=extracted,
-        dealers=dealers,
+        dealers=[d for d in dealers if d["dealer_name"] != PENDING_SUPPLIER_NAME],
         dealer_id=draft.get("dealer_id"),
         dealer_setup=draft.get("dealer_setup"),
         new_dealer=draft.get("new_dealer"),
@@ -323,7 +330,7 @@ def verify(draft_id):
         flash_t("flash_confirm_required", "error")
         return redirect(url_for("ingestion.review", draft_id=draft_id))
 
-    dealer_id = request.form.get("dealer_id") or draft.get("dealer_id")
+    dealer_id = _form_dealer_id() or draft.get("dealer_id")
     if not dealer_id:
         if draft.get("new_dealer"):
             flash_t("flash_verify_dealer_first", "error")
@@ -424,7 +431,7 @@ def verify_invoice(invoice_id):
             flash_t("flash_confirm_required", "error")
             return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
 
-        dealer_id = request.form.get("dealer_id") or invoice["dealer_id"]
+        dealer_id = _form_dealer_id() or invoice["dealer_id"]
         if not dealer_id or int(dealer_id) == pending_supplier_id:
             if new_dealer:
                 flash_t("flash_verify_dealer_first", "error")
@@ -470,7 +477,7 @@ def verify_invoice(invoice_id):
 def manual_invoice():
     dealers = repo.get_dealers()
     if request.method == "POST":
-        dealer_id = request.form.get("dealer_id")
+        dealer_id = _form_dealer_id()
         if not dealer_id:
             flash_t("flash_select_dealer", "error")
             return redirect(url_for("ingestion.manual_invoice"))
@@ -488,9 +495,11 @@ def manual_invoice():
 
     return render_template(
         "manual_invoice.html",
-        dealers=dealers,
+        dealers=[d for d in dealers if d["dealer_name"] != PENDING_SUPPLIER_NAME],
         default_credit=Config.DEFAULT_CREDIT_PERIOD_DAYS,
         today=format_date(date.today()),
+        user_bank_accounts=repo.get_bank_accounts(),
+        dealer_bank_data={"default_user_bank_acc_id": _default_user_bank_acc_id()},
     )
 
 

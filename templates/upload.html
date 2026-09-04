@@ -133,7 +133,14 @@
           <td>{{ inv.invoiced_date }}</td>
           <td>{{ "{:,.2f}".format(inv.total_amount) }}</td>
           <td>{% if inv.source in ('whatsapp', 'whatsapp_web') %}<span class="badge badge-pending">{{ t('source_whatsapp') }}</span>{% else %}—{% endif %}</td>
-          <td><a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-primary btn-lg">{{ t('verify') }}</a></td>
+          <td class="col-actions">
+            <a href="{{ url_for('ingestion.verify_invoice', invoice_id=inv.invoices_id) }}" class="btn btn-primary btn-lg">{{ t('verify') }}</a>
+            <form method="post" action="{{ url_for('dealers.delete_invoice', invoice_id=inv.invoices_id) }}"
+                  onsubmit="return confirm({{ t('confirm_remove_invoice') | tojson }});">
+              <input type="hidden" name="next" value="dashboard">
+              <button type="submit" class="btn btn-danger btn-lg">{{ t('remove_invoice') }}</button>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

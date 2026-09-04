@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=legal1">
+  <style>
+    .legal-page { max-width: 42rem; margin: 2rem auto; padding: 0 1.25rem 3rem; line-height: 1.55; color: var(--text, #1a1a1a); }
+    .legal-page h1 { font-size: 1.75rem; margin: 0 0 0.75rem; }
+    .legal-page h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+    .legal-page p, .legal-page li { font-size: 0.95rem; }
+    .legal-page ul { padding-left: 1.25rem; }
+    .legal-meta { color: var(--muted, #555); font-size: 0.85rem; margin-bottom: 1.5rem; }
+    .legal-nav { margin: 1rem 0 2rem; font-size: 0.9rem; }
+    .legal-nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <main class="legal-page">
+    <p class="legal-nav">
+      <a href="{{ url_for('legal.privacy') }}">Privacy</a>
+      <a href="{{ url_for('legal.terms') }}">Terms</a>
+      <a href="{{ url_for('legal.data_deletion') }}">Data deletion</a>
+    </p>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

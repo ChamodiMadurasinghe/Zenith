@@ -1,13 +1,13 @@
 from datetime import date
 from pathlib import Path
 
-from flask import Blueprint, abort, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, url_for
 
 from config import Config
 from core.auth import login_required
 from core.bundle_session import load_bundle_state
-from core.dates import format_date, parse_date
-from core.i18n import flash_t
+from core.dates import format_date, impossible_days_from_form, parse_date
+from core.i18n import flash_t, t
 from core.ingestion_helpers import parse_items_from_form
 from db import repositories as repo
 
@@ -57,7 +57,7 @@ def _dealer_from_form(form) -> dict:
         "dealer_address": form.get("dealer_address", "").strip() or None,
         "dealer_strictness": form.get("dealer_strictness", "Medium"),
         "casual_days": int(form.get("casual_days") or 3),
-        "impossible_days": form.get("impossible_days", "Sunday"),
+        "impossible_days": impossible_days_from_form(form),
         "bank_name": form.get("bank_name", "").strip() or None,
         "branch_name": form.get("branch_name", "").strip() or None,
         "account_name": form.get("account_name", "").strip() or None,
@@ -118,6 +118,51 @@ def new_dealer():
         return redirect(url_for("dealers.details", dealer_id=dealer_id))
 
     return render_template("dealer_form.html", **_form_context())
+
+
+@dealers_bp.route("/api/dealers/quick-add", methods=["POST"])
+@login_required
+def quick_add():
+    if not request.form.get("confirm_dealer"):
+        return jsonify({"ok": False, "error": t("flash_confirm_dealer_required")}), 400
+
+    data = _dealer_from_form(request.form)
+    if not data["dealer_name"]:
+        return jsonify({"ok": False, "error": t("flash_dealer_name_required")}), 400
+
+    existing = repo.find_dealer_by_name_exact(data["dealer_name"])
+    if existing:
+        return jsonify(
+            {
+                "ok": True,
+                "dealer_id": int(existing["dealer_id"]),
+                "dealer_name": existing["dealer_name"],
+                "reused": True,
+            }
+        )
+
+    bank_err = repo.validate_dealer_bank_input(data)
+    if bank_err:
+        return jsonify({"ok": False, "error": t(bank_err)}), 400
+
+    dealer_id = repo.create_dealer(data)
+    save_err = repo.save_dealer_banking(dealer_id, data)
+    if save_err:
+        return jsonify({"ok": False, "error": t(save_err)}), 400
+
+    return jsonify({"ok": True, "dealer_id": int(dealer_id), "dealer_name": data["dealer_name"]})
+
+
+@dealers_bp.route("/dealers/<int:dealer_id>/delete", methods=["POST"])
+@login_required
+def delete_dealer(dealer_id):
+    _get_dealer_or_404(dealer_id)
+    err = repo.delete_dealer(dealer_id)
+    if err:
+        flash_t(err, "error")
+        return redirect(url_for("dealers.details", dealer_id=dealer_id))
+    flash_t("flash_supplier_removed", "success")
+    return redirect(url_for("bundling.bundling_home"))
 
 
 @dealers_bp.route("/dealers/<int:dealer_id>/details", methods=["GET", "POST"])
@@ -262,3 +307,28 @@ def invoice_detail(dealer_id, invoice_id):
         aging_days=_aging_days(invoice),
         today=format_date(date.today()),
     )
+
+
+@dealers_bp.route("/invoices/<int:invoice_id>/delete", methods=["POST"])
+@login_required
+def delete_invoice(invoice_id):
+    invoice = repo.get_invoice(invoice_id)
+    if not invoice:
+        abort(404)
+    if invoice.get("user_id") is not None and int(invoice["user_id"]) != int(Config.USER_ID):
+        abort(404)
+    dealer_id = int(invoice["dealer_id"])
+    err = repo.delete_invoice(invoice_id)
+    if err:
+        flash_t(err, "error")
+    else:
+        flash_t("flash_invoice_removed", "success")
+    if request.form.get("next") == "dashboard":
+        return redirect(url_for("ingestion.dashboard"))
+    if request.form.get("next") == "cheques":
+        return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
+    if err:
+        return redirect(
+            url_for("dealers.invoice_detail", dealer_id=dealer_id, invoice_id=invoice_id)
+        )
+    return redirect(url_for("dealers.invoices", dealer_id=dealer_id))

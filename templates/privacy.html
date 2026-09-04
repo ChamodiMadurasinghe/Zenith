@@ -1,0 +1,64 @@
+{% extends "legal_base.html" %}
+{% block title %}Privacy Policy — {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Privacy Policy</h1>
+<p class="legal-meta">Last updated: 4 September 2026 · {{ app_name }} ({{ site_host }})</p>
+
+<p>
+  {{ app_name }} (“we”, “the Service”) helps Sri Lankan businesses process supplier invoices
+  and plan cheque payments. This policy explains what data we handle when you use the web app
+  or send invoice photos via WhatsApp connected to this instance.
+</p>
+
+<h2>Data we process</h2>
+<ul>
+  <li><strong>Account access:</strong> a shop login password for the web dashboard.</li>
+  <li><strong>Business records:</strong> invoice images, extracted invoice fields, dealer/supplier
+      details, bank account labels, cheque plans, and related cash-flow notes you enter or approve.</li>
+  <li><strong>WhatsApp:</strong> if WhatsApp is connected, we receive message metadata and media
+      (for example invoice photos) from numbers that message the linked business WhatsApp account,
+      including the sender’s phone number.</li>
+  <li><strong>Technical logs:</strong> server logs needed to operate and secure the Service
+      (for example webhook delivery and error messages).</li>
+</ul>
+
+<h2>How we use data</h2>
+<ul>
+  <li>To show invoice photos in the shop dashboard and run OCR / verification workflows you trigger.</li>
+  <li>To prepare cheque bundling, printing, and cash-flow planning for the shop that operates this instance.</li>
+  <li>To reply on WhatsApp when the configuration allows outbound messages.</li>
+  <li>To maintain security (for example ignoring messages from numbers not on an allow-list when one is configured).</li>
+</ul>
+
+<h2>AI providers</h2>
+<p>
+  When the shop enables AI features, invoice images or text may be sent to third-party AI providers
+  (for example Google Gemini for document reading, and optionally OpenAI for chat assistants)
+  solely to provide those features. Those providers process data under their own terms and policies.
+</p>
+
+<h2>Sharing</h2>
+<p>
+  We do not sell personal data. Data may be processed by hosting providers (for example the cloud host
+  running this instance) and by Meta when WhatsApp Cloud API is used. Access is limited to the shop
+  operators of this {{ app_name }} instance and the systems they configure.
+</p>
+
+<h2>Retention</h2>
+<p>
+  Invoice images and business records are kept until the shop deletes them or the hosting database
+  is reset. On free-tier hosts without persistent storage, data may be lost when the service restarts.
+</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li>Shop operators can dismiss WhatsApp inbox items and manage allow-listed sender numbers in settings.</li>
+  <li>You may request deletion of personal data associated with your WhatsApp number; see our
+      <a href="{{ url_for('legal.data_deletion') }}">Data deletion</a> page.</li>
+</ul>
+
+<h2>Contact</h2>
+<p>
+  Questions about this policy: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+</p>
+{% endblock %}

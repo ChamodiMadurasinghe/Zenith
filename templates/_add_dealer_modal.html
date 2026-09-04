@@ -1,0 +1,42 @@
+<div id="add-dealer-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="add-dealer-title">
+  <div class="modal-backdrop" data-add-dealer-close></div>
+  <div class="modal-panel add-dealer-modal-panel" role="document">
+    <button type="button" class="modal-close" data-add-dealer-close aria-label="{{ t('cancel') }}">&times;</button>
+    <h2 id="add-dealer-title">{{ t('add_supplier_modal_title') }}</h2>
+    <p class="lead">{{ t('lead_add_dealer') }}</p>
+    <p class="field-error-msg" id="add-dealer-error" hidden></p>
+    <form method="post" action="{{ url_for('dealers.quick_add') }}" data-zenith-validate data-quick-add-dealer="1" data-reuse-existing-dealer="1">
+      <div class="grid-2">
+        <label>{{ t('dealer_name') }} <input name="dealer_name" required></label>
+        <label>{{ t('email') }} <input name="dealer_email"></label>
+        <label>{{ t('phone') }} <input name="dealer_telno"></label>
+        <label>{{ t('address') }} <input name="dealer_address"></label>
+        <label>{{ t('strictness') }}
+          <select name="dealer_strictness">
+            {% for s in ['High','Medium','Low'] %}
+            <option {{ 'selected' if s == 'Medium' }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="3"></label>
+        {% with impossible_days_value = 'Sunday' %}
+        {% include '_impossible_days.html' %}
+        {% endwith %}
+      </div>
+      {% with dealer_data = dealer_bank_data if dealer_bank_data is defined else {},
+              user_bank_accounts = user_bank_accounts if user_bank_accounts is defined else [] %}
+      {% include '_dealer_bank_fields.html' %}
+      {% endwith %}
+      <div class="confirm-box">
+        <label class="confirm-label">
+          <input type="checkbox" name="confirm_dealer" required>
+          {{ t('confirm_dealer') }}
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
+        <button type="button" class="btn btn-secondary" data-add-dealer-close>{{ t('cancel') }}</button>
+      </div>
+    </form>
+  </div>
+</div>

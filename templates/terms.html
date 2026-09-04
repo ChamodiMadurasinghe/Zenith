@@ -1,0 +1,54 @@
+{% extends "legal_base.html" %}
+{% block title %}Terms of Service — {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Terms of Service</h1>
+<p class="legal-meta">Last updated: 4 September 2026 · {{ app_name }} ({{ site_host }})</p>
+
+<p>
+  These terms govern use of the {{ app_name }} web application and related WhatsApp intake
+  operated at {{ site_host }}. By using the Service you agree to these terms.
+</p>
+
+<h2>The Service</h2>
+<p>
+  {{ app_name }} is a business tool for invoice intake, human verification, cheque planning,
+  and related cash-flow helpers. It is provided for the shop that operates this instance.
+</p>
+
+<h2>Accounts and access</h2>
+<p>
+  Access to the dashboard is controlled by credentials issued by the shop operator.
+  You must keep credentials confidential and use the Service only for lawful business purposes.
+</p>
+
+<h2>WhatsApp</h2>
+<p>
+  If WhatsApp is connected, suppliers or testers may send invoice photos to the linked number.
+  Do not send unlawful content or personal data that you are not authorised to share.
+  The shop operator is responsible for allow-lists and how messages are processed.
+</p>
+
+<h2>No banking advice</h2>
+<p>
+  Cheque dates, float estimates, and AI suggestions are decision-support tools only.
+  You remain responsible for verifying amounts, payees, and compliance with your bank and suppliers.
+</p>
+
+<h2>Availability</h2>
+<p>
+  The Service may be unavailable during maintenance, host sleep (free tiers), or outages.
+  We do not guarantee uninterrupted access or permanent storage without a persistent database.
+</p>
+
+<h2>Limitation of liability</h2>
+<p>
+  To the fullest extent permitted by law, the operators of this instance are not liable for
+  indirect or consequential losses arising from use of the Service, including incorrect OCR,
+  missed WhatsApp delivery, or cheque printing mistakes. Always verify critical figures manually.
+</p>
+
+<h2>Contact</h2>
+<p>
+  <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+</p>
+{% endblock %}

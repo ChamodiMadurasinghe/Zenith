@@ -35,7 +35,9 @@
     if (!el) return true;
     if (el.type === "checkbox" || el.type === "radio") return !el.checked;
     if (el.type === "file") return !(el.files && el.files.length);
-    return !(el.value || "").toString().trim();
+    const value = (el.value || "").toString().trim();
+    if (el.name === "dealer_id" && value === "__add__") return true;
+    return !value;
   }
 
   async function fetchJson(url) {
@@ -137,7 +139,7 @@
 
     const invoiceNo = form.querySelector('input[name="invoice_no"]');
     const dealerIdEl = form.querySelector('select[name="dealer_id"]');
-    if (invoiceNo && dealerIdEl && (invoiceNo.value || "").trim() && dealerIdEl.value) {
+    if (invoiceNo && dealerIdEl && (invoiceNo.value || "").trim() && dealerIdEl.value && dealerIdEl.value !== "__add__") {
       const exclude = form.getAttribute("data-check-invoice-exclude") || "";
       try {
         const available = await checkInvoiceNo(
@@ -154,6 +156,113 @@
       }
     }
     return ok;
+  }
+
+  function closeAddDealerModal() {
+    const modal = document.getElementById("add-dealer-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  function openAddDealerModal() {
+    const modal = document.getElementById("add-dealer-modal");
+    if (!modal) {
+      window.location.href = "/dealers/new";
+      return;
+    }
+    const err = document.getElementById("add-dealer-error");
+    if (err) {
+      err.hidden = true;
+      err.textContent = "";
+    }
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+    const name = modal.querySelector('input[name="dealer_name"]');
+    if (name) name.focus();
+  }
+
+  function addDealerToSelects(dealerId, dealerName) {
+    document.querySelectorAll("select[name='dealer_id']").forEach((sel) => {
+      const exists = Array.from(sel.options).some((opt) => opt.value === String(dealerId));
+      if (!exists) {
+        const opt = document.createElement("option");
+        opt.value = String(dealerId);
+        opt.textContent = dealerName;
+        const addOpt = sel.querySelector('option[value="__add__"]');
+        if (addOpt) sel.insertBefore(opt, addOpt);
+        else sel.appendChild(opt);
+      }
+      sel.value = String(dealerId);
+    });
+  }
+
+  async function submitQuickAddDealer(form) {
+    const err = document.getElementById("add-dealer-error");
+    if (err) {
+      err.hidden = true;
+      err.textContent = "";
+    }
+    try {
+      const res = await fetch(form.action, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        body: new FormData(form),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        if (err) {
+          err.textContent = data.error || t("js_add_supplier_failed");
+          err.hidden = false;
+        }
+        return;
+      }
+      addDealerToSelects(data.dealer_id, data.dealer_name);
+      form.reset();
+      const sunday = form.querySelector('input[name="impossible_days"][value="Sunday"]');
+      if (sunday) sunday.checked = true;
+      const strict = form.querySelector('select[name="dealer_strictness"]');
+      if (strict) strict.value = "Medium";
+      const casual = form.querySelector('input[name="casual_days"]');
+      if (casual) casual.value = "3";
+      closeAddDealerModal();
+    } catch (_) {
+      if (err) {
+        err.textContent = t("js_add_supplier_failed");
+        err.hidden = false;
+      }
+    }
+  }
+
+  function bindDealerAddSelects(root) {
+    (root || document).querySelectorAll("select[data-dealer-add-select]").forEach((sel) => {
+      if (sel.dataset.addBound === "1") return;
+      sel.dataset.addBound = "1";
+      sel.addEventListener("focus", () => {
+        if (sel.value !== "__add__") sel.dataset.prev = sel.value;
+      });
+      sel.addEventListener("change", () => {
+        if (sel.value !== "__add__") {
+          sel.dataset.prev = sel.value;
+          return;
+        }
+        sel.value = sel.dataset.prev || "";
+        openAddDealerModal();
+      });
+    });
+  }
+
+  function bindAddDealerModal() {
+    const modal = document.getElementById("add-dealer-modal");
+    if (!modal || modal.dataset.bound === "1") return;
+    modal.dataset.bound = "1";
+    modal.querySelectorAll("[data-add-dealer-close]").forEach((el) => {
+      el.addEventListener("click", closeAddDealerModal);
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !modal.hidden) closeAddDealerModal();
+    });
   }
 
   function bindForm(form) {
@@ -180,6 +289,10 @@
       try {
         const uniqueOk = await validateUniqueness(form);
         if (!uniqueOk) return;
+        if (form.getAttribute("data-quick-add-dealer") === "1") {
+          await submitQuickAddDealer(form);
+          return;
+        }
         form.submit();
       } finally {
         if (submitBtn) submitBtn.disabled = false;
@@ -201,7 +314,7 @@
       const run = () =>
         scheduleCheck(async () => {
           clearFieldError(invoiceNo);
-          if (!invoiceNo.value.trim() || !dealerIdEl.value) return;
+          if (!invoiceNo.value.trim() || !dealerIdEl.value || dealerIdEl.value === "__add__") return;
           try {
             const available = await checkInvoiceNo(
               invoiceNo.value.trim(),
@@ -257,11 +370,15 @@
   function init() {
     document.querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
     bindPasswordToggles();
+    bindDealerAddSelects();
+    bindAddDealerModal();
   }
 
   window.zenithBindForms = function (root) {
     (root || document).querySelectorAll("form[data-zenith-validate]").forEach(bindForm);
     bindPasswordToggles(root);
+    bindDealerAddSelects(root);
+    bindAddDealerModal();
   };
 
   if (document.readyState === "loading") {

@@ -16,7 +16,9 @@
         </select>
       </label>
       <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_setup.casual_days or 3 }}"></label>
-      <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_setup.impossible_days or 'Sunday' }}"></label>
+      {% with impossible_days_value = dealer_setup.impossible_days or 'Sunday' %}
+      {% include '_impossible_days.html' %}
+      {% endwith %}
     </div>
     {% set dealer_data = {
       'account_name': dealer_setup.get('account_name') or dealer_setup.get('dealer_name') or extracted.get('supplier_name'),

@@ -13,7 +13,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu9">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu11">
 </head>
 <body class="lang-{{ current_lang }}">
   {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
@@ -120,7 +120,7 @@
   {% endif %}
 
   <script src="{{ url_for('static', filename='js/theme.js') }}?v=2"></script>
-  <script src="{{ url_for('static', filename='js/forms.js') }}?v=4"></script>
+  <script src="{{ url_for('static', filename='js/forms.js') }}?v=5"></script>
   <script src="{{ url_for('static', filename='js/list_filters.js') }}?v=1"></script>
   {% block scripts %}{% endblock %}
 </body>

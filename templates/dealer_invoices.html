@@ -18,6 +18,7 @@
       <th>{{ t('delivery_date') }}</th>
       <th>{{ t('col_aging') }}</th>
       <th>{{ t('col_payment') }}</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -37,6 +38,14 @@
         <span class="status-paid" aria-label="{{ t('payment_paid') }}" title="{{ t('payment_paid') }}">&#10003;</span>
         {% else %}
         <span class="status-unpaid" aria-label="{{ t('payment_unpaid') }}" title="{{ t('payment_unpaid') }}">&#10007;</span>
+        {% endif %}
+      </td>
+      <td class="col-actions" onclick="event.stopPropagation()">
+        {% if not inv.cheque_id %}
+        <form method="post" action="{{ url_for('dealers.delete_invoice', invoice_id=inv.invoices_id) }}"
+              onsubmit="return confirm({{ t('confirm_remove_invoice') | tojson }});">
+          <button type="submit" class="btn btn-danger btn-sm">{{ t('remove_invoice') }}</button>
+        </form>
         {% endif %}
       </td>
     </tr>

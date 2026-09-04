@@ -44,6 +44,12 @@
         <a href="{{ url_for('dealers.invoices', dealer_id=dealer.dealer_id) }}" class="btn btn-secondary">{{ t('cancel') }}</a>
       </div>
     </form>
+    {% if not invoice.cheque_id %}
+    <form method="post" action="{{ url_for('dealers.delete_invoice', invoice_id=invoice.invoices_id) }}"
+          onsubmit="return confirm({{ t('confirm_remove_invoice') | tojson }});">
+      <button type="submit" class="btn btn-danger btn-lg">{{ t('remove_invoice') }}</button>
+    </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

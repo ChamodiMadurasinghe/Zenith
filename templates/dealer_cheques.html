@@ -82,12 +82,15 @@
       </div>
       <ul class="check-list" id="invoice-check-list">
         {% for inv in invoices %}
-        <li>
+        <li class="invoice-check-row">
           <label>
             <input type="checkbox" name="invoice_ids" value="{{ inv.invoices_id }}">
             {{ inv.invoice_no }} — Rs. {{ "{:,.2f}".format(inv.total_amount) }}
             ({{ inv.invoiced_date }}, {{ inv.credit_period_days }}d)
           </label>
+          <button type="submit" class="btn btn-danger btn-sm"
+                  form="delete-invoice-{{ inv.invoices_id }}"
+                  onclick="return confirm({{ t('confirm_remove_invoice') | tojson }});">{{ t('remove_invoice') }}</button>
         </li>
         {% endfor %}
       </ul>
@@ -97,6 +100,14 @@
       <p>{{ t('no_verified_invoices') }}</p>
       {% endif %}
     </form>
+    {% if invoices %}
+    {% for inv in invoices %}
+    <form id="delete-invoice-{{ inv.invoices_id }}" method="post"
+          action="{{ url_for('dealers.delete_invoice', invoice_id=inv.invoices_id) }}">
+      <input type="hidden" name="next" value="cheques">
+    </form>
+    {% endfor %}
+    {% endif %}
 
     <div id="bundle-proposals"></div>
   </div>

@@ -1,0 +1,9 @@
+<label class="dealer-select-field">{{ t('dealer') }}
+  <select name="dealer_id" required data-dealer-add-select>
+    <option value="">{{ t('select_dealer') }}</option>
+    {% for d in dealers %}
+    <option value="{{ d.dealer_id }}" {{ 'selected' if dealer_id is defined and dealer_id == d.dealer_id }}>{{ d.dealer_name }}</option>
+    {% endfor %}
+    <option value="__add__">{{ t('add_supplier_option') }}</option>
+  </select>
+</label>

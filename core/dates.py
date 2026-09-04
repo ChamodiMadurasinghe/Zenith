@@ -11,10 +11,33 @@ def format_date(d: date) -> str:
     return d.isoformat()
 
 
+def parse_impossible_days(value) -> str:
+    """Normalize free text or checkbox values to canonical weekday names."""
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        raw_parts = [str(part) for part in value]
+    else:
+        raw_parts = str(value).split(",")
+    selected = {part.strip().lower() for part in raw_parts if part and str(part).strip()}
+    return ", ".join(day for day in WEEKDAYS if day.lower() in selected)
+
+
+def impossible_days_from_form(form) -> str:
+    """Read Never-pay-on days from checkboxes or a legacy text field."""
+    if form.get("impossible_days_present"):
+        return parse_impossible_days(form.getlist("impossible_days"))
+    if hasattr(form, "getlist"):
+        listed = form.getlist("impossible_days")
+        if len(listed) > 1:
+            return parse_impossible_days(listed)
+    return parse_impossible_days(form.get("impossible_days", "Sunday"))
+
+
 def is_impossible_day(d: date, impossible_days: str) -> bool:
     if not impossible_days:
         return False
-    blocked = {day.strip() for day in impossible_days.split(",")}
+    blocked = {day.strip() for day in parse_impossible_days(impossible_days).split(",") if day.strip()}
     return WEEKDAYS[d.weekday()] in blocked
 
 

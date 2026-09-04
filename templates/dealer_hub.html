@@ -32,11 +32,21 @@
       </select>
     </label>
     <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_data.casual_days or 3 }}"></label>
-    <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_data.impossible_days or 'Sunday' }}"></label>
+    {% with impossible_days_value = dealer_data.impossible_days or 'Sunday' %}
+    {% include '_impossible_days.html' %}
+    {% endwith %}
   </div>
   {% include '_dealer_bank_fields.html' %}
-  <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
+  <div class="actions dealer-detail-actions">
+    <button type="submit" class="btn btn-primary btn-lg">{{ t('save_dealer') }}</button>
+  </div>
 </form>
+{% if dealer.dealer_name != 'Pending Supplier' %}
+<form class="dealer-delete-form" method="post" action="{{ url_for('dealers.delete_dealer', dealer_id=dealer.dealer_id) }}"
+      onsubmit="return confirm({{ t('confirm_remove_supplier') | tojson }});">
+  <button type="submit" class="btn btn-danger btn-lg">{{ t('remove_supplier') }}</button>
+</form>
+{% endif %}
 {% elif active_tab == 'invoices' %}
 <div class="card hub-tab-card">
   {% include 'dealer_invoices.html' %}

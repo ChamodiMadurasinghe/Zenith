@@ -20,7 +20,9 @@
       </select>
     </label>
     <label>{{ t('casual_days') }} <input type="number" name="casual_days" value="{{ dealer_data.get('casual_days', 3) }}"></label>
-    <label>{{ t('impossible_days') }} <input name="impossible_days" value="{{ dealer_data.get('impossible_days', 'Sunday') }}"></label>
+    {% with impossible_days_value = dealer_data.get('impossible_days', 'Sunday') %}
+    {% include '_impossible_days.html' %}
+    {% endwith %}
   </div>
 
   {% include '_dealer_bank_fields.html' %}

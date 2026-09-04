@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from datetime import date, datetime, timedelta
 
 from config import Config
@@ -248,6 +249,108 @@ def update_dealer(dealer_id: int, data: dict):
             dealer_id,
         ),
     )
+
+
+def _null_invoice_refs(conn, invoice_id: int):
+    for sql in (
+        "UPDATE whatsapp_inbox SET invoice_id = NULL WHERE invoice_id = ?",
+        "UPDATE inbound_messages SET invoice_id = NULL WHERE invoice_id = ?",
+    ):
+        try:
+            conn.execute(sql, (invoice_id,))
+        except sqlite3.OperationalError:
+            pass
+
+
+def invoice_is_on_cheque(invoice_id: int) -> bool:
+    row = query_one(
+        """SELECT invoices_id FROM invoices
+           WHERE invoices_id = ? AND user_id = ? AND cheque_id IS NOT NULL""",
+        (invoice_id, Config.USER_ID),
+    )
+    if row:
+        return True
+    alloc = query_one(
+        "SELECT allocation_id FROM cheque_invoice_allocation WHERE invoices_id = ?",
+        (invoice_id,),
+    )
+    return bool(alloc)
+
+
+def dealer_has_cheques(dealer_id: int) -> bool:
+    row = query_one(
+        """SELECT i.invoices_id FROM invoices i
+           WHERE i.dealer_id = ? AND i.user_id = ?
+             AND (i.cheque_id IS NOT NULL
+                  OR EXISTS (
+                      SELECT 1 FROM cheque_invoice_allocation a
+                      WHERE a.invoices_id = i.invoices_id
+                  ))
+           LIMIT 1""",
+        (dealer_id, Config.USER_ID),
+    )
+    return bool(row)
+
+
+def delete_invoice(invoice_id: int) -> str | None:
+    """Remove an invoice that is not on a cheque. Returns an i18n error key or None."""
+    invoice = get_invoice(invoice_id)
+    if not invoice:
+        return "flash_invoice_not_found"
+    if invoice.get("user_id") is not None and int(invoice["user_id"]) != int(Config.USER_ID):
+        return "flash_invoice_not_found"
+    if invoice_is_on_cheque(invoice_id):
+        return "flash_cannot_remove_invoice_on_cheque"
+    with transaction() as conn:
+        _null_invoice_refs(conn, invoice_id)
+        conn.execute("DELETE FROM cheque_invoice_allocation WHERE invoices_id = ?", (invoice_id,))
+        conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
+        conn.execute(
+            "DELETE FROM invoices WHERE invoices_id = ? AND user_id = ?",
+            (invoice_id, Config.USER_ID),
+        )
+    return None
+
+
+def delete_dealer(dealer_id: int) -> str | None:
+    """Remove a supplier and invoices that are not on a cheque. Returns an i18n error key or None."""
+    dealer = get_dealer(dealer_id)
+    if not dealer:
+        return "flash_dealer_not_found"
+    if (dealer.get("dealer_name") or "").strip().lower() == PENDING_SUPPLIER_NAME.lower():
+        return "flash_cannot_remove_pending_supplier"
+    if dealer_has_cheques(dealer_id):
+        return "flash_cannot_remove_supplier_with_cheques"
+    invoices = query(
+        "SELECT invoices_id FROM invoices WHERE dealer_id = ? AND user_id = ?",
+        (dealer_id, Config.USER_ID),
+    )
+    invoice_ids = [int(row["invoices_id"]) for row in invoices]
+    with transaction() as conn:
+        for invoice_id in invoice_ids:
+            _null_invoice_refs(conn, invoice_id)
+            conn.execute("DELETE FROM cheque_invoice_allocation WHERE invoices_id = ?", (invoice_id,))
+            conn.execute("DELETE FROM item WHERE invoices_id = ?", (invoice_id,))
+        if invoice_ids:
+            conn.execute(
+                f"DELETE FROM invoices WHERE dealer_id = ? AND user_id = ? AND invoices_id IN ({','.join('?' * len(invoice_ids))})",
+                (dealer_id, Config.USER_ID, *invoice_ids),
+            )
+        try:
+            conn.execute("DELETE FROM bundle_drafts WHERE dealer_id = ?", (dealer_id,))
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("DELETE FROM deposit_timetable WHERE dealer_id = ?", (dealer_id,))
+        except sqlite3.OperationalError:
+            pass
+        conn.execute(
+            "UPDATE dealers SET preferred_dealer_bank_acc_id = NULL WHERE dealer_id = ?",
+            (dealer_id,),
+        )
+        conn.execute("DELETE FROM dealers_bank_account WHERE dealer_id = ?", (dealer_id,))
+        conn.execute("DELETE FROM dealers WHERE dealer_id = ?", (dealer_id,))
+    return None
 
 
 def validate_dealer_bank_input(data: dict) -> str | None:

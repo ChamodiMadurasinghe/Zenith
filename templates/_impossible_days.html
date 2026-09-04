@@ -1,0 +1,14 @@
+<fieldset class="day-check-fieldset grid-span-2">
+  <legend>{{ t('impossible_days') }}</legend>
+  <input type="hidden" name="impossible_days_present" value="1">
+  <div class="day-check-list">
+    {% set raw = (impossible_days_value or 'Sunday')|lower %}
+    {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+    <label class="day-check">
+      <input type="checkbox" name="impossible_days" value="{{ day }}"
+             {% if day|lower in raw %}checked{% endif %}>
+      <span>{{ t('weekday_' ~ day|lower) }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
