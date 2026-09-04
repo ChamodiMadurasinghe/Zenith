@@ -356,7 +356,9 @@ MESSAGES = {
         "flash_incorrect_password": "Wrong password. Try again.",
         "flash_select_image": "Please choose a photo.",
         "flash_allowed_formats": "Use JPG, PNG, or WEBP.",
-        "flash_vision_unavailable": "Could not read photo ({error}). Please type the details yourself.",
+        "flash_vision_unavailable": "Could not read this photo. Please try again, or type the details yourself.",
+        "flash_vision_busy": "The photo reader is busy right now. Please try again in a minute, or type the invoice details yourself.",
+        "flash_vision_denied": "Photo reading is not available right now. Please type the details yourself, or check the AI setup.",
         "flash_draft_expired": "Session expired. Please upload again.",
         "flash_dealer_registered": "Supplier added.",
         "flash_confirm_required": "Please tick the box to confirm the details are correct.",
@@ -920,7 +922,9 @@ MESSAGES = {
         "flash_incorrect_password": "වැරදි මුරපදය. නැවත උත්සාහ කරන්න.",
         "flash_select_image": "ඡායාරූපයක් තෝරන්න.",
         "flash_allowed_formats": "JPG, PNG, හෝ WEBP භාවිතා කරන්න.",
-        "flash_vision_unavailable": "ඡායාරූපය කියවිය නොහැක ({error}). අතින් ටයිප් කරන්න.",
+        "flash_vision_unavailable": "ඡායාරූපය කියවිය නොහැක. නැවත උත්සාහ කරන්න, නැතහොත් අතින් ටයිප් කරන්න.",
+        "flash_vision_busy": "ඡායාරූප කියවීම දැන් කාර්යබහුලයි. මිනිත්තුවකින් නැවත උත්සාහ කරන්න, නැතහොත් ඉන්වොයිස් විස්තර අතින් ටයිප් කරන්න.",
+        "flash_vision_denied": "ඡායාරූප කියවීම දැන් ලබා ගත නොහැක. අතින් ටයිප් කරන්න, නැතහොත් AI සැකසුම පරීක්ෂා කරන්න.",
         "flash_draft_expired": "කාලය ඉක්මවා ඇත. නැවත උඩුගත කරන්න.",
         "flash_dealer_registered": "සැපයුම්කරු එකතු කළා.",
         "flash_confirm_required": "විස්තර නිවැරදි බව තහවුරු කිරීමට tick කරන්න.",
@@ -1483,7 +1487,9 @@ MESSAGES = {
         "flash_incorrect_password": "தவறான கடவுச்சொல். மீண்டும் முயற்சிக்கவும்.",
         "flash_select_image": "புகைப்படம் தேர்வு செய்யவும்.",
         "flash_allowed_formats": "JPG, PNG, அல்லது WEBP பயன்படுத்தவும்.",
-        "flash_vision_unavailable": "புகைப்படம் படிக்க முடியவில்லை ({error}). கையால் typing செய்யவும்.",
+        "flash_vision_unavailable": "புகைப்படம் படிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும், அல்லது கையால் typing செய்யவும்.",
+        "flash_vision_busy": "புகைப்பட வாசிப்பு இப்போது பிஸியாக உள்ளது. ஒரு நிமிடத்தில் மீண்டும் முயற்சிக்கவும், அல்லது invoice விவரங்களை கையால் typing செய்யவும்.",
+        "flash_vision_denied": "புகைப்பட வாசிப்பு இப்போது கிடைக்கவில்லை. கையால் typing செய்யவும், அல்லது AI அமைப்பை சரிபார்க்கவும்.",
         "flash_draft_expired": "நேரம் முடிந்தது. மீண்டும் பதிவேற்றவும்.",
         "flash_dealer_registered": "சப்ளையர் சேர்க்கப்பட்டது.",
         "flash_confirm_required": "விவரம் சரி என உறுதிப்படுத்த tick செய்யவும்.",
@@ -1845,6 +1851,33 @@ def flash_t(key: str, category: str = "message", **kwargs) -> None:
     from flask import flash
 
     flash(translate(key, **kwargs), category)
+
+
+def flash_vision_error(exc: BaseException | str, category: str = "error") -> None:
+    """Show a plain-language flash for Gemini/vision failures (no raw API JSON)."""
+    text = str(exc).upper()
+    if any(
+        token in text
+        for token in (
+            "503",
+            "UNAVAILABLE",
+            "HIGH DEMAND",
+            "RESOURCE_EXHAUSTED",
+            "429",
+            "QUOTA",
+            "RATE LIMIT",
+            "OVERLOADED",
+        )
+    ):
+        key = "flash_vision_busy"
+    elif any(
+        token in text
+        for token in ("403", "PERMISSION_DENIED", "API_KEY_INVALID", "API KEY", "UNAUTHENTICATED")
+    ):
+        key = "flash_vision_denied"
+    else:
+        key = "flash_vision_unavailable"
+    flash_t(key, category)
 
 
 def js_translations(lang: str | None = None) -> dict:

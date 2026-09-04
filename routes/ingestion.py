@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from config import Config
 from core.auth import login_required
 from core.dates import format_date, impossible_days_from_form
-from core.i18n import flash_t
+from core.i18n import flash_t, flash_vision_error
 from core.ingestion_helpers import PENDING_SUPPLIER_NAME, dealer_setup_from_extraction, merge_dealer_setup, parse_items_from_form
 from core.whatsapp_intake import extract_image_to_pending_invoice
 from db import repositories as repo
@@ -247,7 +247,7 @@ def upload():
     session.modified = True
 
     if gemini_error:
-        flash_t("flash_vision_unavailable", "error", error=gemini_error)
+        flash_vision_error(gemini_error)
 
     return redirect(url_for("ingestion.review", draft_id=draft_id))
 
@@ -524,7 +524,7 @@ def extract_whatsapp_inbox(inbox_id):
         flash_t("flash_whatsapp_extracted", "success")
         return redirect(url_for("ingestion.verify_invoice", invoice_id=invoice_id))
     except Exception as exc:
-        flash_t("flash_vision_unavailable", "error", error=str(exc))
+        flash_vision_error(exc)
         return redirect(url_for("ingestion.dashboard"))
 
 
