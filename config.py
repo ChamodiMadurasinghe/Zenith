@@ -114,6 +114,11 @@ class Config:
         return _env("META_GRAPH_VERSION", "v21.0")
 
     @staticmethod
+    def meta_phone_pin() -> str:
+        """6-digit WhatsApp two-step PIN for Cloud API phone /register (ops only)."""
+        return _env("META_PHONE_PIN", "").strip()
+
+    @staticmethod
     def twilio_account_sid() -> str:
         return _env("TWILIO_ACCOUNT_SID", "")
 

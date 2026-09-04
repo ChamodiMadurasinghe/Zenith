@@ -422,8 +422,15 @@ def whatsapp_webhook():
 def _meta_webhook_post():
     """POST body from Meta Graph WhatsApp webhooks."""
     raw = request.get_data()
+    # Log before signature check so misconfigured META_APP_SECRET still shows in Render.
+    print(
+        f"[whatsapp] META hit content_length={request.content_length} "
+        f"raw_len={len(raw)} has_sig={bool(request.headers.get('X-Hub-Signature-256'))}",
+        flush=True,
+    )
     # Optional HMAC: only enforced when META_APP_SECRET is set
     if not validate_meta_signature(raw, request.headers.get("X-Hub-Signature-256")):
+        print("[whatsapp] META rejected: Invalid signature", flush=True)
         return "Invalid signature", 403
 
     payload = request.get_json(silent=True) or {}
