@@ -11,6 +11,10 @@
       <input type="number" step="0.01" min="0" name="overdraft_limit" value="0">
       <span class="muted help-tip">{{ t('overdraft_limit_help') }}</span>
     </label>
+    <label>{{ t('account_ceiling') }}
+      <input type="number" step="0.01" min="1" name="ceiling_lkr" value="500000" required>
+      <span class="muted help-tip">{{ t('account_ceiling_help') }}</span>
+    </label>
   </div>
   <label class="confirm-label">
     <input type="checkbox" name="set_as_default" value="1" {% if not accounts %}checked{% endif %}>

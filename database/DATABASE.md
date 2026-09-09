@@ -98,6 +98,7 @@ erDiagram
         text nickname
         real available_balance
         real overdraft_limit
+        real ceiling_lkr
         text branch_name
         text bank_name
     }
@@ -371,6 +372,7 @@ Your bank accounts.
 | nickname | TEXT | Short label for UI |
 | available_balance | REAL | Current ledger balance (updated via Cash Flow UI) |
 | overdraft_limit | REAL | Cheque overdraft facility (0 = none). Usable funds = balance + overdraft |
+| ceiling_lkr | REAL | Max amount of one cheque drawn on this account (default 500000). Bundle working cap cannot exceed this. |
 | branch_name | TEXT | |
 | bank_name | TEXT | |
 

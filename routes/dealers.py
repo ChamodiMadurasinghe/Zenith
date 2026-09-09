@@ -217,7 +217,10 @@ def details(dealer_id):
 @login_required
 def cheques(dealer_id):
     dealer = _get_dealer_or_404(dealer_id)
-    state = load_bundle_state(session, dealer_id)
+    paying_id = repo.paying_account_id_for_dealer(dealer_id)
+    account_ceiling = repo.account_ceiling_lkr(paying_id)
+    state = load_bundle_state(session, dealer_id, default_ceiling=account_ceiling)
+    display_ceiling = repo.effective_cheque_ceiling(state["ceiling_lkr"], paying_id)
     cheque_filter = repo.written_cheque_filters_from_args(request.args)
     committed = repo.get_committed_cheque_bundles(
         dealer_id, **repo.written_cheque_repo_kwargs(cheque_filter)
@@ -233,7 +236,8 @@ def cheques(dealer_id):
         list_summary=repo.list_amount_summary(committed, "amount_in_numerals"),
         summary=repo.get_dealer_invoice_summary(dealer_id),
         bundles=state["bundles"],
-        ceiling_lkr=state["ceiling_lkr"],
+        ceiling_lkr=display_ceiling,
+        account_ceiling_lkr=account_ceiling,
         chat_history=state["chat_history"],
         validation_issues=state["validation_issues"],
         pending_review=state.get("pending_review"),

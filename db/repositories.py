@@ -64,6 +64,9 @@ def clear_merchant_whatsapp_phone():
     execute("DELETE FROM app_settings WHERE setting_key = ?", (MERCHANT_WHATSAPP_PHONE_KEY,))
 
 
+DEFAULT_CHEQUE_CEILING_LKR = 500000.0
+
+
 def get_bank_accounts():
     rows = query(
         "SELECT * FROM user_bank_account WHERE user_id = ? ORDER BY user_bank_acc_id",
@@ -71,6 +74,7 @@ def get_bank_accounts():
     )
     for row in rows:
         row.setdefault("overdraft_limit", 0)
+        row.setdefault("ceiling_lkr", DEFAULT_CHEQUE_CEILING_LKR)
     return rows
 
 
@@ -81,6 +85,7 @@ def get_bank_account(acc_id: int):
     )
     if row is not None:
         row.setdefault("overdraft_limit", 0)
+        row.setdefault("ceiling_lkr", DEFAULT_CHEQUE_CEILING_LKR)
     return row
 
 
@@ -92,17 +97,68 @@ def _overdraft_limit_from(data: dict) -> float:
     return max(0.0, value)
 
 
+def _ceiling_lkr_from(data: dict) -> float:
+    raw = data.get("ceiling_lkr")
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_CHEQUE_CEILING_LKR
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_CHEQUE_CEILING_LKR
+    return value if value > 0 else DEFAULT_CHEQUE_CEILING_LKR
+
+
+def account_ceiling_lkr(acc_id: int | None) -> float:
+    """Max amount of one cheque drawn on this paying account."""
+    if not acc_id:
+        return DEFAULT_CHEQUE_CEILING_LKR
+    acc = get_bank_account(int(acc_id))
+    if not acc:
+        return DEFAULT_CHEQUE_CEILING_LKR
+    try:
+        value = float(acc.get("ceiling_lkr") or DEFAULT_CHEQUE_CEILING_LKR)
+    except (TypeError, ValueError):
+        return DEFAULT_CHEQUE_CEILING_LKR
+    return value if value > 0 else DEFAULT_CHEQUE_CEILING_LKR
+
+
+def effective_cheque_ceiling(session_ceiling: float, account_id: int | None) -> float:
+    """Working bundle cap cannot exceed the paying account's ceiling."""
+    try:
+        requested = float(session_ceiling)
+    except (TypeError, ValueError):
+        requested = DEFAULT_CHEQUE_CEILING_LKR
+    if requested <= 0:
+        requested = DEFAULT_CHEQUE_CEILING_LKR
+    return min(requested, account_ceiling_lkr(account_id))
+
+
+def amounts_exceeding_account_ceiling(amounts: list, account_id: int) -> list[float]:
+    """Cheque amounts that are strictly over this paying account's ceiling."""
+    cap = account_ceiling_lkr(account_id)
+    over = []
+    for raw in amounts:
+        try:
+            amount = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if amount > cap + 0.009:
+            over.append(amount)
+    return over
+
+
 def create_bank_account(data: dict) -> int:
     return execute(
         """INSERT INTO user_bank_account
-           (user_id, account_name, nickname, available_balance, overdraft_limit, branch_name, bank_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (user_id, account_name, nickname, available_balance, overdraft_limit, ceiling_lkr, branch_name, bank_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             Config.USER_ID,
             (data.get("account_name") or "").strip(),
             (data.get("nickname") or data.get("account_name") or "").strip() or None,
             float(data.get("available_balance") or 0),
             _overdraft_limit_from(data),
+            _ceiling_lkr_from(data),
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
         ),
@@ -112,7 +168,7 @@ def create_bank_account(data: dict) -> int:
 def update_bank_account(acc_id: int, data: dict):
     execute(
         """UPDATE user_bank_account
-           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?, overdraft_limit = ?
+           SET account_name = ?, nickname = ?, branch_name = ?, bank_name = ?, overdraft_limit = ?, ceiling_lkr = ?
            WHERE user_bank_acc_id = ? AND user_id = ?""",
         (
             (data.get("account_name") or "").strip(),
@@ -120,6 +176,7 @@ def update_bank_account(acc_id: int, data: dict):
             (data.get("branch_name") or "").strip() or None,
             (data.get("bank_name") or "").strip(),
             _overdraft_limit_from(data),
+            _ceiling_lkr_from(data),
             acc_id,
             Config.USER_ID,
         ),
@@ -158,6 +215,14 @@ def validate_bank_account_input(data: dict) -> str | None:
         return "flash_overdraft_invalid"
     if overdraft < 0:
         return "flash_overdraft_invalid"
+    raw_ceiling = data.get("ceiling_lkr")
+    if raw_ceiling is not None and str(raw_ceiling).strip() != "":
+        try:
+            ceiling = float(raw_ceiling)
+        except (TypeError, ValueError):
+            return "flash_ceiling_invalid"
+        if ceiling <= 0:
+            return "flash_ceiling_invalid"
     return None
 
 

@@ -21,8 +21,17 @@ def _bundle_session():
     return session.setdefault("bundle_state", {})
 
 
+def _capped_ceiling(dealer_id: int, requested, account_id=None) -> float:
+    acc = account_id if account_id is not None else repo.paying_account_id_for_dealer(dealer_id)
+    return repo.effective_cheque_ceiling(requested, acc)
+
+
 def _load_state(dealer_id: int) -> dict:
-    return load_bundle_state(session, dealer_id)
+    paying = repo.paying_account_id_for_dealer(dealer_id)
+    default_ceiling = repo.account_ceiling_lkr(paying)
+    state = load_bundle_state(session, dealer_id, default_ceiling=default_ceiling)
+    state["ceiling_lkr"] = _capped_ceiling(dealer_id, state.get("ceiling_lkr", default_ceiling), paying)
+    return state
 
 
 def _save_state(
@@ -74,7 +83,7 @@ def bundling_dealer(dealer_id):
 @login_required
 def compute(dealer_id):
     invoice_ids = [int(x) for x in request.form.getlist("invoice_ids")]
-    ceiling = float(request.form.get("ceiling_lkr", 500000))
+    ceiling = _capped_ceiling(dealer_id, request.form.get("ceiling_lkr", 500000))
     # If nothing ticked (common after AI already grouped), use all ready invoices.
     if not invoice_ids:
         invoice_ids = [
@@ -534,7 +543,7 @@ def manual_bundling(dealer_id):
     data = request.get_json() or {}
     assignments = data.get("invoice_assignments", {})
     cheque_dates = data.get("cheque_dates", {})
-    ceiling = float(data.get("ceiling_lkr", 500000))
+    ceiling = _capped_ceiling(dealer_id, data.get("ceiling_lkr", 500000))
     separate = data.get("one_per_invoice", False)
     empty_groups = data.get("empty_groups") or []
     invoice_parts = data.get("invoice_parts") or {}
@@ -780,6 +789,18 @@ def commit():
             }
             for inv in b["invoices"]
         ]
+
+    over = repo.amounts_exceeding_account_ceiling(
+        [c["amount_in_numerals"] for c in cheques], bank_acc_id
+    )
+    if over:
+        flash_t(
+            "flash_cheque_over_account_ceiling",
+            "error",
+            amount=f"{max(over):,.2f}",
+            ceiling=f"{repo.account_ceiling_lkr(bank_acc_id):,.2f}",
+        )
+        return redirect(url_for("dealers.cheques", dealer_id=dealer_id))
 
     try:
         repo.save_cheques(cheques, invoice_map)

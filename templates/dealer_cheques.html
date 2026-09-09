@@ -71,7 +71,10 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('bundling.compute', dealer_id=dealer.dealer_id) }}" data-agent-busy="js_agent_busy_strategist">
-      <label>{{ t('lkr_ceiling') }} <input type="number" name="ceiling_lkr" value="{{ ceiling_lkr }}" step="1000" required></label>
+      <label>{{ t('lkr_ceiling') }}
+        <input type="number" name="ceiling_lkr" value="{{ ceiling_lkr }}" max="{{ account_ceiling_lkr }}" step="0.01" required>
+        <span class="muted help-tip">{{ t('lkr_ceiling_account_help', amount="{:,.0f}".format(account_ceiling_lkr)) }}</span>
+      </label>
       <h3>{{ t('ready_to_bundle') }}</h3>
       {% if invoices %}
       <div class="select-all-row">

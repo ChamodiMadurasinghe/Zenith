@@ -223,6 +223,30 @@ class TestAuditInvoice(unittest.TestCase):
         codes = [f["code"] for f in result["findings"]]
         self.assertIn("unknown_dealer", codes)
 
+    def test_duplicate_invoice_no_is_blocking(self):
+        extracted = {
+            "invoice_no": "INV-DUP",
+            "supplier_name": "Abans",
+            "total_amount": 10000,
+            "invoiced_date": "2026-01-15",
+            "line_items": [{"item_code": "A", "item_qty": 1, "item_price": 10000}],
+        }
+        with patch("agents.anomaly.repo.get_dealer_invoice_stats", return_value={"count": 5, "avg_amount": 10000}):
+            with patch(
+                "agents.anomaly.repo.find_invoice_by_no_and_dealer",
+                return_value={"invoices_id": 9, "invoice_no": "INV-DUP"},
+            ):
+                with patch(
+                    "agents.anomaly.repo.get_dealer_item_history_stats",
+                    return_value={"sample_count": 5, "avg_qty": 1, "max_qty": 1, "avg_price": 10000},
+                ):
+                    with patch("agents.anomaly.repo.find_recent_item_orders", return_value=[]):
+                        result = audit_invoice(extracted, dealer_id=5)
+        codes = [f["code"] for f in result["findings"]]
+        self.assertIn("duplicate_invoice_no", codes)
+        dup = next(f for f in result["findings"] if f["code"] == "duplicate_invoice_no")
+        self.assertTrue(dup.get("blocking"))
+
     def test_chat_messages_on_issues(self):
         audit = {
             "status": "ISSUE_DETECTED",

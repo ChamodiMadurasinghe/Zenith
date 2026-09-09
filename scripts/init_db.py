@@ -203,6 +203,7 @@ MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS idx_unprocessed_media_status ON unprocessed_media_log(status)",
     "ALTER TABLE item ADD COLUMN item_mrp REAL NOT NULL DEFAULT 0",
     "ALTER TABLE item ADD COLUMN item_line_total REAL NOT NULL DEFAULT 0",
+    "ALTER TABLE user_bank_account ADD COLUMN ceiling_lkr REAL NOT NULL DEFAULT 500000.00",
 ]
 
 

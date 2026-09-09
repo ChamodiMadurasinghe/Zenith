@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import patch
 
-from agents.strategist import proposed_cheques_to_bundles, _bundles_to_strategy
+from agents.strategist import (
+    _allocate_invoices_to_cheques,
+    proposed_cheques_to_bundles,
+    _bundles_to_strategy,
+)
 
 
 class TestStrategistMapping(unittest.TestCase):
@@ -59,6 +63,83 @@ class TestStrategistMapping(unittest.TestCase):
         self.assertEqual(len(bundles), 2)
         self.assertEqual(bundles[0]["group"], 1)
         self.assertEqual(bundles[0]["clearing_type"], "INTERBANK")
+        parts = [inv for b in bundles for inv in b["invoices"]]
+        self.assertEqual(len(parts), 2)
+        self.assertEqual([p["part_index"] for p in parts], [1, 2])
+        self.assertEqual(parts[0]["part_count"], 2)
+        self.assertEqual(parts[1]["part_count"], 2)
+        self.assertAlmostEqual(sum(p["total_amount"] for p in parts), 200000.0)
+
+    def test_allocate_three_way_split_labels(self):
+        invoices = [
+            {
+                "invoices_id": 10,
+                "invoice_no": "INV-A",
+                "total_amount": 600000.0,
+            }
+        ]
+        proposed = [
+            {"amount": 200000.0},
+            {"amount": 200000.0},
+            {"amount": 200000.0},
+        ]
+        groups = _allocate_invoices_to_cheques(invoices, proposed)
+        self.assertEqual(len(groups), 3)
+        parts = [inv for group in groups for inv in group]
+        self.assertEqual(len(parts), 3)
+        self.assertEqual([p["part_index"] for p in parts], [1, 2, 3])
+        self.assertTrue(all(p["part_count"] == 3 for p in parts))
+        self.assertAlmostEqual(sum(p["total_amount"] for p in parts), 600000.0)
+        self.assertTrue(all(p["original_amount"] == 600000.0 for p in parts))
+
+    @patch("agents.strategist._invoice_rows")
+    @patch("agents.strategist.recalculate_all_bundles")
+    def test_proposed_cheques_three_way_split(self, mock_recalc, mock_rows):
+        mock_rows.return_value = [
+            {
+                "invoices_id": 10,
+                "invoice_no": "INV-A",
+                "total_amount": 600000.0,
+                "invoiced_date": "2026-08-01",
+                "credit_period_days": 30,
+            }
+        ]
+        mock_recalc.side_effect = lambda bundles, dealer_id: bundles
+        proposed = [
+            {
+                "cheque_index": 1,
+                "selected_shop_account_id": 1,
+                "payee_bank": "Commercial",
+                "amount": 200000.0,
+                "proposed_date": "2026-10-10",
+                "clearing_type": "INTERBANK",
+                "strategic_reasoning": "Part 1.",
+            },
+            {
+                "cheque_index": 2,
+                "selected_shop_account_id": 1,
+                "payee_bank": "Commercial",
+                "amount": 200000.0,
+                "proposed_date": "2026-10-17",
+                "clearing_type": "INTERBANK",
+                "strategic_reasoning": "Part 2.",
+            },
+            {
+                "cheque_index": 3,
+                "selected_shop_account_id": 1,
+                "payee_bank": "Commercial",
+                "amount": 200000.0,
+                "proposed_date": "2026-10-24",
+                "clearing_type": "INTERBANK",
+                "strategic_reasoning": "Part 3.",
+            },
+        ]
+        bundles = proposed_cheques_to_bundles(2, proposed, [10])
+        self.assertEqual(len(bundles), 3)
+        parts = [inv for b in bundles for inv in b["invoices"]]
+        self.assertEqual([p["part_index"] for p in parts], [1, 2, 3])
+        self.assertTrue(all(p["part_count"] == 3 for p in parts))
+        self.assertAlmostEqual(sum(p["total_amount"] for p in parts), 600000.0)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ CREATE TABLE user_bank_account (
     nickname            TEXT,
     available_balance   REAL    NOT NULL DEFAULT 0.00,
     overdraft_limit     REAL    NOT NULL DEFAULT 0.00,
+    ceiling_lkr        REAL    NOT NULL DEFAULT 500000.00,
     branch_name         TEXT,
     bank_name           TEXT    NOT NULL,
     FOREIGN KEY (user_id) REFERENCES user(user_id)

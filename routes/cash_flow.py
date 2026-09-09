@@ -21,6 +21,7 @@ def _account_from_form(form) -> dict:
         "branch_name": (form.get("branch_name") or "").strip(),
         "available_balance": form.get("available_balance") or 0,
         "overdraft_limit": form.get("overdraft_limit") or 0,
+        "ceiling_lkr": form.get("ceiling_lkr") or 500000,
     }
 
 

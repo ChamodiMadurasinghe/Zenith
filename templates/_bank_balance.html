@@ -8,6 +8,10 @@
     <span class="stat-value">Rs. {{ "{:,.2f}".format(report.overdraft_limit) }}</span>
   </div>
   <div class="stat-card">
+    <span class="stat-label">{{ t('account_ceiling') }}</span>
+    <span class="stat-value">Rs. {{ "{:,.2f}".format(selected_account.ceiling_lkr or 500000) }}</span>
+  </div>
+  <div class="stat-card">
     <span class="stat-label">{{ t('usable_funds') }}</span>
     <span class="stat-value">Rs. {{ "{:,.2f}".format(report.usable_funds) }}</span>
   </div>

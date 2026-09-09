@@ -81,6 +81,72 @@ def main():
         if r["cheque_id"] and not r["cheque_no"]:
             issues.append(f"invoice {r['invoice_no']} points to missing cheque_id={r['cheque_id']}")
 
+    if "cheque_invoice_allocation" in tables:
+        split_invoices = cur.execute(
+            """SELECT invoices_id, MAX(part_count) AS part_count
+               FROM cheque_invoice_allocation
+               GROUP BY invoices_id
+               HAVING MAX(part_count) > 1"""
+        ).fetchall()
+        for s in split_invoices:
+            inv_id = s["invoices_id"]
+            header = cur.execute(
+                "SELECT invoice_no, total_amount, cheque_id FROM invoices WHERE invoices_id = ?",
+                (inv_id,),
+            ).fetchone()
+            parts = cur.execute(
+                """SELECT cheque_id, amount, part_index, part_count
+                   FROM cheque_invoice_allocation
+                   WHERE invoices_id = ?
+                   ORDER BY part_index""",
+                (inv_id,),
+            ).fetchall()
+            expected = int(s["part_count"])
+            indexes = [int(p["part_index"]) for p in parts]
+            if len(parts) != expected:
+                issues.append(
+                    f"invoice {header['invoice_no'] if header else inv_id}: "
+                    f"expected {expected} allocation parts, found {len(parts)}"
+                )
+            if indexes != list(range(1, expected + 1)):
+                issues.append(
+                    f"invoice {header['invoice_no'] if header else inv_id}: "
+                    f"part indexes {indexes} != 1..{expected}"
+                )
+            if header:
+                part_sum = sum(float(p["amount"]) for p in parts)
+                if abs(part_sum - float(header["total_amount"])) > 0.05:
+                    issues.append(
+                        f"invoice {header['invoice_no']}: parts sum {part_sum} "
+                        f"!= total {header['total_amount']}"
+                    )
+                first_cheque = parts[0]["cheque_id"] if parts else None
+                if header["cheque_id"] != first_cheque:
+                    issues.append(
+                        f"invoice {header['invoice_no']}: cheque_id={header['cheque_id']} "
+                        f"!= first allocation cheque {first_cheque}"
+                    )
+            if "deposit_timetable" in tables:
+                for p in parts:
+                    tt_n = cur.execute(
+                        "SELECT COUNT(*) FROM deposit_timetable WHERE cheque_id = ?",
+                        (p["cheque_id"],),
+                    ).fetchone()[0]
+                    if tt_n < 1:
+                        issues.append(
+                            f"invoice {header['invoice_no'] if header else inv_id}: "
+                            f"no deposit_timetable row for cheque_id={p['cheque_id']}"
+                        )
+
+    print("\n=== written cheques by bank account ===")
+    by_acc = {}
+    for r in rows:
+        by_acc.setdefault(r["user_bank_acc_id"], []).append(r)
+    for acc_id, cheques in sorted(by_acc.items()):
+        print(f"account {acc_id}: {len(cheques)} cheque(s)")
+        for c in cheques:
+            print(f"  {c['cheque_no']} Rs.{c['amount_in_numerals']}")
+
     # Seed fingerprint
     seed_nos = {"000145", "000146", "000089"}
     actual_nos = {r["cheque_no"] for r in rows}

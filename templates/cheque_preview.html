@@ -19,12 +19,14 @@
       {% for acc in accounts %}
       {% set od = acc.overdraft_limit or 0 %}
       {% set bal = acc.available_balance or 0 %}
+      {% set ceil = acc.ceiling_lkr or 500000 %}
       {% set proj = account_projections.get(acc.user_bank_acc_id) if account_projections else none %}
       <option value="{{ acc.user_bank_acc_id }}"
               data-exceeds="{{ '1' if proj and proj.exceeds_overdraft else '0' }}"
+              data-ceiling="{{ ceil }}"
               {{ 'selected' if default_user_bank_acc_id == acc.user_bank_acc_id }}>
         {{ acc.nickname or acc.account_name }} — {{ acc.bank_name }}
-        (Rs. {{ "{:,.2f}".format(bal) }}{% if od > 0 %} · {{ t('overdraft_limit') }} Rs. {{ "{:,.2f}".format(od) }} · {{ t('usable_funds') }} Rs. {{ "{:,.2f}".format(bal + od) }}{% endif %})
+        (Rs. {{ "{:,.2f}".format(bal) }} · {{ t('account_ceiling') }} Rs. {{ "{:,.0f}".format(ceil) }}{% if od > 0 %} · {{ t('overdraft_limit') }} Rs. {{ "{:,.2f}".format(od) }} · {{ t('usable_funds') }} Rs. {{ "{:,.2f}".format(bal + od) }}{% endif %})
       </option>
       {% endfor %}
     </select>
@@ -32,6 +34,9 @@
   <p class="muted help-tip">{{ t('cheque_bank_select_help') }}</p>
   <div id="overdraft-warning" class="alert-card alert-card-danger" hidden>
     <strong>{{ t('cheque_overdraft_warning') }}</strong>
+  </div>
+  <div id="ceiling-warning" class="alert-card alert-card-danger" hidden>
+    <strong>{{ t('cheque_ceiling_warning') }}</strong>
   </div>
 
   {% for b in bundles %}
@@ -66,10 +71,25 @@
 (function () {
   var sel = document.getElementById("paying-account");
   var box = document.getElementById("overdraft-warning");
-  if (sel && box) {
+  var ceilBox = document.getElementById("ceiling-warning");
+  if (sel) {
+    function maxChequeAmount() {
+      var maxAmt = 0;
+      document.querySelectorAll(".cheque-print").forEach(function (card) {
+        var amt = parseFloat(card.getAttribute("data-cheque-amount") || "0");
+        if (amt > maxAmt) maxAmt = amt;
+      });
+      return maxAmt;
+    }
     function update() {
       var opt = sel.options[sel.selectedIndex];
-      box.hidden = !(opt && opt.getAttribute("data-exceeds") === "1");
+      if (box) {
+        box.hidden = !(opt && opt.getAttribute("data-exceeds") === "1");
+      }
+      if (ceilBox) {
+        var ceil = opt ? parseFloat(opt.getAttribute("data-ceiling") || "0") : 0;
+        ceilBox.hidden = !(opt && ceil > 0 && maxChequeAmount() > ceil + 0.009);
+      }
     }
     sel.addEventListener("change", update);
     update();

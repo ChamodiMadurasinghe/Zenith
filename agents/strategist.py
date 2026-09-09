@@ -10,7 +10,7 @@ from config import Config
 from core.bundling import compute_bundles, invoice_due_date, recalculate_all_bundles
 from core.dates import format_date, parse_date
 from core.dealer_patterns import build_dealer_pattern_document
-from core.invoice_parts import apply_part_fields, original_amount
+from core.invoice_parts import apply_part_fields, display_invoice_no, is_split_part, original_amount
 from core.strategist_dates import (
     earliest_cheque_date,
     interbank_account_options,
@@ -165,13 +165,37 @@ def _normalize_proposed_cheques(raw: list, ctx: dict) -> list[dict]:
     return [c for c in normalized if c["amount"] > 0]
 
 
+def _stamp_split_part_counts(groups: list[list[dict]]) -> None:
+    """Set sequential part_index 1..N and matching part_count on split fragments."""
+    by_id: dict[int, list[dict]] = {}
+    for group in groups:
+        for inv in group:
+            by_id.setdefault(int(inv["invoices_id"]), []).append(inv)
+    for parts in by_id.values():
+        if not any(is_split_part(p) for p in parts):
+            continue
+        orig = original_amount(parts[0])
+        n = len(parts)
+        for i, part in enumerate(parts, start=1):
+            part["part_index"] = i
+            part["part_count"] = n
+            part["original_amount"] = orig
+            part["invoice_no_display"] = display_invoice_no(part)
+
+
 def _allocate_invoices_to_cheques(
     invoices: list[dict], proposed_cheques: list[dict]
 ) -> list[list[dict]]:
-    """Greedy amount allocation; may split one invoice across cheques."""
+    """Greedy amount allocation; may split one invoice across N cheques."""
     pool: list[tuple[dict, float]] = [
         (copy.deepcopy(inv), float(inv["total_amount"])) for inv in invoices
     ]
+    orig_by_id: dict[int, float] = {}
+    next_index: dict[int, int] = {}
+    for inv in invoices:
+        iid = int(inv["invoices_id"])
+        orig_by_id[iid] = original_amount(inv)
+        next_index[iid] = 1
     groups: list[list[dict]] = []
 
     for cheque in proposed_cheques:
@@ -179,34 +203,44 @@ def _allocate_invoices_to_cheques(
         group: list[dict] = []
         while need > 0.01 and pool:
             inv, remaining = pool[0]
+            iid = int(inv["invoices_id"])
+            orig = orig_by_id[iid]
             if remaining <= need + 0.02:
-                group.append(inv)
+                if next_index[iid] > 1 or abs(remaining - orig) > 0.02:
+                    group.append(
+                        apply_part_fields(
+                            inv,
+                            amount=remaining,
+                            part_index=next_index[iid],
+                            part_count=next_index[iid],
+                            original=orig,
+                        )
+                    )
+                    next_index[iid] += 1
+                else:
+                    group.append(inv)
                 pool.pop(0)
                 need -= remaining
                 continue
-            orig = original_amount(inv)
-            part = apply_part_fields(
-                inv,
-                amount=need,
-                part_index=1,
-                part_count=2,
-                original=orig,
-            )
-            group.append(part)
-            rest_amount = round(remaining - need, 2)
-            if rest_amount > 0.01:
-                rest_inv = apply_part_fields(
+            idx = next_index[iid]
+            group.append(
+                apply_part_fields(
                     inv,
-                    amount=rest_amount,
-                    part_index=2,
-                    part_count=2,
+                    amount=need,
+                    part_index=idx,
+                    part_count=idx + 1,
                     original=orig,
                 )
-                pool[0] = (rest_inv, rest_amount)
+            )
+            next_index[iid] = idx + 1
+            rest_amount = round(remaining - need, 2)
+            if rest_amount > 0.01:
+                pool[0] = (inv, rest_amount)
             else:
                 pool.pop(0)
             need = 0.0
         groups.append(group)
+    _stamp_split_part_counts(groups)
     return groups
 
 

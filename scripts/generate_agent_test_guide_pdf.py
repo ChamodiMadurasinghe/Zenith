@@ -457,6 +457,7 @@ def build_pdf(sample_files: dict[str, Path]):
     story.append(
         Paragraph(
             "App: http://127.0.0.1:5000 · Samples: docs/agent_test_samples/ (01–15) · "
+            "Shop QA (suppliers, intake, ceiling, 3-way split): docs/TEAMMATE_QA.md · "
             "Regenerate: python scripts/generate_agent_test_guide_pdf.py",
             styles["small"],
         )
@@ -922,6 +923,117 @@ def build_pdf(sample_files: dict[str, Path]):
     )
 
     story.append(Spacer(1, 10))
+    story.append(PageBreak())
+    story.append(Paragraph("11. Teammate shop QA (docs/TEAMMATE_QA.md)", styles["h1"]))
+    story.append(
+        Paragraph(
+            "Full Given / When / Then cases live in <font face='Courier'>docs/TEAMMATE_QA.md</font>. "
+            "Login: yohan@hardware.lk / APP_PASSWORD. Do not reset the live DB. "
+            "Use unique invoice numbers QA-YYYYMMDD-xx.",
+            styles["body"],
+        )
+    )
+    story.append(Paragraph("11.1 Agents and intake", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Agent 1 is extract_invoice() only (Gemini OCR). Agent 2 is Python anomaly rules, not bundling chat. "
+            "OCR never creates a dealers row — unknown names go to Pending Supplier.",
+            styles["body"],
+        )
+    )
+    story.append(
+        T(
+            ["Way", "Route", "Agent 1?", "Lands as"],
+            [
+                ["Web upload", "POST /upload → /review/<draft>", "Yes, immediately", "Session draft → verified insert"],
+                ["WhatsApp inbox-v2", "Send to AI on inbox item", "Only after Send to AI", "Pending → /invoice/<id>/verify"],
+                ["Manual", "/invoice/manual", "No", "Verified immediately"],
+            ],
+            [W * 0.16, W * 0.30, W * 0.22, W * 0.32],
+        )
+    )
+    story.append(Paragraph("11.2 Supplier / invoice / verify", styles["h2"]))
+    story.append(
+        T(
+            ["ID", "Dummy / steps", "Pass if"],
+            [
+                ["TC-S1", "Add QA City Mart, bank City Mart Current, paying = Main", "Dealer + bank row saved"],
+                ["TC-S2", "Quick-add QA Quick Dealer twice", "Second call reuses (reused: true)"],
+                ["TC-S3", "Upload 01_clean; unknown name", "New-dealer form, not auto-insert. After TC-S1, dropdown preselected"],
+                ["TC-I1", "Upload 01_clean, confirm, save", "Verified, cheque_id NULL"],
+                ["TC-I2", "Manual ABD Traders QA-MAN-001 / 15000", "Verified without OCR"],
+                ["TC-I3", "GET /webhook/whatsapp/health", "inbox-v2, gemini_on_whatsapp_receive false. Live send N/A if no tunnel"],
+            ],
+            [W * 0.12, W * 0.50, W * 0.38],
+        )
+    )
+    story.append(Paragraph("11.3 Agent 1 samples", styles["h2"]))
+    story.append(
+        T(
+            ["Sample", "Expect"],
+            [
+                ["01_clean", "Invoice no, supplier, date, total, lines"],
+                ["05 messy / 15 glare", "Best-effort fields; review still opens"],
+                ["12 bank footer", "Supplier bank fields"],
+                ["13 credit period", "45 days"],
+                ["09 missing amount", "Total 0 + Agent 2 missing_amount"],
+                ["Non-image PDF", "Rejected"],
+                ["USE_FAKE_AI", "WA-MOCK-001 / 125000"],
+            ],
+            [W * 0.32, W * 0.68],
+        )
+    )
+    story.append(Paragraph("11.4 Agent 2 (soft unless duplicate)", styles["h2"]))
+    story.append(
+        T(
+            ["Case", "Dummy", "Code"],
+            [
+                ["Math", "02_math_mismatch.png", "math_mismatch"],
+                ["Discount", "03_missing_discount.png", "possible_missing_discount"],
+                ["Qty", "04 after TOFFEE-01 qty 10", "qty_unusual"],
+                ["Future", "06_future_date.png", "future_date"],
+                ["Price spike", "07 after cheaper TOFFEE", "item_price_spike"],
+                ["Outlier", "08 with 3+ smaller invoices", "amount_outlier"],
+                ["Missing amount", "09", "missing_amount"],
+                ["Duplicate no", "verify same no twice", "blocked"],
+                ["Unknown dealer", "Pending Supplier", "unknown_dealer"],
+                ["Reorder", "same item within 30d", "item_reordered_soon"],
+                ["Clean new dealer", "01", "INSUFFICIENT_DATA or GOOD_TO_GO"],
+            ],
+            [W * 0.22, W * 0.42, W * 0.36],
+        )
+    )
+    story.append(Paragraph("11.5 Bank ceiling + 3-way split", styles["h2"]))
+    story.append(
+        Paragraph(
+            "Each paying account has ceiling_lkr (default 500000). Dealer Cheques working cap = min(session, paying account). "
+            "Commit uses the preview form’s user_bank_acc_id — reject any cheque over that account’s ceiling.",
+            styles["body"],
+        )
+    )
+    story.append(
+        T(
+            ["ID", "Dummy / steps", "Pass if"],
+            [
+                ["TC-B1", "Edit Main nickname/balance/overdraft", "Reload Details matches"],
+                ["TC-B2", "Deposit + planned + complete planned", "Balance increases"],
+                ["TC-B3", "Set Reserve default, then Main", "Badge follows last save"],
+                ["TC-B4", "Main 500000, Reserve 200000", "Each Details + hub card shows its max"],
+                ["TC-B5", "300000 cheque from Reserve then Main", "Reserve blocked; Main allowed"],
+                ["TC-B6", "Cash Flow → account → written cheques", "New cheque only on paying account"],
+                ["TC-G", "Split large invoice into 3, commit QA-CH-1/2/3", "3 cheques, parts 1..3 part_count=3, timetable ×3"],
+            ],
+            [W * 0.12, W * 0.48, W * 0.40],
+        )
+    )
+    story.append(
+        Paragraph(
+            "SQL after 3-way: invoices.cheque_id = first cheque; draft gone; print PDF does not write extra rows. "
+            "Integrity: python scripts/check_cheques_saved.py",
+            styles["body"],
+        )
+    )
+
     story.append(Paragraph("Notes / bugs found:", styles["body"]))
     story.append(Paragraph("________________________________________________________________", styles["body"]))
     story.append(Paragraph("________________________________________________________________", styles["body"]))

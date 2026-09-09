@@ -18,6 +18,7 @@
     <span class="dealer-icon">{{ label[0] }}</span>
     <span>{{ label }}</span>
     <span class="muted">{{ acc.bank_name }}</span>
+    <span class="muted">{{ t('account_ceiling') }}: Rs. {{ "{:,.0f}".format(acc.ceiling_lkr or 500000) }}</span>
     <span class="dealer-badges">
       {% if default_bank_acc_id == acc.user_bank_acc_id %}
       <span class="badge badge-ready">{{ t('default_account_badge') }}</span>
