@@ -1,15 +1,25 @@
-/** Read-only cheque detail modal. Rows use data-cheque-id. */
+/** Cheque detail modal with Edit/Save/Cancel for cheque_no + cheque_date. Rows use data-cheque-id. */
 (function () {
   var modal = document.getElementById("cheque-detail-modal");
   if (!modal) return;
 
   var body = document.getElementById("cheque-detail-body");
+  var actions = document.getElementById("cheque-detail-actions");
   var statusEl = document.getElementById("cheque-detail-status");
   var titleEl = document.getElementById("cheque-detail-title");
   var lastFocus = null;
+  var currentId = null;
+  var currentData = null;
+  var editMode = false;
+  var saving = false;
 
   function t(key, vars) {
     return window.__ ? window.__(key, vars) : key;
+  }
+
+  function label(key, fallback) {
+    var v = t(key);
+    return !v || v === key ? fallback : v;
   }
 
   function formatLkr(n) {
@@ -51,6 +61,14 @@
   }
 
   function closeModal() {
+    editMode = false;
+    saving = false;
+    currentId = null;
+    currentData = null;
+    if (actions) {
+      actions.hidden = true;
+      actions.innerHTML = "";
+    }
     modal.hidden = true;
     document.body.classList.remove("modal-open");
     if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
@@ -65,7 +83,56 @@
     if (closeBtn) closeBtn.focus();
   }
 
+  function dealerContextId(data) {
+    var d = (data && data.dealer) || {};
+    if (d.dealer_id != null) return String(d.dealer_id);
+    var hub = document.querySelector("[data-dealer]");
+    return hub ? hub.getAttribute("data-dealer") : "";
+  }
+
+  function refreshTableRow(data) {
+    if (!data || data.cheque_id == null) return;
+    var row = document.querySelector('[data-cheque-id="' + String(data.cheque_id) + '"]');
+    if (!row) return;
+    var cells = row.querySelectorAll("td");
+    // dealer_cheques.html: no, date, clearance, days_gained, amount, dealer
+    if (cells.length >= 1) cells[0].textContent = data.cheque_no || "";
+    if (cells.length >= 2) cells[1].textContent = data.cheque_date || "";
+    if (cells.length >= 3) {
+      var clearance = data.expected_clearance_date || "—";
+      cells[2].innerHTML = "<strong>" + escapeHtml(clearance) + "</strong>";
+    }
+    if (cells.length >= 4) {
+      cells[3].textContent = data.days_gained != null ? String(data.days_gained) : "—";
+    }
+  }
+
+  function renderActions() {
+    if (!actions) return;
+    if (!currentData) {
+      actions.hidden = true;
+      actions.innerHTML = "";
+      return;
+    }
+    actions.hidden = false;
+    if (editMode) {
+      actions.innerHTML =
+        '<button type="button" class="btn btn-primary" data-cheque-save>' +
+        escapeHtml(label("save", "Save")) +
+        "</button> " +
+        '<button type="button" class="btn btn-secondary" data-cheque-cancel>' +
+        escapeHtml(label("cancel", "Cancel")) +
+        "</button>";
+    } else {
+      actions.innerHTML =
+        '<button type="button" class="btn btn-secondary" data-cheque-edit>' +
+        escapeHtml(label("edit", "Edit")) +
+        "</button>";
+    }
+  }
+
   function renderDetail(data) {
+    currentData = data;
     var dealer = data.dealer || {};
     var invoices = data.invoices || [];
     var creditDays = "";
@@ -104,6 +171,22 @@
       })
       .join("");
 
+    var noCell;
+    var dateCell;
+    if (editMode) {
+      noCell =
+        '<input type="text" id="cheque-edit-no" class="input" value="' +
+        escapeHtml(data.cheque_no || "") +
+        '" autocomplete="off" />';
+      dateCell =
+        '<input type="date" id="cheque-edit-date" class="input" value="' +
+        escapeHtml(data.cheque_date || "") +
+        '" />';
+    } else {
+      noCell = escapeHtml(data.cheque_no || "—");
+      dateCell = escapeHtml(data.cheque_date || "—");
+    }
+
     body.innerHTML =
       '<div class="cheque-print card">' +
       '<div class="cheque-header">' +
@@ -112,12 +195,12 @@
       '<div class="cheque-row"><span>' +
       escapeHtml(t("cheque_number")) +
       ":</span> " +
-      escapeHtml(data.cheque_no || "—") +
+      noCell +
       "</div>" +
       '<div class="cheque-row"><span>' +
       escapeHtml(t("cheque_date")) +
       ":</span> " +
-      escapeHtml(data.cheque_date || "—") +
+      dateCell +
       "</div>" +
       '<div class="cheque-row"><span>' +
       escapeHtml(t("cheque_pay")) +
@@ -196,11 +279,24 @@
     if (titleEl) {
       titleEl.textContent = t("cheque_detail_title") + (data.cheque_no ? " #" + data.cheque_no : "");
     }
+    renderActions();
+    if (editMode) {
+      var noInput = document.getElementById("cheque-edit-no");
+      if (noInput) noInput.focus();
+    }
   }
 
   function loadCheque(id) {
+    editMode = false;
+    saving = false;
+    currentId = id;
+    currentData = null;
     setStatus(t("cheque_detail_loading"), true);
     body.innerHTML = "";
+    if (actions) {
+      actions.hidden = true;
+      actions.innerHTML = "";
+    }
     openModal();
     fetch("/api/cheques/" + encodeURIComponent(id) + "/detail", { credentials: "same-origin" })
       .then(function (res) {
@@ -217,7 +313,99 @@
       });
   }
 
+  function enterEdit() {
+    if (!currentData || saving) return;
+    editMode = true;
+    renderDetail(currentData);
+  }
+
+  function cancelEdit() {
+    if (saving) return;
+    editMode = false;
+    if (currentData) renderDetail(currentData);
+  }
+
+  function saveEdit() {
+    if (!currentId || saving) return;
+    var noInput = document.getElementById("cheque-edit-no");
+    var dateInput = document.getElementById("cheque-edit-date");
+    var chequeNo = noInput ? String(noInput.value || "").trim() : "";
+    var chequeDate = dateInput ? String(dateInput.value || "").trim() : "";
+
+    if (!chequeNo) {
+      setStatus(label("cheque_no_required", "Cheque number is required."), true);
+      if (noInput) noInput.focus();
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(chequeDate)) {
+      setStatus(label("invalid_cheque_date", "Cheque date must be YYYY-MM-DD."), true);
+      if (dateInput) dateInput.focus();
+      return;
+    }
+
+    var confirmMsg = label(
+      "cheque_edit_confirm",
+      "Save changes to cheque number and date? Clearance will be recalculated if the date changed."
+    );
+    if (!window.confirm(confirmMsg)) return;
+
+    saving = true;
+    setStatus(label("cheque_edit_saving", "Saving…"), true);
+    var payload = { cheque_no: chequeNo, cheque_date: chequeDate };
+    var dealerId = dealerContextId(currentData);
+    if (dealerId) payload.dealer_id = dealerId;
+
+    fetch("/dealers/cheques/" + encodeURIComponent(currentId) + "/edit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(payload),
+    })
+      .then(function (res) {
+        if (res.status === 401) throw new Error(t("js_session_expired"));
+        return res.json().then(function (data) {
+          return { res: res, data: data };
+        });
+      })
+      .then(function (pair) {
+        saving = false;
+        if (!pair.res.ok || !pair.data || !pair.data.ok) {
+          var err =
+            (pair.data && pair.data.error) ||
+            label("cheque_edit_error", "Could not save cheque changes.");
+          setStatus(String(err), true);
+          return;
+        }
+        editMode = false;
+        setStatus("", false);
+        renderDetail(pair.data.cheque);
+        refreshTableRow(pair.data.cheque);
+      })
+      .catch(function (err) {
+        saving = false;
+        setStatus(err.message || label("cheque_edit_error", "Could not save cheque changes."), true);
+      });
+  }
+
   document.addEventListener("click", function (ev) {
+    if (actions && actions.contains(ev.target)) {
+      if (ev.target.closest("[data-cheque-edit]")) {
+        ev.preventDefault();
+        enterEdit();
+        return;
+      }
+      if (ev.target.closest("[data-cheque-cancel]")) {
+        ev.preventDefault();
+        cancelEdit();
+        return;
+      }
+      if (ev.target.closest("[data-cheque-save]")) {
+        ev.preventDefault();
+        saveEdit();
+        return;
+      }
+    }
+
     var closer = ev.target.closest("[data-cheque-detail-close]");
     if (closer && modal.contains(closer)) {
       ev.preventDefault();
@@ -234,6 +422,11 @@
 
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && !modal.hidden) {
+      if (editMode) {
+        ev.preventDefault();
+        cancelEdit();
+        return;
+      }
       closeModal();
       return;
     }

@@ -1824,6 +1824,86 @@ def get_recent_deposits_by_week(weeks=4):
     )
 
 
+
+def update_cheque(cheque_id: int, fields: dict) -> dict | None:
+    """Update editable cheque fields (cheque_no, cheque_date only).
+
+    Ownership matches get_cheque_detail (cheque drawn on the current user's bank
+    account). Amount is never updated. When cheque_date changes, recomputes
+    predicted_clearance_date with the same holiday / liquidity helpers used by
+    sync_timetable_from_cheque (apply_liquidity_dates + is_interbank), then
+    refreshes deposit_timetable. Returns get_cheque_detail(...) or None.
+    """
+    from core.liquidity_engine import apply_liquidity_dates, is_interbank
+
+    allowed = {"cheque_no", "cheque_date"}
+    updates = {k: fields[k] for k in allowed if k in fields and fields[k] is not None}
+    if not updates:
+        return get_cheque_detail(cheque_id)
+
+    ch = query_one(
+        """SELECT c.*
+           FROM cheque c
+           JOIN user_bank_account uba ON uba.user_bank_acc_id = c.user_bank_acc_id
+           WHERE c.cheque_id = ? AND uba.user_id = ?""",
+        (cheque_id, Config.USER_ID),
+    )
+    if not ch:
+        return None
+
+    new_no = updates.get("cheque_no", ch["cheque_no"])
+    new_date = updates.get("cheque_date", ch["cheque_date"])
+    if isinstance(new_no, str):
+        new_no = new_no.strip()
+    if isinstance(new_date, str):
+        new_date = new_date.strip()
+
+    if not new_no:
+        raise ValueError("cheque_no_required")
+    if not new_date:
+        raise ValueError("cheque_date_required")
+
+    date_changed = str(new_date) != str(ch.get("cheque_date") or "")
+    predicted = ch.get("predicted_clearance_date")
+
+    inv = query_one(
+        """SELECT dealer_id FROM invoices
+           WHERE user_id = ?
+             AND (
+               cheque_id = ?
+               OR invoices_id IN (
+                 SELECT invoices_id FROM cheque_invoice_allocation WHERE cheque_id = ?
+               )
+             )
+           LIMIT 1""",
+        (Config.USER_ID, cheque_id, cheque_id),
+    )
+    dealer_id = inv["dealer_id"] if inv else None
+
+    if date_changed:
+        holidays = get_holidays()
+        user_acc = get_bank_account(ch["user_bank_acc_id"])
+        dealer_bank = get_dealer_preferred_bank(dealer_id) if dealer_id else None
+        interbank = is_interbank(
+            user_acc["bank_name"] if user_acc else "",
+            dealer_bank["bank_name"] if dealer_bank else "",
+        )
+        dates = apply_liquidity_dates(new_date, holidays, is_interbank=interbank)
+        predicted = dates["predicted_clearance_date"]
+
+    execute(
+        """UPDATE cheque
+           SET cheque_no = ?, cheque_date = ?, predicted_clearance_date = ?
+           WHERE cheque_id = ?""",
+        (new_no, new_date, predicted, cheque_id),
+    )
+
+    if date_changed:
+        sync_timetable_from_cheque(cheque_id, dealer_id)
+
+    return get_cheque_detail(cheque_id)
+
+
 def save_cheques(cheques: list, invoice_map: dict):
     """Persist cheques and invoice links.
 

@@ -1,0 +1,4 @@
+db/repositories.py
+routes/dealers.py
+static/js/cheque_detail.js
+templates/_cheque_detail_modal.html

@@ -336,3 +336,55 @@ def delete_invoice(invoice_id):
             url_for("dealers.invoice_detail", dealer_id=dealer_id, invoice_id=invoice_id)
         )
     return redirect(url_for("dealers.invoices", dealer_id=dealer_id))
+
+
+@dealers_bp.route("/dealers/cheques/<int:cheque_id>/edit", methods=["POST"])
+@login_required
+def edit_cheque(cheque_id):
+    """Edit cheque_no / cheque_date for an owned committed cheque."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = request.form
+
+    cheque_no = (payload.get("cheque_no") or "").strip()
+    cheque_date = (payload.get("cheque_date") or "").strip()
+
+    if not cheque_no:
+        return jsonify({"ok": False, "error": "cheque_no_required"}), 400
+    if not cheque_date:
+        return jsonify({"ok": False, "error": "cheque_date_required"}), 400
+    try:
+        parse_date(cheque_date)
+    except ValueError:
+        return jsonify({"ok": False, "error": "invalid_cheque_date"}), 400
+    # Strict YYYY-MM-DD (parse_date accepts ISO; reject other lengths/shapes).
+    if len(cheque_date) != 10 or cheque_date[4] != "-" or cheque_date[7] != "-":
+        return jsonify({"ok": False, "error": "invalid_cheque_date"}), 400
+
+    existing = repo.get_cheque_detail(cheque_id)
+    if not existing:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    # Optional dealer context (e.g. editing from a dealer hub page).
+    raw_dealer = payload.get("dealer_id")
+    if raw_dealer not in (None, ""):
+        try:
+            dealer_id = int(raw_dealer)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        detail_dealer = (existing.get("dealer") or {}).get("dealer_id")
+        if detail_dealer is None or int(detail_dealer) != dealer_id:
+            return jsonify({"ok": False, "error": "not_found"}), 404
+
+    try:
+        updated = repo.update_cheque(
+            cheque_id,
+            {"cheque_no": cheque_no, "cheque_date": cheque_date},
+        )
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    if not updated:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    return jsonify({"ok": True, "cheque": updated})
