@@ -2485,3 +2485,28 @@ body.modal-open { overflow: hidden; }
 [data-theme="dark"] .agent2-chat { background: #1e2430; }
 [data-theme="dark"] .agent2-chat-bubble { background: #252b38; }
 
+/* Items table: Excel-like column resize */
+#items-table.items-table-resizable thead th {
+  position: relative;
+  user-select: none;
+}
+#items-table.items-table-resizable thead th.col-resize-hover::after,
+body.col-resizing #items-table.items-table-resizable thead th::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--primary, #0d47c7);
+  opacity: 0.55;
+  pointer-events: none;
+}
+body.col-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
