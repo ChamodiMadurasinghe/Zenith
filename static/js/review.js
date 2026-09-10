@@ -31,21 +31,45 @@ document.getElementById("items-table")?.addEventListener("input", (event) => {
   const table = document.getElementById("items-table");
   if (!table) return;
 
-  const STORAGE_KEY = "zenith-items-table-col-widths";
-  const EDGE_PX = 8;
-  const MIN_COL = 56;
+  const STORAGE_KEY = "zenith-items-table-col-widths-v2";
+  const MIN_BY_INDEX = [120, 200, 72, 88, 110, 96, 110];
+  const DEFAULTS = [140, 240, 80, 100, 120, 110, 120];
 
   table.classList.add("items-table-resizable");
-  // Prefer fixed layout while resizing so widths stick
   table.style.tableLayout = "fixed";
+  table.style.width = "max-content";
+  table.style.minWidth = "100%";
 
+  const headRow = table.querySelector("thead tr");
   const heads = Array.from(table.querySelectorAll("thead th"));
-  if (!heads.length) return;
+  if (!headRow || !heads.length) return;
+
+  // Visible drag grips on every header
+  heads.forEach((th, i) => {
+    th.classList.add("items-col-head");
+    if (th.querySelector(".col-resize-handle")) return;
+    const handle = document.createElement("span");
+    handle.className = "col-resize-handle";
+    handle.title = "Drag to resize column";
+    handle.dataset.colIndex = String(i);
+    th.appendChild(handle);
+  });
+
+  // Prefer <colgroup> so body cells follow header widths
+  let colgroup = table.querySelector("colgroup");
+  if (!colgroup) {
+    colgroup = document.createElement("colgroup");
+    heads.forEach(() => colgroup.appendChild(document.createElement("col")));
+    table.insertBefore(colgroup, table.firstChild);
+  }
+  const cols = Array.from(colgroup.querySelectorAll("col"));
 
   function loadWidths() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!Array.isArray(parsed) || parsed.length !== heads.length) return null;
+      return parsed.map((w, i) => Math.max(MIN_BY_INDEX[i] || 72, Number(w) || DEFAULTS[i]));
     } catch (_) {
       return null;
     }
@@ -58,62 +82,67 @@ document.getElementById("items-table")?.addEventListener("input", (event) => {
   }
 
   function applyWidths(widths) {
-    heads.forEach((th, i) => {
-      const w = widths[i];
-      if (!w) return;
-      th.style.width = w + "px";
-      th.style.minWidth = w + "px";
+    let total = 0;
+    widths.forEach((w, i) => {
+      const px = Math.max(MIN_BY_INDEX[i] || 72, w) + "px";
+      if (cols[i]) {
+        cols[i].style.width = px;
+        cols[i].style.minWidth = px;
+      }
+      if (heads[i]) {
+        heads[i].style.width = px;
+        heads[i].style.minWidth = px;
+        heads[i].style.maxWidth = px;
+      }
+      total += Math.max(MIN_BY_INDEX[i] || 72, w);
     });
+    table.style.width = total + "px";
   }
 
-  const saved = loadWidths();
-  if (saved && Array.isArray(saved) && saved.length === heads.length) {
-    applyWidths(saved);
-  }
+  const initial = loadWidths() || DEFAULTS.slice(0, heads.length);
+  applyWidths(initial);
 
   let drag = null;
 
   function onMove(event) {
     if (!drag) return;
     const dx = event.clientX - drag.startX;
-    const next = Math.max(MIN_COL, drag.startW + dx);
-    drag.th.style.width = next + "px";
-    drag.th.style.minWidth = next + "px";
+    const next = Math.max(drag.minW, drag.startW + dx);
+    const widths = cols.map((col, i) => {
+      if (i === drag.index) return next;
+      return Math.max(MIN_BY_INDEX[i] || 72, parseFloat(col.style.width) || DEFAULTS[i]);
+    });
+    applyWidths(widths);
     drag.currentW = next;
   }
 
   function onUp() {
     if (!drag) return;
     document.body.classList.remove("col-resizing");
-    const widths = heads.map((th) => Math.round(th.getBoundingClientRect().width));
+    const widths = cols.map((col, i) =>
+      Math.max(MIN_BY_INDEX[i] || 72, parseFloat(col.style.width) || DEFAULTS[i])
+    );
     saveWidths(widths);
     drag = null;
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
   }
 
-  heads.forEach((th) => {
-    th.addEventListener("mousemove", (event) => {
-      if (drag) return;
-      const rect = th.getBoundingClientRect();
-      const nearEdge = event.clientX >= rect.right - EDGE_PX;
-      th.classList.toggle("col-resize-hover", nearEdge);
-      th.style.cursor = nearEdge ? "col-resize" : "";
-    });
-    th.addEventListener("mouseleave", () => {
-      if (drag) return;
-      th.classList.remove("col-resize-hover");
-      th.style.cursor = "";
-    });
-    th.addEventListener("mousedown", (event) => {
-      const rect = th.getBoundingClientRect();
-      if (event.clientX < rect.right - EDGE_PX) return;
+  table.querySelectorAll(".col-resize-handle").forEach((handle) => {
+    handle.addEventListener("mousedown", (event) => {
       event.preventDefault();
+      event.stopPropagation();
+      const index = Number(handle.dataset.colIndex);
+      const startW = Math.max(
+        MIN_BY_INDEX[index] || 72,
+        parseFloat(cols[index]?.style.width) || heads[index].getBoundingClientRect().width
+      );
       drag = {
-        th,
+        index,
         startX: event.clientX,
-        startW: rect.width,
-        currentW: rect.width,
+        startW,
+        minW: MIN_BY_INDEX[index] || 72,
+        currentW: startW,
       };
       document.body.classList.add("col-resizing");
       window.addEventListener("mousemove", onMove);
