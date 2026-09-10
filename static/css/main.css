@@ -567,8 +567,30 @@ input:focus, select:focus, textarea:focus {
 .data-table-lg th, .data-table-lg td { padding: 1rem; font-size: 1.08rem; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 0.5rem; }
 .items-table-wrap { margin: 0.5rem 0 0.75rem; }
+#items-table {
+  min-width: 58rem; /* scroll horizontally instead of crushing Code/Name */
+  table-layout: auto;
+}
 #items-table .item-template { display: none; }
-#items-table input[type="number"] { min-width: 5.5rem; }
+#items-table th:nth-child(1),
+#items-table td:nth-child(1) { min-width: 7.5rem; }
+#items-table th:nth-child(2),
+#items-table td:nth-child(2) { min-width: 14rem; }
+#items-table input[name="item_code"] {
+  min-width: 6.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+#items-table input[name="item_name"] {
+  min-width: 12rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+#items-table input[type="number"] {
+  min-width: 5.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
 .list-filter-stack {
   margin: 0.5rem 0 1rem;
   border: 2px solid #3d6ec9;
