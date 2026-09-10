@@ -599,9 +599,9 @@ input:focus, select:focus, textarea:focus {
   margin-top: 0;
 }
 #items-table th:nth-child(1),
-#items-table td:nth-child(1) { min-width: 7.5rem; }
+#items-table td:nth-child(1) { min-width: 8.5rem; }
 #items-table th:nth-child(2),
-#items-table td:nth-child(2) { min-width: 12.5rem; }
+#items-table td:nth-child(2) { min-width: 14rem; }
 #items-table input[name="item_code"],
 #items-table input[name="item_name"],
 #items-table input[type="number"] {

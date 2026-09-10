@@ -31,9 +31,9 @@ document.getElementById("items-table")?.addEventListener("input", (event) => {
   const table = document.getElementById("items-table");
   if (!table) return;
 
-  const STORAGE_KEY = "zenith-items-table-col-widths-v2";
-  const MIN_BY_INDEX = [120, 200, 72, 88, 110, 96, 110];
-  const DEFAULTS = [140, 240, 80, 100, 120, 110, 120];
+  const STORAGE_KEY = "zenith-items-table-col-widths-v3";
+  const MIN_BY_INDEX = [130, 180, 64, 72, 100, 88, 100];
+  const DEFAULTS = [168, 260, 72, 80, 118, 96, 110];
 
   table.classList.add("items-table-resizable");
   table.style.tableLayout = "fixed";
