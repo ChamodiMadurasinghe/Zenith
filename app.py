@@ -1,9 +1,14 @@
-﻿import os
+﻿import logging
+import os
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, jsonify, request
 
+from backup_engine import run_backup_pipeline
 from config import Config
+from core.auth import login_required
 from core.app_guide import guide_welcome_for_path
 from core.alert_scheduler import start_alert_scheduler
 from core.i18n import SUPPORTED_LANGS, get_lang, js_translations, speech_lang_code, t
@@ -21,6 +26,19 @@ from routes.orchestration import orchestration_bp
 from routes.legal import legal_bp
 from routes.whatsapp_settings import whatsapp_settings_bp
 from whatsapp_agent import whatsapp_bp
+
+logger = logging.getLogger(__name__)
+
+
+def is_internet_available(timeout: float = 3) -> bool:
+    """Fast reachability check before Google Drive operations."""
+    try:
+        urllib.request.urlopen("https://www.google.com", timeout=timeout)
+        return True
+    except (OSError, urllib.error.URLError):
+        return False
+    except Exception:
+        return False
 
 
 def create_app():
@@ -47,6 +65,49 @@ def create_app():
     @app.get("/health")
     def health():
         return {"ok": True}
+
+    @app.post("/api/backup/now")
+    @login_required
+    def backup_now():
+        if not is_internet_available():
+            return jsonify(
+                {
+                    "status": "warning",
+                    "message": (
+                        "Backup skipped: No internet connection detected. "
+                        "Local database remains safe."
+                    ),
+                }
+            ), 200
+
+        body = request.get_json(silent=True) or {}
+        passphrase = ""
+        if isinstance(body, dict):
+            passphrase = str(body.get("passphrase") or "").strip()
+        if not passphrase:
+            passphrase = Config.backup_passphrase().strip()
+
+        try:
+            drive_file_title = run_backup_pipeline(passphrase)
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": (
+                        f"Backup uploaded to Google Drive as '{drive_file_title}'"
+                    ),
+                    "file_name": drive_file_title,
+                }
+            ), 200
+        except Exception as exc:
+            logger.exception("Backup failed; core app continues running")
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        f"Backup failed: {exc}. Core app continues running."
+                    ),
+                }
+            ), 500
 
     @app.context_processor
     def inject_i18n():

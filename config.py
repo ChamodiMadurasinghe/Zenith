@@ -221,6 +221,15 @@ class Config:
         return str(_data_path("CHROMA_PERSIST_DIR", "database/chroma"))
 
     @staticmethod
+    def backup_passphrase() -> str:
+        """User-supplied or env backup passphrase. Never hardcode a production secret."""
+        return _env("BACKUP_PASSPHRASE", "") or _env("ZENITH_BACKUP_PASSPHRASE", "")
+
+    @staticmethod
+    def gdrive_credentials_path() -> Path:
+        return _data_path("GDRIVE_CREDS_PATH", "mycreds.txt")
+
+    @staticmethod
     def openai_embedding_model() -> str:
         return _env("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 

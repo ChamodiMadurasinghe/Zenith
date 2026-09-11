@@ -1,4 +1,13 @@
 .env
+mycreds.txt
+client_secrets.json
+credentials.json
+credentials.json.json
+credential.json
+credential.txt
+credit.txt
+settings.yaml
+*.enc
 __pycache__/
 *.py[cod]
 *.db
