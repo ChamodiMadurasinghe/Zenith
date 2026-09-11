@@ -9,6 +9,7 @@ from core.alert_scheduler import start_alert_scheduler
 from core.i18n import SUPPORTED_LANGS, get_lang, js_translations, speech_lang_code, t
 from routes.analytics import analytics_bp
 from routes.auth import auth_bp
+from routes.bank_statement import bank_statement_bp
 from routes.bundling import bundling_bp
 from routes.cash_flow import cash_flow_bp
 from routes.cheque_print import cheque_print_bp
@@ -32,6 +33,7 @@ def create_app():
     app.register_blueprint(i18n_bp)
     app.register_blueprint(ingestion_bp)
     app.register_blueprint(cash_flow_bp)
+    app.register_blueprint(bank_statement_bp)
     app.register_blueprint(bundling_bp)
     app.register_blueprint(cheque_print_bp)
     app.register_blueprint(dealers_bp)

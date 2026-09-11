@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ t('statement_mail_settings_title') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<div class="page-title-row">
+  <div class="page-title-main">
+    <h1>{{ t('statement_mail_settings_title') }}</h1>
+    <p class="lead">{{ t('statement_mail_settings_help') }}</p>
+  </div>
+</div>
+<p><a href="{{ url_for('cash_flow.cash_flow') }}" class="btn btn-secondary">{{ t('back_to_accounts') }}</a></p>
+
+{% if accounts %}
+{% for account in accounts %}
+{% set cfg = configs.get(account.user_bank_acc_id) %}
+<section class="section-block">
+  <h2 class="section-title">{{ account.nickname or account.account_name }}</h2>
+  <p class="section-help">{{ account.bank_name }}{% if account.branch_name %} — {{ account.branch_name }}{% endif %}</p>
+  <form class="card card-lg form-stack" method="post"
+        action="{{ url_for('bank_statement.save_mail_settings', account_id=account.user_bank_acc_id) }}"
+        data-zenith-validate>
+    <label>{{ t('business_email') }}
+      <input type="email" name="business_email" value="{{ cfg.business_email if cfg else '' }}" required>
+    </label>
+    <label>{{ t('business_email_app_password') }}
+      <input type="password" name="business_email_app_password"
+             placeholder="{{ t('statement_app_password_placeholder') }}" {% if not cfg %}required{% endif %}>
+    </label>
+    <label>{{ t('bank_email') }}
+      <input type="email" name="bank_email" value="{{ cfg.bank_email if cfg else '' }}" required>
+    </label>
+    <div class="grid-2">
+      <label>{{ t('imap_host') }}
+        <input name="imap_host" value="{{ cfg.imap_host if cfg else 'imap.gmail.com' }}">
+      </label>
+      <label>{{ t('imap_port') }}
+        <input type="number" name="imap_port" value="{{ cfg.imap_port if cfg else 993 }}">
+      </label>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ t('save_statement_mail_settings') }}</button>
+  </form>
+</section>
+{% endfor %}
+{% else %}
+<p class="muted">{{ t('flash_bank_account_missing') }}</p>
+{% endif %}
+{% endblock %}
