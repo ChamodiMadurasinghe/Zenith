@@ -104,3 +104,118 @@
   </tbody>
 </table>
 {% endif %}
+
+{# --- Monthly statement verification (new feature — added on top of the existing balance tab) --- #}
+{% set stmt = get_statement_widget_data(selected_account_id) %}
+<h2>{{ t('statement_verify_title') }}</h2>
+<p class="muted">{{ t('statement_verify_help') }}</p>
+
+<form class="card" method="post" action="{{ url_for('bank_statement.save_mail_settings', account_id=selected_account_id) }}" data-zenith-validate>
+  <h3>{{ t('statement_mail_settings') }}</h3>
+  <p class="muted">{{ t('statement_mail_settings_help') }}</p>
+  <label>{{ t('business_email') }}
+    <input type="email" name="business_email"
+           value="{{ stmt.statement_mail_config.business_email if stmt.statement_mail_config else '' }}" required>
+  </label>
+  <label>{{ t('business_email_app_password') }}
+    <input type="password" name="business_email_app_password" placeholder="{{ t('statement_app_password_placeholder') }}"
+           {% if not stmt.statement_mail_config %}required{% endif %}>
+  </label>
+  <label>{{ t('bank_email') }}
+    <input type="email" name="bank_email"
+           value="{{ stmt.statement_mail_config.bank_email if stmt.statement_mail_config else '' }}" required>
+  </label>
+  <div class="grid-2">
+    <label>{{ t('imap_host') }}
+      <input name="imap_host" value="{{ stmt.statement_mail_config.imap_host if stmt.statement_mail_config else 'imap.gmail.com' }}">
+    </label>
+    <label>{{ t('imap_port') }}
+      <input type="number" name="imap_port" value="{{ stmt.statement_mail_config.imap_port if stmt.statement_mail_config else 993 }}">
+    </label>
+  </div>
+  <button type="submit" class="btn btn-secondary btn-lg">{{ t('save_statement_mail_settings') }}</button>
+</form>
+
+<div class="grid-2">
+  <form method="post" action="{{ url_for('bank_statement.verify_statement', account_id=selected_account_id) }}"
+        onsubmit='return confirm({{ t("confirm_statement_mail_access") | tojson }});'>
+    <input type="hidden" name="confirm_mail_access" value="1">
+    <button type="submit" class="btn btn-primary btn-lg" {% if not stmt.statement_mail_config %}disabled{% endif %}>
+      {{ t('verify_statement_button') }}
+    </button>
+    {% if not stmt.statement_mail_config %}
+    <p class="muted">{{ t('statement_mail_settings_required') }}</p>
+    {% endif %}
+  </form>
+
+  <form method="post" action="{{ url_for('bank_statement.verify_statement_test', account_id=selected_account_id) }}">
+    <button type="submit" class="btn btn-secondary btn-lg">{{ t('test_statement_button') }}</button>
+    <p class="muted">{{ t('test_statement_help') }}</p>
+  </form>
+</div>
+
+{% if stmt.statement_verification %}
+{% set v = stmt.statement_verification %}
+<div class="card">
+  <h3>
+    {{ t('verification_result') }}
+    {% if v.is_test %}<span class="pill pill-warning">{{ t('test_run_label') }}</span>{% endif %}
+  </h3>
+  <p class="muted">{{ v.subject }} — {{ v.statement_date }}</p>
+
+  <div class="summary-grid">
+    <div class="stat-card">
+      <span class="stat-label">{{ t('statement_balance') }}</span>
+      <span class="stat-value">{{ 'Rs. {:,.2f}'.format(v.statement_balance) if v.statement_balance is not none else '—' }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">{{ t('system_balance') }}</span>
+      <span class="stat-value">Rs. {{ '{:,.2f}'.format(v.system_balance or 0) }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">{{ t('balance_match') }}</span>
+      <span class="stat-value">{{ t('yes') if v.balance_matches else t('no') }}</span>
+    </div>
+  </div>
+
+  {% if v.discrepancies %}
+  <div class="alert-card alert-card-danger">
+    <strong>{{ t('discrepancies_found') }}</strong>
+    <ul>{% for d in v.discrepancies %}<li>{{ d }}</li>{% endfor %}</ul>
+  </div>
+  {% else %}
+  <p class="success-msg">{{ t('no_discrepancies') }}</p>
+  {% endif %}
+
+  <h4>{{ t('cashed_cheques') }}</h4>
+  {% if v.matched_cashed or v.unmatched_cashed %}
+  <table class="data-table">
+    <thead><tr><th>{{ t('col_cheque_no') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_status') }}</th></tr></thead>
+    <tbody>
+      {% for c in v.matched_cashed %}
+      <tr><td>{{ c.cheque_no }}</td><td>Rs. {{ '{:,.2f}'.format(c.amount) }}</td><td>{{ t('matched') }}</td></tr>
+      {% endfor %}
+      {% for c in v.unmatched_cashed %}
+      <tr class="row-danger"><td>{{ c.cheque_no }}</td><td>Rs. {{ '{:,.2f}'.format(c.amount) }}</td><td>{{ t('not_in_system') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">{{ t('no_cashed_cheques') }}</p>
+  {% endif %}
+
+  <h4>{{ t('cheques_to_be_cashed') }}</h4>
+  {% if v.still_pending %}
+  <table class="data-table">
+    <thead><tr><th>{{ t('col_cheque_no') }}</th><th>{{ t('col_amount') }}</th><th>{{ t('col_date') }}</th></tr></thead>
+    <tbody>
+      {% for p in v.still_pending %}
+      <tr><td>{{ p.cheque_no or '—' }}</td><td>Rs. {{ '{:,.2f}'.format(p.total_amount) }}</td><td>{{ p.stated_date }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">{{ t('no_pending_cheques') }}</p>
+  {% endif %}
+</div>
+{% endif %}
