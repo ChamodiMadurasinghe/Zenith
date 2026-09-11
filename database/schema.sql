@@ -162,6 +162,38 @@ CREATE TABLE deposit_timetable (
     FOREIGN KEY (dealer_id) REFERENCES dealers(dealer_id)
 );
 
+CREATE TABLE bank_statement_mail_config (
+    config_id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id               INTEGER NOT NULL UNIQUE,
+    business_email                 TEXT    NOT NULL,
+    business_email_app_password    TEXT    NOT NULL,
+    bank_email                     TEXT    NOT NULL,
+    imap_host                      TEXT    NOT NULL DEFAULT 'imap.gmail.com',
+    imap_port                      INTEGER NOT NULL DEFAULT 993,
+    updated_at                     TEXT    DEFAULT (datetime('now')),
+    FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+);
+
+CREATE TABLE bank_statement_verifications (
+    verification_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_bank_acc_id       INTEGER NOT NULL,
+    statement_email_date   TEXT,
+    statement_subject      TEXT,
+    message_id             TEXT,
+    statement_balance      REAL,
+    system_balance         REAL,
+    balance_matches        INTEGER NOT NULL DEFAULT 0,
+    cashed_cheques_json    TEXT,
+    pending_cheques_json   TEXT,
+    discrepancies_json     TEXT,
+    is_test                INTEGER NOT NULL DEFAULT 0,
+    created_at             TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_bank_acc_id) REFERENCES user_bank_account(user_bank_acc_id)
+);
+
+CREATE INDEX idx_bank_statement_verifications_account
+    ON bank_statement_verifications(user_bank_acc_id, created_at);
+
 CREATE TABLE whatsapp_sessions (
     phone           TEXT PRIMARY KEY,
     state           TEXT NOT NULL,
