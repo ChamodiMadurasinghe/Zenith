@@ -20,3 +20,4 @@ python-docx>=1.1
 chromadb>=0.5
 reportlab>=4.0
 num2words>=0.5
+pdfplumber>=0.10  # bank statement PDF text extraction (core/bank_statement_mail.py)
