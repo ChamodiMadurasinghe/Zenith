@@ -17,7 +17,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu19">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu20">
 </head>
 <body class="lang-{{ current_lang }}">
   {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
@@ -59,6 +59,13 @@
                     <button type="button" class="settings-flyout-item" data-font-size="xlarge" role="menuitem">{{ t('font_size_xlarge') }}</button>
                   </div>
                 </li>
+                {% if session.get('user_id') %}
+                <li class="settings-item" role="none">
+                  <a href="{{ url_for('bank_statement.settings_page') }}" class="settings-row" role="menuitem">
+                    <span class="settings-row-label">{{ t('manage_mail_settings') }}</span>
+                  </a>
+                </li>
+                {% endif %}
                 <li class="settings-item" role="none">
                   <button type="button" id="theme-toggle" class="settings-row" role="menuitem"
                           aria-pressed="false"

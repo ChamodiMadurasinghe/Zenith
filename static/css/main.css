@@ -239,6 +239,8 @@ body:has(.hub-page) .main-nav {
   text-align: left;
   cursor: pointer;
   min-height: 2.6rem;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .settings-row:hover,
 .settings-row[aria-expanded="true"],
