@@ -1,9 +1,10 @@
 ﻿import os
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, jsonify, request
 
 from config import Config
+from core.auth import login_required
 from core.app_guide import guide_welcome_for_path
 from core.alert_scheduler import start_alert_scheduler
 from core.i18n import SUPPORTED_LANGS, get_lang, js_translations, speech_lang_code, t
@@ -45,6 +46,54 @@ def create_app():
     @app.get("/health")
     def health():
         return {"ok": True}
+
+    @app.get("/api/admin/check-update")
+    @login_required
+    def admin_check_update():
+        import updater
+
+        result = updater.check_for_updates()
+        if result.get("error"):
+            payload = dict(result)
+            payload["update_available"] = False
+            payload["message"] = "System is offline or central server unreachable"
+            return jsonify(payload), 200
+        return jsonify(result), 200
+
+    @app.post("/api/admin/apply-update")
+    @login_required
+    def admin_apply_update():
+        import updater
+
+        body = request.get_json(silent=True) or {}
+        manifest_data = body if isinstance(body, dict) and body.get("download_url") else None
+        try:
+            if manifest_data is None:
+                manifest_data = updater.check_for_updates()
+            ok = updater.apply_remote_update(manifest_data)
+            if not ok:
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": "Update failed. App remains on current version.",
+                    }
+                ), 500
+            version = manifest_data.get("latest_version") or updater.CURRENT_VERSION
+            return jsonify(
+                {
+                    "status": "restarting",
+                    "message": (
+                        f"Installing update v{version}. Zenith will restart in a few seconds..."
+                    ),
+                }
+            ), 200
+        except Exception:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Update failed. App remains on current version.",
+                }
+            ), 500
 
     @app.context_processor
     def inject_i18n():

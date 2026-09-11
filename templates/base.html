@@ -17,7 +17,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu19">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=menu20">
 </head>
 <body class="lang-{{ current_lang }}">
   {% from '_icons.html' import nav_logout, nav_settings, theme_sun, theme_moon %}
@@ -70,6 +70,15 @@
                     </span>
                   </button>
                 </li>
+                {% if session.get('user_id') %}
+                <li class="settings-item" role="none">
+                  <button type="button" id="check-update-btn" class="settings-row" role="menuitem"
+                          title="{{ t('check_for_updates') }}" aria-label="{{ t('check_for_updates') }}">
+                    <span class="settings-row-label">{{ t('check_for_updates') }}</span>
+                  </button>
+                  <p id="update-status" class="settings-update-status" hidden aria-live="polite"></p>
+                </li>
+                {% endif %}
               </ul>
             </div>
           </div>
@@ -174,6 +183,9 @@
   <script src="{{ url_for('static', filename='js/theme.js') }}?v=4"></script>
   <script src="{{ url_for('static', filename='js/forms.js') }}?v=5"></script>
   <script src="{{ url_for('static', filename='js/list_filters.js') }}?v=1"></script>
+  {% if session.get('user_id') %}
+  <script src="{{ url_for('static', filename='js/admin_update.js') }}?v=1"></script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

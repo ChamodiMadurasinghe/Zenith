@@ -1,0 +1,7 @@
+﻿{
+  "latest_version": "0.2.0",
+  "changelog": "Remote updater (check vs install), Settings gear Check for updates button, Alembic bootstrap for OTA migrations.",
+  "release_date": "2026-09-11",
+  "has_new_deps": true,
+  "download_url": "https://github.com/ChamodiMadurasinghe/Zenith/releases/download/v0.2.0/zenith-0.2.0.zip"
+}

@@ -246,6 +246,22 @@ body:has(.hub-page) .main-nav {
   background: var(--primary);
   color: #fff;
 }
+.settings-update-status {
+  margin: 0.15rem 0.75rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted, #666);
+  max-width: 14rem;
+}
+.settings-update-status.is-ok {
+  color: var(--ok, #1b7f4a);
+}
+.settings-update-status.is-warn {
+  color: var(--warn, #9a6700);
+}
+.settings-update-status.is-error {
+  color: var(--danger, #b42318);
+}
 .settings-row-label {
   display: inline-flex;
   align-items: center;
