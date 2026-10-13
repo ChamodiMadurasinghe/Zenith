@@ -67,6 +67,18 @@
                 </li>
                 {% endif %}
                 <li class="settings-item" role="none">
+                  <p class="settings-row-label">{{ t('app_version_label', version=app_version) }}</p>
+                  {% if update_available %}
+                  <p class="settings-update-status">
+                    {% if update_url %}
+                    <a href="{{ update_url }}" target="_blank" rel="noopener noreferrer">{{ t('update_available', version=update_latest) }}</a>
+                    {% else %}
+                    {{ t('update_available', version=update_latest) }}
+                    {% endif %}
+                  </p>
+                  {% endif %}
+                </li>
+                <li class="settings-item" role="none">
                   <button type="button" id="theme-toggle" class="settings-row" role="menuitem"
                           aria-pressed="false"
                           title="{{ t('theme_dark') }}" aria-label="{{ t('theme_dark') }}">
@@ -78,6 +90,16 @@
                   </button>
                 </li>
                 {% if session.get('user_id') %}
+                <li class="settings-item" role="none">
+                  <a href="{{ url_for('onboarding.setup', review=1) }}" class="settings-row" role="menuitem">
+                    <span class="settings-row-label">{{ t('setup_guide') }}</span>
+                  </a>
+                </li>
+                <li class="settings-item" role="none">
+                  <a href="{{ url_for('onboarding.help_setup') }}" class="settings-row" role="menuitem">
+                    <span class="settings-row-label">{{ t('setup_help') }}</span>
+                  </a>
+                </li>
                 <li class="settings-item" role="none">
                   <button type="button" id="backup-now-btn" class="settings-row" role="menuitem"
                           title="{{ t('backup_now') }}" aria-label="{{ t('backup_now') }}">
@@ -108,6 +130,9 @@
   </div>
 
   <main class="container">
+    {% if session.get('user_id') and fake_ai and show_onboarding %}
+      <div class="flash flash-warning">{{ t('banner_fake_ai') }}</div>
+    {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
         <div class="flash flash-{{ category }}">{{ message }}</div>

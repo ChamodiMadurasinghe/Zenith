@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ t('setup_help') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<article class="card card-lg setup-help">
+  {{ body_html | safe }}
+</article>
+{% endblock %}

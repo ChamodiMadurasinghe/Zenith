@@ -4,7 +4,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request, session, url_for
 
 from backup_engine import run_backup_pipeline
 from config import Config
@@ -24,6 +24,7 @@ from routes.dealers import dealers_bp
 from routes.ingestion import ingestion_bp
 from routes.orchestration import orchestration_bp
 from routes.legal import legal_bp
+from routes.onboarding import onboarding_blocks_app, onboarding_bp
 from routes.whatsapp_settings import whatsapp_settings_bp
 from whatsapp_agent import whatsapp_bp
 
@@ -61,10 +62,24 @@ def create_app():
     app.register_blueprint(whatsapp_settings_bp)
     app.register_blueprint(whatsapp_bp)
     app.register_blueprint(legal_bp)
+    app.register_blueprint(onboarding_bp)
+
+    @app.before_request
+    def require_onboarding():
+        if not session.get("user_id") or not onboarding_blocks_app():
+            return None
+        endpoint = request.endpoint or ""
+        if endpoint.startswith(("onboarding.", "i18n.", "legal.", "whatsapp_settings.", "static")):
+            return None
+        if endpoint in ("health", "auth.login", "auth.logout"):
+            return None
+        if request.path.startswith("/setup") or request.path.startswith("/help/"):
+            return None
+        return redirect(url_for("onboarding.setup"))
 
     @app.get("/health")
     def health():
-        return {"ok": True}
+        return {"ok": True, "version": Config.app_version()}
 
     @app.post("/api/backup/now")
     @login_required
@@ -111,7 +126,10 @@ def create_app():
 
     @app.context_processor
     def inject_i18n():
+        from core.update_checker import update_status
+
         lang = get_lang()
+        status = update_status()
         return {
             "t": t,
             "current_lang": lang,
@@ -119,6 +137,12 @@ def create_app():
             "js_i18n": js_translations(lang),
             "speech_lang": speech_lang_code(lang),
             "guide_welcome_tip": guide_welcome_for_path,
+            "app_version": status["current"],
+            "update_available": status["update_available"],
+            "update_latest": status["latest"],
+            "update_url": status["html_url"],
+            "fake_ai": Config.use_fake_ai(),
+            "show_onboarding": Config.show_onboarding(),
         }
 
     db_path = Path(Config.DATABASE_PATH)
@@ -126,7 +150,11 @@ def create_app():
     if not db_path.exists():
         from scripts.init_db import init_db
 
-        init_db(force_recreate=True)
+        init_db(force_recreate=True, production=Config.use_production_init())
+    else:
+        from scripts.init_db import migrate_existing_db
+
+        migrate_existing_db()
 
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         start_alert_scheduler(app)

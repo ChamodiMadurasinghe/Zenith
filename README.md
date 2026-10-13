@@ -172,6 +172,10 @@ Optional. The web upload path works without WhatsApp.
 
 SQLite file: `database/invoice_cheque.db` (gitignored). Rebuild with `python scripts/init_db.py`.
 
+## Shop PC vs team preview
+
+Customers run Zenith on their own Windows PC (`ZENITH_DESKTOP=true`). The Render site is only so the team can open the same build after a git push. See [docs/DESKTOP_INSTALL.md](docs/DESKTOP_INSTALL.md), [docs/TEAM_PREVIEW.md](docs/TEAM_PREVIEW.md), and [docs/SETUP_GUIDES.md](docs/SETUP_GUIDES.md).
+
 ## Tests
 
 ```bash

@@ -14,14 +14,15 @@ load_dotenv(ROOT / ".env")
 
 
 def _db_path() -> Path:
-    raw = os.getenv("DATABASE_PATH", "database/invoice_cheque.db").strip()
-    path = Path(raw)
-    return path if path.is_absolute() else ROOT / path
+    from config import resolve_storage_path
+
+    return resolve_storage_path("DATABASE_PATH", "database/invoice_cheque.db")
 
 
 DB_PATH = _db_path()
 SCHEMA = ROOT / "database" / "schema.sql"
 SEED = ROOT / "database" / "seed.sql"
+SEED_PRODUCTION = ROOT / "database" / "seed_production_minimal.sql"
 SEED_CHEQUES = ROOT / "database" / "seed_cheques.sql"
 
 
@@ -269,11 +270,18 @@ def migrate_db(conn: sqlite3.Connection):
         cols = {r[1] for r in conn.execute("PRAGMA table_info(user)").fetchall()}
         if "password_hash" not in cols and "password" in cols:
             conn.execute("ALTER TABLE user ADD COLUMN password_hash TEXT")
-        password = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
-        conn.execute(
-            "UPDATE user SET password_hash = ? WHERE user_id = 1",
-            (generate_password_hash(password),),
-        )
+        # Fill a missing hash only. Do not reset a real password on every startup.
+        password = os.getenv("APP_PASSWORD", "").strip()
+        if password:
+            row = conn.execute(
+                "SELECT password_hash FROM user WHERE user_id = 1"
+            ).fetchone()
+            current = row[0] if row else None
+            if not current or current == "pending":
+                conn.execute(
+                    "UPDATE user SET password_hash = ? WHERE user_id = 1",
+                    (generate_password_hash(password),),
+                )
     except sqlite3.OperationalError:
         pass
     _seed_cheque_templates(conn)
@@ -285,10 +293,24 @@ def _seed_cheque_templates(conn: sqlite3.Connection):
         conn.executescript(SEED_CHEQUES.read_text(encoding="utf-8"))
 
 
-def init_db(force_recreate: bool = True):
+def _production_from_env() -> bool:
+    from config import Config
+
+    return Config.use_production_init()
+
+
+def init_db(force_recreate: bool = True, production: bool | None = None):
+    """Create or migrate the database.
+
+    force_recreate=True deletes the database file. Never pass that against a
+    live shop database. Use migrate_existing_db() (or --migrate) for updates.
+    production=True loads the minimal shop seed (no demo invoices).
+    """
     global DB_PATH
     DB_PATH = _db_path()
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if production is None:
+        production = _production_from_env()
     if force_recreate and DB_PATH.exists():
         DB_PATH.unlink()
 
@@ -296,7 +318,8 @@ def init_db(force_recreate: bool = True):
     try:
         if force_recreate or not DB_PATH.exists():
             conn.executescript(SCHEMA.read_text(encoding="utf-8"))
-            conn.executescript(SEED.read_text(encoding="utf-8"))
+            seed_file = SEED_PRODUCTION if production else SEED
+            conn.executescript(seed_file.read_text(encoding="utf-8"))
             _seed_cheque_templates(conn)
             password = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
             conn.execute(
@@ -306,18 +329,43 @@ def init_db(force_recreate: bool = True):
             conn.commit()
             print(f"Database created at {DB_PATH}")
             print("Login password set from APP_PASSWORD in .env")
-            from scripts.seed_sample_invoices import seed_invoices
+            if production:
+                print("Production seed: no demo dealers or sample invoices")
+            else:
+                from scripts.seed_sample_invoices import seed_invoices
 
-            added = seed_invoices(per_dealer=10)
-            print(f"Sample invoices seeded: {added} added")
+                added = seed_invoices(per_dealer=10)
+                print(f"Sample invoices seeded: {added} added")
             _sync_cbsl_holidays()
         else:
             migrate_db(conn)
             print(f"Database migrated at {DB_PATH}")
     finally:
         conn.close()
+    _sync_cheque_allocations()
 
-    # Ensure seed/committed cheques have allocation + cash-flow timetable rows
+
+def migrate_existing_db() -> None:
+    """Apply schema migrations without deleting data. Safe on every startup."""
+    global DB_PATH
+    DB_PATH = _db_path()
+    if not DB_PATH.exists():
+        return
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        migrate_db(conn)
+        print(f"Database migrated at {DB_PATH}")
+    finally:
+        conn.close()
+    _sync_cheque_allocations()
+
+
+def _sync_cheque_allocations() -> None:
+    """Repair cheque allocation rows. Skips when this process is pointed at another file."""
+    from config import Config
+
+    if Path(Config.DATABASE_PATH).resolve() != Path(DB_PATH).resolve():
+        return
     try:
         from db import repositories as repo
         from db.connection import query, execute
@@ -356,5 +404,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Initialize or migrate Zenith database")
     parser.add_argument("--migrate", action="store_true", help="Migrate existing DB without dropping")
+    parser.add_argument(
+        "--production",
+        action="store_true",
+        help="Create a shop database with no demo dealers or sample invoices (wipes the file)",
+    )
     args = parser.parse_args()
-    init_db(force_recreate=not args.migrate)
+    if args.migrate:
+        migrate_existing_db()
+    else:
+        init_db(force_recreate=True, production=True if args.production else None)
