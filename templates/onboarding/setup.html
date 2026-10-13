@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ t('onboarding_title') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<section class="card card-lg onboarding">
+  <p class="onboarding-progress">{{ t('onboarding_step', current=step_index, total=step_count) }}</p>
+  <h1>{{ t('onboarding_title') }}</h1>
+  <p class="onboarding-banner">{{ t('onboarding_not_required') }}</p>
+
+  {% if step == 'welcome' %}
+  <p class="lead">{{ t('onboarding_welcome_lead') }}</p>
+  <p>{{ t('onboarding_welcome_core') }}</p>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="welcome">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip_all">{{ t('onboarding_skip_setup') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_later') }}</p>
+  </form>
+
+  {% elif step == 'password' %}
+  <h2>{{ t('onboarding_password_title') }}</h2>
+  <p>{{ t('onboarding_password_lead') }}</p>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="password">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <label>{{ t('onboarding_password_new') }}
+      <input type="password" name="password" autocomplete="new-password">
+    </label>
+    <label>{{ t('onboarding_password_confirm') }}
+      <input type="password" name="password_confirm" autocomplete="new-password">
+    </label>
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip">{{ t('onboarding_skip_step') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_skip_hint') }}</p>
+  </form>
+
+  {% elif step == 'gemini' %}
+  {% include "onboarding/_optional_step.html" %}
+  <h2>{{ t('onboarding_gemini_title') }}</h2>
+  <p>{{ t('onboarding_gemini_lead') }}</p>
+  <details class="onboarding-howto">
+    <summary>{{ t('onboarding_how_to') }}</summary>
+    <p>{{ t('onboarding_gemini_need') }}</p>
+    <ol>
+      <li>{{ t('onboarding_gemini_s1') }}</li>
+      <li>{{ t('onboarding_gemini_s2') }}</li>
+      <li>{{ t('onboarding_gemini_s3') }}</li>
+      <li>{{ t('onboarding_gemini_s4') }}</li>
+    </ol>
+  </details>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="gemini">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <label>{{ t('onboarding_gemini_key') }}
+      <input type="password" name="gemini_api_key" autocomplete="off">
+    </label>
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip">{{ t('onboarding_skip_step') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_skip_hint') }}</p>
+  </form>
+
+  {% elif step == 'openai' %}
+  {% include "onboarding/_optional_step.html" %}
+  <h2>{{ t('onboarding_openai_title') }}</h2>
+  <p>{{ t('onboarding_openai_lead') }}</p>
+  <details class="onboarding-howto">
+    <summary>{{ t('onboarding_how_to') }}</summary>
+    <p>{{ t('onboarding_openai_need') }}</p>
+    <ol>
+      <li>{{ t('onboarding_openai_s1') }}</li>
+      <li>{{ t('onboarding_openai_s2') }}</li>
+    </ol>
+  </details>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="openai">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <label>{{ t('onboarding_openai_key') }}
+      <input type="password" name="openai_api_key" autocomplete="off">
+    </label>
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip">{{ t('onboarding_skip_step') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_skip_hint') }}</p>
+  </form>
+
+  {% elif step == 'whatsapp' %}
+  {% include "onboarding/_optional_step.html" %}
+  <h2>{{ t('onboarding_whatsapp_title') }}</h2>
+  <p>{{ t('onboarding_whatsapp_lead') }}</p>
+  <details class="onboarding-howto">
+    <summary>{{ t('onboarding_how_to') }}</summary>
+    <p>{{ t('onboarding_whatsapp_need') }}</p>
+    <ol>
+      <li>{{ t('onboarding_whatsapp_s1') }}</li>
+      <li>{{ t('onboarding_whatsapp_s2') }}</li>
+    </ol>
+  </details>
+  <p><a href="{{ url_for('whatsapp_settings.settings_index') }}">{{ t('onboarding_whatsapp_open') }}</a></p>
+  <p><a href="{{ url_for('onboarding.help_setup') }}">{{ t('setup_help') }}</a></p>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="whatsapp">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip">{{ t('onboarding_skip_step') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_skip_hint') }}</p>
+  </form>
+
+  {% elif step == 'backup' %}
+  {% include "onboarding/_optional_step.html" %}
+  <h2>{{ t('onboarding_backup_title') }}</h2>
+  <p>{{ t('onboarding_backup_lead') }}</p>
+  <details class="onboarding-howto">
+    <summary>{{ t('onboarding_how_to') }}</summary>
+    <p>{{ t('onboarding_drive_need') }}</p>
+    <ol>
+      <li>{{ t('onboarding_drive_s1') }}</li>
+      <li>{{ t('onboarding_drive_s2') }}</li>
+      <li>{{ t('onboarding_drive_s3') }}</li>
+      <li>{{ t('onboarding_drive_s4') }}</li>
+    </ol>
+  </details>
+  <form method="post" class="form-stack" enctype="multipart/form-data">
+    <input type="hidden" name="step" value="backup">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <label>{{ t('onboarding_backup_passphrase') }}
+      <input type="password" name="backup_passphrase" autocomplete="new-password">
+    </label>
+    <label>{{ t('onboarding_backup_creds') }}
+      <input type="file" name="creds_file" accept=".txt,.json">
+    </label>
+    <div class="onboarding-actions">
+      <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_continue') }}</button>
+      <button class="btn btn-secondary" type="submit" name="action" value="skip">{{ t('onboarding_skip_step') }}</button>
+    </div>
+    <p class="hint">{{ t('onboarding_skip_hint') }}</p>
+  </form>
+
+  {% else %}
+  <h2>{{ t('onboarding_done_title') }}</h2>
+  <p>{{ t('onboarding_done_lead') }}</p>
+  <div class="onboarding-actions">
+    <a class="btn btn-secondary" href="{{ url_for('ingestion.manual_invoice') }}">{{ t('onboarding_go_manual') }}</a>
+    <a class="btn btn-secondary" href="{{ url_for('ingestion.upload') }}">{{ t('onboarding_go_upload') }}</a>
+  </div>
+  <form method="post" class="form-stack">
+    <input type="hidden" name="step" value="done">
+    {% if review %}<input type="hidden" name="review" value="1">{% endif %}
+    <button class="btn btn-primary" type="submit" name="action" value="continue">{{ t('onboarding_finish') }}</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

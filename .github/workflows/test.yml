@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Route tests
+        run: python -m unittest discover -s routes/tests -p "test_*.py"
+      - name: Core tests
+        run: python -m unittest discover -s core/tests -p "test_*.py"
+      - name: Agent tests
+        run: python -m unittest discover -s agents/tests -p "test_*.py"
+      - name: Agentic tests
+        run: python -m unittest discover -s agentic/tests -p "test_*.py"
+
+  windows-artifact:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer not built yet
+        run: |
+          echo Zenith Windows installer is deferred until the product is feature-complete.
+          echo See docs/DESKTOP_INSTALL.md
+          echo VERSION:
+          type VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zenith-version-stub
+          path: VERSION
+          if-no-files-found: error

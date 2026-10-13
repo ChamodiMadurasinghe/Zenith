@@ -57,6 +57,18 @@ def start_alert_scheduler(app):
         return _scheduler
     _scheduler = BackgroundScheduler(timezone="Asia/Colombo")
     _scheduler.add_job(run_daily_alerts, "cron", hour=8, minute=0, id="daily_cash_alerts", replace_existing=True)
+    if Config.auto_update_check_enabled():
+        from core.update_checker import run_update_check
+
+        _scheduler.add_job(
+            run_update_check,
+            "cron",
+            hour=Config.update_check_hour(),
+            minute=15,
+            id="daily_update_check",
+            replace_existing=True,
+        )
+        app.logger.info("Daily update check scheduled at %02d:15", Config.update_check_hour())
     _scheduler.start()
     app.logger.info("Cash-flow alert scheduler started")
     return _scheduler

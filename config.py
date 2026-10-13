@@ -7,17 +7,77 @@ BASE_DIR = Path(__file__).resolve().parent
 _ENV_PATH = BASE_DIR / ".env"
 load_dotenv(_ENV_PATH)
 
+# Desktop installs keep customer data outside the code folder so updates can
+# replace the app without touching the database, photos, or secrets.
+_DESKTOP_RELATIVE = {
+    "DATABASE_PATH": "invoice_cheque.db",
+    "UPLOAD_FOLDER": "invoices",
+    "INBOUND_QUEUE_DIR": "inbound_queue",
+    "CHROMA_PERSIST_DIR": "chroma",
+    "GDRIVE_CREDS_PATH": "mycreds.txt",
+}
 
-def _data_path(env_key: str, default: str) -> Path:
-    """Relative paths stay under the project; absolute paths (PaaS disks) are used as-is."""
-    raw = os.getenv(env_key, default).strip() or default
+
+def _flag_value(raw: str) -> bool:
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def is_desktop_mode() -> bool:
+    return _flag_value(os.getenv("ZENITH_DESKTOP", ""))
+
+
+def desktop_data_dir() -> Path | None:
+    """%LOCALAPPDATA%\\Zenith when ZENITH_DESKTOP is on; otherwise None."""
+    if not is_desktop_mode():
+        return None
+    local = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    path = Path(local) / "Zenith"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def secrets_env_path() -> Path:
+    """Where the setup wizard writes API keys and the app password."""
+    desktop = desktop_data_dir()
+    if desktop is not None:
+        return desktop / ".env"
+    return _ENV_PATH
+
+
+def _reload_env() -> None:
+    load_dotenv(_ENV_PATH, override=True)
+    desktop_env = desktop_data_dir()
+    if desktop_env is not None:
+        load_dotenv(desktop_env / ".env", override=True)
+
+
+if desktop_data_dir() is not None:
+    load_dotenv(desktop_data_dir() / ".env", override=True)
+
+
+def resolve_storage_path(env_key: str, default: str) -> Path:
+    """Project-relative by default. Desktop mode uses AppData unless the path is absolute."""
+    desktop = desktop_data_dir()
+    raw = os.getenv(env_key, "").strip()
+    if desktop is not None and env_key in _DESKTOP_RELATIVE:
+        if raw:
+            candidate = Path(raw)
+            if candidate.is_absolute():
+                return candidate
+        return desktop / _DESKTOP_RELATIVE[env_key]
+    raw = raw or default
     path = Path(raw)
     return path if path.is_absolute() else BASE_DIR / path
 
 
+def _data_path(env_key: str, default: str) -> Path:
+    """Relative paths stay under the project; absolute paths (PaaS disks) are used as-is."""
+    return resolve_storage_path(env_key, default)
+
+
 def _env(key: str, default: str = "") -> str:
     """Read env var, reloading .env so running server picks up changes."""
-    load_dotenv(_ENV_PATH, override=True)
+    _reload_env()
     return os.getenv(key, default)
 
 
@@ -256,6 +316,49 @@ class Config:
     @staticmethod
     def enable_cash_alerts() -> bool:
         return _env_bool("ENABLE_CASH_ALERTS", False)
+
+    @staticmethod
+    def app_version() -> str:
+        version_file = BASE_DIR / "VERSION"
+        try:
+            text = version_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            return "0.0.0"
+        return text or "0.0.0"
+
+    @staticmethod
+    def use_production_init() -> bool:
+        """Fresh databases for desktop customers skip demo dealers and sample invoices."""
+        if _env_bool("ZENITH_PRODUCTION_INIT", False):
+            return True
+        return is_desktop_mode()
+
+    @staticmethod
+    def show_onboarding() -> bool:
+        """First-run wizard. Off on the Render team preview unless explicitly enabled."""
+        raw = _env("ZENITH_SHOW_ONBOARDING", "").strip()
+        if raw:
+            return _flag_value(raw)
+        return is_desktop_mode()
+
+    @staticmethod
+    def github_repo() -> str:
+        return _env("GITHUB_REPO", "ChamodiMadurasinghe/Zenith").strip().strip("/")
+
+    @staticmethod
+    def auto_update_check_enabled() -> bool:
+        raw = _env("AUTO_UPDATE_CHECK", "").strip()
+        if raw:
+            return _flag_value(raw)
+        return is_desktop_mode()
+
+    @staticmethod
+    def update_check_hour() -> int:
+        try:
+            hour = int(_env("UPDATE_CHECK_HOUR", "2"))
+        except ValueError:
+            return 2
+        return hour if 0 <= hour <= 23 else 2
 
     APP_PASSWORD = os.getenv("APP_PASSWORD", "change-me-on-first-setup")
     DEFAULT_CREDIT_PERIOD_DAYS = int(os.getenv("DEFAULT_CREDIT_PERIOD_DAYS", "30"))

@@ -1,3 +1,5 @@
+# Team preview only (competition / shared QA). Customer shops run on their own PC.
+# See docs/TEAM_PREVIEW.md.
 services:
   - type: web
     name: zenith
