@@ -25,6 +25,7 @@ from routes.ingestion import ingestion_bp
 from routes.orchestration import orchestration_bp
 from routes.legal import legal_bp
 from routes.onboarding import onboarding_blocks_app, onboarding_bp
+from routes.simple import simple_bp
 from routes.whatsapp_settings import whatsapp_settings_bp
 from whatsapp_agent import whatsapp_bp
 
@@ -63,6 +64,7 @@ def create_app():
     app.register_blueprint(whatsapp_bp)
     app.register_blueprint(legal_bp)
     app.register_blueprint(onboarding_bp)
+    app.register_blueprint(simple_bp)
 
     @app.before_request
     def require_onboarding():

@@ -1,0 +1,108 @@
+/* Zenith design tokens — generated from the Figma file "Zenith UI revamp"
+   (variable collections "Zenith color" Light/Dark and "Zenith spacing", local text styles).
+   Keep names in sync with Figma: "bg/canvas" → --bg-canvas. */
+
+:root {
+  /* Colour — Light */
+  --bg-canvas: #F3F6F7;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #E7EDEE;
+  --bg-shell: #F3F6F7;
+  --border-default: #DCE3E5;
+  --border-strong: #B3C0C4;
+  --text-primary: #0B2A3B;
+  --text-secondary: #2E4A5A;
+  --text-muted: #546873;
+  --brand-primary: #013A56;
+  --brand-on-primary: #FFFFFF;
+  --ai-accent: #8FB0A8;
+  --ai-bg: #E6EFEC;
+  --ai-text: #1F4D57;
+  --danger-accent: #A35139;
+  --danger-bg: #F9E3DA;
+  --danger-text: #86391F;
+  --success-accent: #6D8765;
+  --success-bg: #E4ECE1;
+  --success-text: #3B5636;
+  --review-bg: #EAF0F1;
+  --review-text: #2E4A5A;
+  --nav-bg: #F3F6F7;
+  --nav-text: #2E4A5A;
+  --nav-active-bg: #FFFFFF;
+  --nav-active-text: #0B2A3B;
+  --ink-chip: #013A56;
+  --ink-on-chip: #FFFFFF;
+  --banner-bg: #013A56;
+  --banner-text: #F2E9DC;
+  --banner-muted: #A9C3CF;
+  --pastel-lavender: #B6CBC6;
+  --pastel-peach: #F2E9DC;
+  --pastel-lime: #A9BBA3;
+  --pastel-ink: #0B2A3B;
+
+  /* Spacing and radius */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --elevation-pill: 0 2px 6px rgba(33, 33, 59, 0.06);
+  --elevation-raised: 0 2px 4px rgba(27, 38, 50, 0.06), 0 24px 48px -8px rgba(27, 38, 50, 0.12);
+
+  /* Type — Poppins for Latin and numbers; Noto fallbacks carry Sinhala and Tamil. */
+  --font-sans: "Poppins", "Noto Sans Sinhala", "Noto Sans Tamil", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sinhala: "Abhaya Libre", "Noto Sans Sinhala", var(--font-sans);
+  --font-tamil: "Anek Tamil", "Noto Sans Tamil", var(--font-sans);
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas: #0B1E28;
+  --bg-surface: #13303F;
+  --bg-subtle: #1B3D4E;
+  --bg-shell: #0B1E28;
+  --border-default: #22465A;
+  --border-strong: #35607A;
+  --text-primary: #F2E9DC;
+  --text-secondary: #C8D3D0;
+  --text-muted: #93A7A8;
+  --brand-primary: #B6CBC6;
+  --brand-on-primary: #0B2A3B;
+  --ai-accent: #B6CBC6;
+  --ai-bg: #1E3A40;
+  --ai-text: #B6CBC6;
+  --danger-accent: #E08A6E;
+  --danger-bg: #3F2620;
+  --danger-text: #F4B4A0;
+  --success-accent: #8FAE86;
+  --success-bg: #1F3320;
+  --success-text: #B9D0B1;
+  --review-bg: #16323F;
+  --review-text: #C8D3D0;
+  --nav-bg: #0B1E28;
+  --nav-text: #C8D3D0;
+  --nav-active-bg: #13303F;
+  --nav-active-text: #F2E9DC;
+  --ink-chip: #B6CBC6;
+  --ink-on-chip: #0B2A3B;
+}
+
+/* Text styles (Figma local styles) */
+.t-hero      { font: 600 38px/50px var(--font-sans); letter-spacing: -0.6px; }
+.t-display   { font: 600 32px/42px var(--font-sans); letter-spacing: -0.4px; }
+.t-h1        { font: 600 28px/38px var(--font-sans); letter-spacing: -0.3px; }
+.t-h2        { font: 600 21px/30px var(--font-sans); letter-spacing: -0.2px; }
+.t-h3        { font: 600 17px/26px var(--font-sans); }
+.t-body-lg   { font: 400 18px/28px var(--font-sans); }
+.t-body      { font: 400 16px/24px var(--font-sans); }
+.t-body-md   { font: 500 16px/24px var(--font-sans); }
+.t-caption   { font: 400 14px/20px var(--font-sans); }
+.t-caption-md{ font: 500 14px/20px var(--font-sans); }
+.t-number    { font: 600 16px/24px var(--font-sans); font-variant-numeric: tabular-nums; }
+.t-number-lg { font: 600 32px/42px var(--font-sans); letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }

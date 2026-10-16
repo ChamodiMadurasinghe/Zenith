@@ -1,0 +1,82 @@
+{% extends 'simple/base.html' %}
+{% from 'simple/_ui.html' import icon, button, chip, alert, field, page_head, task with context %}
+
+{% block title %}UI preview · {{ t('app_name') }}{% endblock %}
+
+{% block content %}
+<div class="content">
+  {{ page_head('UI preview', 'Building blocks of the simple UI, matching the Figma design system.', back_href=nav.main[0].url, back_label='Back') }}
+
+  <section class="banner">
+    <p class="banner-kicker">Good morning, {{ user_name }}</p>
+    <p class="banner-title">You have 3 things to do today.</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">To do today</h2><span class="count">3</span></div>
+    {{ task(1, 'wallet', 'Put Rs. 385,000 in the bank', 'Before Friday 16 Oct, 3:00 PM. Otherwise 5 cheques may bounce on Monday.', {'label': 'Add a deposit', 'href': '#'}, urgent=True) }}
+    {{ task(2, 'invoice', 'Check 7 new invoices', '3 came on WhatsApp today. About 5 minutes.', {'label': 'Start checking', 'href': '#'}) }}
+    {{ task(3, 'cheque', 'Make cheques for Tokyo Cement', '6 invoices are checked and ready to pay.', {'label': 'Make cheques', 'href': '#'}) }}
+    <p class="note">{{ icon('check', 18) }}When this list is empty, you are done for today.</p>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Buttons</h2>
+    <div class="cluster">
+      {{ button('Save invoice', 'primary', 'check') }}
+      {{ button('Finish later', 'secondary') }}
+      {{ button('Use this suggestion', 'ai', 'sparkle') }}
+      {{ button('Remove', 'danger', 'trash') }}
+      {{ button('Cancel', 'ghost', 'x') }}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Status chips</h2>
+    <div class="cluster">
+      {{ chip('Enough', 'success') }}
+      {{ chip('Not enough', 'danger-solid') }}
+      {{ chip('Please check', 'review') }}
+      {{ chip('Suggested', 'ai') }}
+      {{ chip('Over the limit', 'danger', 'lock') }}
+      {{ chip('Printed', 'success') }}
+      {{ chip('Not in a cheque', 'neutral') }}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Alerts</h2>
+    <div class="stack gap-12">
+      {{ alert('Cheque 3 is over your limit', 'No cheque can be more than Rs. 1,000,000.', 'danger') }}
+      {{ alert('Suggested by Zenith', 'Move the Hayleys cheque to Wed 21 Oct.', 'ai') }}
+      {{ alert('Before 3:00 PM', 'So the money is ready on Monday.', 'info') }}
+      {{ alert('Invoice saved', 'Next: Hayleys Fabric.', 'success') }}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Fields</h2>
+    <div class="stack gap-16">
+      {{ field('p_supplier', 'Supplier', 'Lanka Tiles PLC', 'ok') }}
+      {{ field('p_due', 'Pay by (due date)', '08 Nov 2026', 'check', 'We could not read the year clearly. Look at the marked box on the photo.') }}
+      {{ field('p_total', 'Total amount (Rs.)', '', 'error', 'Type the total from the bottom of the invoice.') }}
+      {{ field('p_note', 'Where is the money from? (you can leave this empty)') }}
+    </div>
+  </section>
+
+  <section class="answer answer--danger">
+    <span class="answer-icon">{{ icon('alert', 24) }}</span>
+    <p class="answer-title">You need Rs. 385,000 more by Friday.</p>
+    <p>On Monday 19 Oct the bank will pay 5 cheques. Put the money in before Friday 16 Oct, 3:00 PM.</p>
+    <div class="cluster">{{ button('Add a deposit', 'primary', 'arrowright', href='#') }}</div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">List</h2>
+    <div class="rows">
+      <div class="row"><div class="row-main"><p class="row-title">Lanka Tiles PLC</p><p class="row-sub">Today</p></div><span class="row-amount">Rs. 248,500</span><a class="link" href="#">{{ icon('arrowright', 18) }}Check</a></div>
+      <div class="row"><div class="row-main"><p class="row-title">Hayleys Fabric</p><p class="row-sub">Yesterday</p></div><span class="row-amount">Rs. 96,200</span><a class="link" href="#">{{ icon('arrowright', 18) }}Check</a></div>
+    </div>
+  </section>
+</div>
+{% endblock %}

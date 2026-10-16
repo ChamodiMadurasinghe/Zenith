@@ -1,0 +1,80 @@
+{#- Building blocks for the simple UI. Every status is icon + word + colour, never colour alone. -#}
+
+{% macro icon(name, size=20, label=None) -%}
+<svg class="icon" width="{{ size }}" height="{{ size }}" {% if label %}role="img" aria-label="{{ label }}"{% else %}aria-hidden="true"{% endif %}><use href="{{ url_for('static', filename='simple/icons.svg') }}#i-{{ name }}"/></svg>
+{%- endmacro %}
+
+{#- variant: primary | secondary | ai | danger | ghost. Pass href for a link, otherwise a <button>. -#}
+{% macro button(label, variant='primary', icon_name=None, href=None, type='button', block=False, attrs='') -%}
+{%- set cls = 'btn btn--' ~ variant ~ (' btn--block' if block else '') -%}
+{%- if href -%}
+<a class="{{ cls }}" href="{{ href }}" {{ attrs|safe }}>{% if icon_name %}{{ icon(icon_name) }}{% endif %}<span>{{ label }}</span></a>
+{%- else -%}
+<button class="{{ cls }}" type="{{ type }}" {{ attrs|safe }}>{% if icon_name %}{{ icon(icon_name) }}{% endif %}<span>{{ label }}</span></button>
+{%- endif -%}
+{%- endmacro %}
+
+{#- tone: ai | review | danger | success | neutral | danger-solid -#}
+{% macro chip(label, tone='neutral', icon_name=None) -%}
+{%- set default_icons = {'ai': 'sparkle', 'review': 'alert', 'danger': 'x', 'danger-solid': 'x', 'success': 'check', 'neutral': 'clock'} -%}
+<span class="chip chip--{{ tone }}">{{ icon(icon_name or default_icons[tone], 16) }}<span>{{ label }}</span></span>
+{%- endmacro %}
+
+{#- tone: danger | ai | info | success -#}
+{% macro alert(title, body=None, tone='info', icon_name=None) -%}
+{%- set default_icons = {'danger': 'lock', 'ai': 'sparkle', 'info': 'info', 'success': 'check'} -%}
+<div class="alert alert--{{ tone }}" role="{{ 'alert' if tone == 'danger' else 'status' }}">
+  {{ icon(icon_name or default_icons[tone], 18) }}
+  <div class="alert-text">
+    <p class="alert-title">{{ title }}</p>
+    {% if body %}<p class="alert-body">{{ body }}</p>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{#- state: None | 'check' (Please check) | 'error' (Fix this) | 'ok' (Looks right) -#}
+{% macro field(name, label, value='', state=None, help=None, type='text', attrs='') -%}
+{%- set status = {'check': ('alert', t('s_field_check')), 'error': ('alert', t('s_field_error')), 'ok': ('check', t('s_field_ok'))} -%}
+<div class="field{% if state %} is-{{ state }}{% endif %}">
+  <div class="field-head">
+    <label class="field-label" for="f-{{ name }}">{{ label }}</label>
+    {% if state %}<span class="field-status">{{ icon(status[state][0], 16) }}{{ status[state][1] }}</span>{% endif %}
+  </div>
+  <input class="input" id="f-{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value }}"
+         {% if help %}aria-describedby="f-{{ name }}-help"{% endif %} {{ attrs|safe }}>
+  {% if help %}<p class="field-help" id="f-{{ name }}-help">{{ help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro page_head(title, sub=None, back_href=None, back_label=None) -%}
+<header class="page-head">
+  {% if back_href %}<a class="back-link" href="{{ back_href }}">{{ icon('arrowleft', 18) }}{{ back_label }}</a>{% endif %}
+  <h1 class="page-title">{{ title }}</h1>
+  {% if sub %}<p class="page-sub">{{ sub }}</p>{% endif %}
+</header>
+{%- endmacro %}
+
+{#- One numbered to-do item. action: dict(label, href, icon) -#}
+{% macro task(number, icon_name, title, detail, action, urgent=False) -%}
+<div class="task{% if urgent %} task--urgent{% endif %}">
+  <span class="step-num{% if urgent %} step-num--urgent{% endif %}">{{ number }}</span>
+  <span class="icon-chip">{{ icon(icon_name, 22) }}</span>
+  <div class="task-text">
+    <p class="task-title">{{ title }}</p>
+    <p class="task-detail">{{ detail }}</p>
+  </div>
+  {{ button(action.label, 'primary' if urgent else 'secondary', action.icon or 'arrowright', href=action.href) }}
+</div>
+{%- endmacro %}
+
+{% macro flashes() -%}
+{%- with messages = get_flashed_messages(with_categories=true) -%}
+{%- if messages -%}
+<div class="flashes">
+  {%- for category, message in messages -%}
+  {{ alert(message, tone={'error': 'danger', 'success': 'success'}.get(category, 'info')) }}
+  {%- endfor -%}
+</div>
+{%- endif -%}
+{%- endwith -%}
+{%- endmacro %}
