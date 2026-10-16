@@ -1,0 +1,128 @@
+{% from 'simple/_ui.html' import icon, flashes with context %}
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ t('app_name') }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Abhaya+Libre&family=Anek+Tamil&family=Noto+Sans+Sinhala:wght@400;500;600&family=Noto+Sans+Tamil:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='simple/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='simple/app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body class="lang-{{ current_lang }}">
+  <div class="shell">
+    <nav class="sidebar" aria-label="{{ t('s_main_menu') }}">
+      <a class="logo" href="{{ nav.main[0].url or '#' }}">
+        <span class="logo-mark" aria-hidden="true">Z</span>
+        <span class="logo-name">{{ t('app_name') }}</span>
+      </a>
+      {% for item in nav.main %}
+      <a class="nav-item{% if item.active %} is-active{% endif %}" href="{{ item.url or '#' }}"
+         {% if item.active %}aria-current="page"{% endif %}{% if not item.url %} aria-disabled="true"{% endif %}>
+        <span class="nav-icon">{{ icon(item.icon, 22) }}</span>
+        <span class="nav-text">
+          <span class="nav-label">{{ t(item.label_key) }}</span>
+          <span class="nav-sub">{{ t(item.sub_key) }}</span>
+        </span>
+      </a>
+      {% endfor %}
+      <div class="sidebar-spacer"></div>
+      <a class="help-card" href="tel:{{ support_phone|replace(' ', '') }}">
+        <span class="help-card-icon">{{ icon('phone') }}</span>
+        <span class="help-card-text">
+          <small>{{ t('s_help_call') }}</small>
+          <strong>{{ support_phone }}</strong>
+        </span>
+      </a>
+      {% set s = nav.settings %}
+      <a class="nav-item{% if s.active %} is-active{% endif %}" href="{{ s.url or '#' }}"
+         {% if s.active %}aria-current="page"{% endif %}{% if not s.url %} aria-disabled="true"{% endif %}>
+        <span class="nav-icon">{{ icon(s.icon, 22) }}</span>
+        <span class="nav-text">
+          <span class="nav-label">{{ t(s.label_key) }}</span>
+          <span class="nav-sub">{{ t(s.sub_key) }}</span>
+        </span>
+      </a>
+    </nav>
+
+    <header class="appbar">
+      <span class="logo-mark" aria-hidden="true">Z</span>
+      <span class="appbar-spacer"></span>
+      <label class="sr-only" for="lang-select">{{ t('s_language') }}</label>
+      <select id="lang-select" class="lang-select" data-lang-select>
+        {% for code in ('si', 'ta', 'en') if code in supported_langs %}{% set label = supported_langs[code] %}
+        <option value="{{ url_for('i18n.set_language', lang_code=code) }}" {% if code == current_lang %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="pill-btn" data-help-open>{{ icon('help') }}<span>{{ t('s_help') }}</span></button>
+    </header>
+
+    <main class="main">
+      <div class="topbar">
+        <p class="topbar-date">{{ today_label }}</p>
+        <div class="lang-switch" role="group" aria-label="{{ t('s_language') }}">
+          {% for code in ('si', 'ta', 'en') if code in supported_langs %}{% set label = supported_langs[code] %}
+          <a class="lang-option{% if code == current_lang %} is-active{% endif %}" lang="{{ code }}"
+             href="{{ url_for('i18n.set_language', lang_code=code) }}"
+             {% if code == current_lang %}aria-current="true"{% endif %}>{{ label }}</a>
+          {% endfor %}
+        </div>
+        <button type="button" class="pill-btn" data-help-open>{{ icon('help') }}<span>{{ t('s_help') }}</span></button>
+        <div class="avatar-menu">
+          <button type="button" class="avatar" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu"
+                  aria-label="{{ t('s_account_menu') }}" data-menu-toggle>{{ user_initials }}</button>
+          <div class="menu" id="account-menu" role="menu" hidden>
+            <div class="menu-head">
+              <strong>{{ user_name }}</strong>
+              <span>{{ t('s_signed_in') }}</span>
+            </div>
+            {% if nav.settings.url %}
+            <a class="menu-item" role="menuitem" href="{{ nav.settings.url }}">{{ icon('settings') }}{{ t('s_nav_settings') }}</a>
+            {% endif %}
+            <form action="{{ url_for('auth.logout') }}" method="post">
+              <button type="submit" class="menu-item menu-item--danger" role="menuitem">{{ icon('arrowright') }}{{ t('s_log_out') }}</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      {{ flashes() }}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <nav class="dock" aria-label="{{ t('s_main_menu') }}">
+      <form action="{{ url_for('ingestion.upload') }}" method="post" enctype="multipart/form-data" data-photo-form>
+        <label class="dock-photo">
+          {{ icon('camera', 22) }}<span>{{ t('s_add_photo') }}</span>
+          <input class="sr-only" type="file" name="invoice_image" accept="image/*" capture="environment" data-photo-input>
+        </label>
+      </form>
+      <div class="dock-nav">
+        {% for item in nav.main %}
+        <a class="dock-item{% if item.active %} is-active{% endif %}" href="{{ item.url or '#' }}"
+           {% if item.active %}aria-current="page"{% endif %}>
+          <span class="dock-icon">{{ icon(item.icon, 22) }}</span>
+          <span>{{ t(item.label_key) }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </nav>
+  </div>
+
+  <dialog class="dialog" id="help-dialog" aria-labelledby="help-title">
+    <div class="stack gap-16">
+      <h2 class="t-h2" id="help-title">{{ t('s_help_title') }}</h2>
+      <p>{{ t('s_help_body') }}</p>
+      <a class="btn btn--primary" href="tel:{{ support_phone|replace(' ', '') }}">{{ icon('phone') }}<span>{{ support_phone }}</span></a>
+      <button type="button" class="btn btn--secondary" data-help-close>{{ t('s_help_close') }}</button>
+    </div>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='simple/app.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -318,6 +318,16 @@ class Config:
         return _env_bool("ENABLE_CASH_ALERTS", False)
 
     @staticmethod
+    def ui_mode() -> str:
+        """Which UI the home page and login land on: "classic" or "simple"."""
+        mode = _env("UI_MODE", "classic").lower()
+        return mode if mode in ("classic", "simple") else "classic"
+
+    @staticmethod
+    def support_phone() -> str:
+        return _env("SUPPORT_PHONE", "011 234 5678")
+
+    @staticmethod
     def app_version() -> str:
         version_file = BASE_DIR / "VERSION"
         try:

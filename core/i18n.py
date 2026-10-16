@@ -2027,6 +2027,11 @@ _ONBOARDING = {
 for _lang, _extra in _ONBOARDING.items():
     MESSAGES[_lang].update(_extra)
 
+from core.i18n_simple import SIMPLE_MESSAGES  # noqa: E402
+
+for _lang, _extra in SIMPLE_MESSAGES.items():
+    MESSAGES[_lang].update(_extra)
+
 JS_KEYS = [
     "js_select_invoice",
     "js_thinking",
